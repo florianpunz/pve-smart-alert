@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[build-system]
+# 77 is the first setuptools release that understands the SPDX license expression
+# and license-files below (PEP 639).
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pve-smart-alert"
+dynamic = ["version"]
+description = "SMART drive alerts for Proxmox VE"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Florian Punz" }]
+keywords = ["smart", "smartctl", "proxmox", "drive", "monitoring"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Systems Administration",
+]
+# The installed tool uses the standard library only (ADR 0003).
+dependencies = []
+
+[project.scripts]
+pve-smart-alert = "pve_smart_alert.cli:main"
+
+[project.optional-dependencies]
+# Development only. The pins for the linter and the type checker are tight on
+# purpose: their defaults decide whether `make check` passes, so a new version is
+# taken deliberately, not by accident.
+dev = [
+  "build>=1.2",
+  "mypy~=2.4.0",
+  "pytest>=8.0",
+  "ruff~=0.16.0",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "pve_smart_alert.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+  "A",    # builtins
+  "ARG",  # unused arguments
+  "B",    # bugbear
+  "C4",   # comprehensions
+  "DTZ",  # naive datetimes
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "I",    # import order
+  "N",    # naming
+  "PTH",  # use pathlib
+  "PT",   # pytest style
+  "RET",  # return statements
+  "RUF",  # ruff-specific
+  "SIM",  # simplifications
+  "UP",   # pyupgrade
+  "W",    # pycodestyle warnings
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pve_smart_alert"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests", "scripts"]
+show_error_codes = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
