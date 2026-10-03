@@ -87,7 +87,9 @@ ATTRIBUTION_EXEMPT: Final = frozenset(
 # project it came from (ADR 0015, THIRD-PARTY-NOTICES.md).
 EXPECTED_LICENSE: Final = "AGPL-3.0-or-later"
 
-# Paths whose file carries a different license. Empty on purpose.
+# Files that carry a different license identifier on purpose, for example
+# third-party code. Each entry needs the notice of its origin in
+# THIRD-PARTY-NOTICES.md (ADR 0015). Empty on purpose.
 LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 
 SOURCE_SUFFIXES: Final = frozenset({".pl", ".pm", ".py", ".sh", ".toml", ".yaml", ".yml"})
@@ -111,11 +113,11 @@ class Finding:
 
 
 def list_repository_files(root: Path) -> list[Path]:
-    """Return every file of the repository, relative to ``root``.
+    """Return every file of the repository below ``root``.
 
-    Tracked files come first: they are what CI checks. Untracked files that are
-    not ignored are included as well, so that the check also covers work that is
-    not committed yet.
+    Tracked files are what CI checks. Untracked files that are not ignored are
+    included as well, so that the check also covers work that is not committed
+    yet.
     """
     try:
         result = subprocess.run(
