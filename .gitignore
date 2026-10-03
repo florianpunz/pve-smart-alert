@@ -1,0 +1,17 @@
+# Python byte code and caches
+__pycache__/
+*.py[cod]
+
+# Development environment created by `make dev-install`
+.venv/
+.eggs/
+*.egg-info/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build output
+build/
+dist/
