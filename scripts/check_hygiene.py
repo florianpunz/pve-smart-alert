@@ -141,7 +141,12 @@ def list_repository_files(root: Path) -> list[Path]:
 
 def _walk(root: Path) -> Iterator[Path]:
     for path in root.rglob("*"):
-        if path.is_file() and not IGNORED_DIRECTORIES.intersection(path.parts):
+        if not path.is_file():
+            continue
+        # Compared relative to the root: a checkout below a directory called
+        # "build" or "dist" must not be skipped as a whole.
+        parts = path.relative_to(root).parts
+        if IGNORED_DIRECTORIES.isdisjoint(parts):
             yield path
 
 
