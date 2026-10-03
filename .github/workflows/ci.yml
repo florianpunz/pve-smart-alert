@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The workflow only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the language baseline, 3.13 is what Proxmox VE 9 ships, and
+        # "3.x" is the newest release, which catches deprecated standard library
+        # modules early (ADR 0002).
+        python-version: ["3.11", "3.13", "3.x"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Lint, type check, the repository rules of scripts/check_hygiene.py and
+      # the test suite. Creates the virtual environment on its own.
+      - name: Run make check
+        run: make check
