@@ -2,7 +2,7 @@
 
 SMART drive alerts for Proxmox VE.
 
-Status: planning. No code exists yet. This document describes what the project is for and what version 1 contains.
+Status: early development. The repository bootstrap (milestone M0) is done; the milestones in [ROADMAP.md](ROADMAP.md) are being worked through. This document describes what the project is for and what version 1 contains.
 
 ## Purpose
 

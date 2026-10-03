@@ -2,7 +2,7 @@
 
 SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: planning.** There is no code and nothing to install yet. This repository currently contains the project plan.
+> **Status: early development.** The repository bootstrap (milestone M0) is done: the package skeleton, the development tooling and the continuous integration are in place. There is nothing to install yet. The first version that can be installed on a host arrives with milestone M5, version 1.0 with M7.
 
 ## What it will do
 
@@ -27,9 +27,23 @@ SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of ev
 | [docs/check-catalog.md](docs/check-catalog.md) | Planned checks and default thresholds |
 | [CLAUDE.md](CLAUDE.md) | Binding rules for contributors and AI agents |
 
+## Development
+
+Requirements: Python 3.11 or later, GNU Make and git.
+
+```sh
+make check         # lint, format check, type check, repository rules and tests
+make dev-install   # create the virtual environment and install the development tools
+make test          # the test suite
+make build         # wheel and sdist in dist/
+```
+
+`make check` creates the virtual environment on its own, so a fresh clone needs only that one command.
+[CONTRIBUTING.md](CONTRIBUTING.md) describes the rules for contributions.
+
 ## License
 
-AGPL-3.0-or-later. Copyright (C) 2026 Florian Punz. See [ADR 0015](docs/adr/0015-license.md). The license file is added with the first milestone.
+AGPL-3.0-or-later. Copyright (C) 2026 Florian Punz. See [LICENSE](LICENSE) and [ADR 0015](docs/adr/0015-license.md).
 
 ## Affiliation
 
