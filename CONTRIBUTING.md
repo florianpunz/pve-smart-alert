@@ -44,6 +44,7 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - The maintainer scripts do nothing but the standard debhelper snippets, and `purge` removes the configuration and the state directory of the tool. Nothing else.
 - The version of the package is the version of the program. `make hygiene` compares `src/pve_smart_alert/__init__.py` with the newest entry of `debian/changelog`, so a release changes both in one commit.
 - Building the package needs `dpkg-dev` and `debhelper`: `make deb`, or `make build` for the package and the Python distribution together. It runs in CI and on a Debian or Proxmox VE host, not on every development machine.
+- CI builds the package on every push and inspects it: the file list, the dependencies, that the shipped configuration is a conffile, that the source tree ends up where the launcher looks for it, and that no byte code is inside. It plants a `__pycache__` directory in the source tree before the build, so that the exclusion is exercised instead of assumed.
 
 ## Fixtures and test data
 

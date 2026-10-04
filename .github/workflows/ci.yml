@@ -38,3 +38,131 @@ jobs:
       # the test suite. Creates the virtual environment on its own.
       - name: Run make check
         run: make check
+
+  # The package is what users install, so it is built and looked at on every
+  # push: the file list, the dependencies, the absence of byte code, and
+  # lintian. This needs dpkg-dev and debhelper, which the check job does not
+  # have (ADR 0013).
+  package:
+    name: Debian package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Install the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends debhelper dpkg-dev lintian
+
+      # A checkout that has run the tests carries byte code caches next to the
+      # source. They must not reach the package, and an exclusion that is never
+      # exercised is not a guarantee, so one is planted here on purpose.
+      - name: Plant a byte code cache in the source tree
+        run: |
+          mkdir -p src/pve_smart_alert/__pycache__
+          : > src/pve_smart_alert/__pycache__/model.cpython-311.pyc
+
+      - name: Build the package
+        run: make deb
+
+      - name: Show what was built
+        run: |
+          ls -l dist
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+
+      - name: The package holds every file of the tool
+        run: |
+          contents=$(dpkg-deb --contents dist/*.deb)
+          for path in \
+            ./usr/sbin/pve-smart-alert \
+            ./usr/libexec/pve-smart-alert/notify-bridge \
+            ./usr/share/pve-smart-alert/pve_smart_alert/__init__.py \
+            ./usr/share/pve-smart-alert/pve_smart_alert/cli.py \
+            ./usr/share/pve-smart-alert/pve_smart_alert/transports/pve_notify.py \
+            ./usr/share/pve-manager/templates/default/pve-smart-alert-subject.txt.hbs \
+            ./usr/share/pve-manager/templates/default/pve-smart-alert-body.txt.hbs \
+            ./etc/pve-smart-alert/config.toml \
+            ./usr/share/doc/pve-smart-alert/config.reference.toml \
+            ./usr/share/doc/pve-smart-alert/copyright
+          do
+            if ! grep -qF " $path" <<<"$contents"; then
+              echo "not in the package: $path"
+              exit 1
+            fi
+          done
+
+      - name: No byte code in the package
+        run: |
+          if dpkg-deb --contents dist/*.deb | grep -E '__pycache__|\.pyc'; then
+            echo "the package must not contain byte code (ADR 0013)"
+            exit 1
+          fi
+
+      # The install list names a directory as the source. A directory is copied
+      # with its own name and not with the path it has in the repository, and
+      # the launcher depends on that: it puts /usr/share/pve-smart-alert into
+      # PYTHONPATH.
+      - name: The source tree is where the launcher looks for it
+        run: |
+          if dpkg-deb --contents dist/*.deb | grep -q 'usr/share/pve-smart-alert/src/'; then
+            echo "the repository path was kept in the package"
+            exit 1
+          fi
+
+      - name: The dependencies are the ones the tool needs
+        run: |
+          expected=$(printf '%s\n' \
+            'python3 (>= 3.11)' \
+            'perl' \
+            'smartmontools (>= 7.0)' \
+            'libpve-notify-perl' | sort)
+          actual=$(dpkg-deb --field dist/*.deb Depends \
+            | tr ',' '\n' \
+            | sed -e 's/^ *//' -e 's/ *$//' \
+            | grep -v '^$' \
+            | sort)
+          if [ "$actual" != "$expected" ]; then
+            echo "Depends is:"; echo "$actual"
+            echo "expected:"; echo "$expected"
+            exit 1
+          fi
+
+      - name: The shipped configuration is a conffile
+        run: |
+          control=$(mktemp -d)
+          dpkg-deb --ctrl-tarfile dist/*.deb | tar -x -C "$control"
+          if ! grep -qx '/etc/pve-smart-alert/config.toml' "$control/conffiles"; then
+            echo "not a conffile: /etc/pve-smart-alert/config.toml"
+            cat "$control/conffiles" || true
+            exit 1
+          fi
+
+      - name: The installed files run
+        run: |
+          root=$(mktemp -d)
+          dpkg-deb --extract dist/*.deb "$root"
+
+          for program in usr/sbin/pve-smart-alert usr/libexec/pve-smart-alert/notify-bridge
+          do
+            if [ ! -x "$root/$program" ]; then
+              echo "not executable: /$program"
+              exit 1
+            fi
+          done
+
+          version=$(dpkg-deb --field dist/*.deb Version)
+          PYTHONPATH="$root/usr/share/pve-smart-alert" python3 -B -m pve_smart_alert --version \
+            | grep -qF "$version"
+
+          # The tool never writes byte code, and this is where that would show.
+          if find "$root/usr/share/pve-smart-alert" -name '__pycache__' | grep -q .; then
+            echo "byte code was created in the installed tree"
+            exit 1
+          fi
+
+      # Warnings are reported, errors fail the job. Man pages arrive with
+      # milestone M5 and are the main reason for warnings today.
+      - name: Run lintian
+        run: lintian --fail-on error dist/*.deb
