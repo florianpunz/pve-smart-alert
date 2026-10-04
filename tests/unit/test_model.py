@@ -7,6 +7,7 @@ from pve_smart_alert.model import (
     MAX_FIELD_VALUE,
     NOTIFICATION_TYPE,
     PVE_SEVERITY,
+    SEVERITY_FOR_PVE,
     EventType,
     Notification,
     PveSeverity,
@@ -25,6 +26,14 @@ def test_severity_mapping_follows_the_decision_record() -> None:
     assert PVE_SEVERITY[Severity.NOTICE] is PveSeverity.NOTICE
     assert PVE_SEVERITY[Severity.WARNING] is PveSeverity.WARNING
     assert PVE_SEVERITY[Severity.CRITICAL] is PveSeverity.ERROR
+
+
+def test_a_name_of_proxmox_leads_back_to_the_severity_of_the_tool() -> None:
+    # `test-notification --severity error` is the way back (FR-520).
+    assert set(SEVERITY_FOR_PVE) == set(PveSeverity)
+    for severity, pve in PVE_SEVERITY.items():
+        assert SEVERITY_FOR_PVE[pve] is severity
+    assert SEVERITY_FOR_PVE[PveSeverity.ERROR] is Severity.CRITICAL
 
 
 def test_event_types_are_the_documented_ones() -> None:

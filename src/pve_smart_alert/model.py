@@ -22,6 +22,7 @@ NOTIFICATION_TYPE: Final = "pve-smart-alert"
 
 FIELD_TYPE: Final = "type"
 FIELD_HOSTNAME: Final = "hostname"
+FIELD_EVENT: Final = "event"
 
 # Longer field values are cut. Field values go into the configuration of the
 # notification system and drive data is untrusted (ARCHITECTURE.md section 14).
@@ -56,6 +57,12 @@ PVE_SEVERITY: Final[Mapping[Severity, PveSeverity]] = {
     Severity.NOTICE: PveSeverity.NOTICE,
     Severity.WARNING: PveSeverity.WARNING,
     Severity.CRITICAL: PveSeverity.ERROR,
+}
+
+#: The way back: a severity named by Proxmox VE, as the `test-notification`
+#: command takes it, belongs to exactly one severity of the tool (FR-520).
+SEVERITY_FOR_PVE: Final[Mapping[PveSeverity, Severity]] = {
+    pve: severity for severity, pve in PVE_SEVERITY.items()
 }
 
 

@@ -1,0 +1,278 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Tests for the `test-notification` command and the rendering behind it."""
+
+from __future__ import annotations
+
+import pytest
+
+from pve_smart_alert import cli
+from pve_smart_alert.config import Config, ConfigError, NotifySettings, TransportName
+from pve_smart_alert.model import EventType, Notification, PveSeverity, Severity
+from pve_smart_alert.render import render_test_notification
+from pve_smart_alert.transports import TransportOutcome
+
+NODE = "pve1"
+
+
+class FakeTransport:
+    """A transport that answers with a fixed outcome and records what it got."""
+
+    def __init__(
+        self,
+        *,
+        delivered: bool = True,
+        transport: TransportName = TransportName.PVE_NOTIFY,
+        log_lines: tuple[str, ...] = (),
+        fallback_reason: str | None = None,
+        error: str | None = None,
+        duration_seconds: float = 0.0,
+    ) -> None:
+        self._outcome = TransportOutcome(
+            delivered=delivered,
+            transport=transport,
+            duration_seconds=duration_seconds,
+            log_lines=log_lines,
+            fallback_reason=fallback_reason,
+            error=error,
+        )
+        self.sent: list[Notification] = []
+
+    @property
+    def name(self) -> TransportName:
+        return self._outcome.transport
+
+    def send(self, notification: Notification) -> TransportOutcome:
+        self.sent.append(notification)
+        return self._outcome
+
+
+def install(
+    monkeypatch: pytest.MonkeyPatch,
+    transport: FakeTransport,
+    *,
+    config: Config | None = None,
+    config_error: ConfigError | None = None,
+) -> list[NotifySettings]:
+    """Let the command see this transport and this configuration.
+
+    Returns the settings the command built its transport from.
+    """
+    seen: list[NotifySettings] = []
+
+    def build(settings: NotifySettings) -> FakeTransport:
+        seen.append(settings)
+        return transport
+
+    def load() -> Config:
+        if config_error is not None:
+            raise config_error
+        return config if config is not None else Config()
+
+    monkeypatch.setattr(cli, "node_name", lambda: NODE)
+    monkeypatch.setattr(cli, "build_transport", build)
+    monkeypatch.setattr(cli, "load_config", load)
+    return seen
+
+
+# Rendering
+
+
+def test_the_test_notification_is_rendered() -> None:
+    notification = render_test_notification(Severity.INFO, node=NODE)
+
+    assert notification.event is EventType.TEST
+    assert notification.severity is Severity.INFO
+    assert notification.node == NODE
+    assert notification.subject == "[pve-smart-alert] INFO pve1: test notification"
+    assert NODE in notification.body
+    assert notification.fields_for() == {
+        "event": "test",
+        "type": "pve-smart-alert",
+        "hostname": "pve1",
+    }
+
+
+@pytest.mark.parametrize("severity", list(Severity))
+def test_the_subject_names_the_severity(severity: Severity) -> None:
+    # The mail route carries no severity, so the subject has to (ADR 0008).
+    notification = render_test_notification(severity, node=NODE)
+
+    assert notification.subject.startswith(f"[pve-smart-alert] {severity.value.upper()} pve1: ")
+
+
+# The command
+
+
+def test_a_delivered_notification_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(
+        log_lines=("notified via target 'mail-to-root'",), duration_seconds=0.42
+    )
+    install(monkeypatch, transport)
+
+    assert cli.main(["test-notification"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert "Transport: auto" in out
+    assert "Severity:  info" in out
+    assert "Delivered: yes" in out
+    assert "Used:      pve-notify" in out
+    assert "Duration:  0.42 s" in out
+    assert "Log:\n  notified via target 'mail-to-root'\n" in out
+
+
+def test_the_default_severity_is_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = FakeTransport()
+    install(monkeypatch, transport)
+
+    cli.main(["test-notification"])
+
+    assert transport.sent[0].severity is Severity.INFO
+
+
+def test_the_severity_can_be_chosen(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport()
+    install(monkeypatch, transport)
+
+    assert cli.main(["test-notification", "--severity", "warning"]) == cli.EXIT_OK
+
+    assert transport.sent[0].severity is Severity.WARNING
+    assert "Severity:  warning" in capsys.readouterr().out
+
+
+def test_the_severity_error_becomes_critical(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport()
+    install(monkeypatch, transport)
+
+    assert cli.main(["test-notification", "--severity", "error"]) == cli.EXIT_OK
+
+    # The tool names this severity `critical`, Proxmox VE names it `error`.
+    assert transport.sent[0].severity is Severity.CRITICAL
+    assert "Severity:  error" in capsys.readouterr().out
+
+
+def test_a_not_delivered_notification_exits_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(
+        delivered=False,
+        transport=TransportName.MAIL,
+        error="every matched target of the notification system failed",
+    )
+    install(monkeypatch, transport)
+
+    assert cli.main(["test-notification"]) == cli.EXIT_NOT_DELIVERED
+
+    out = capsys.readouterr().out
+    assert "Delivered: no" in out
+    assert "Error:     every matched target of the notification system failed" in out
+    assert "Used:" not in out
+
+
+def test_the_fallback_reason_is_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(
+        transport=TransportName.MAIL,
+        fallback_reason=(
+            "the notify bridge is missing at /usr/libexec/pve-smart-alert/notify-bridge"
+        ),
+    )
+    install(monkeypatch, transport)
+
+    assert cli.main(["test-notification"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert "Used:      mail" in out
+    assert "Fallback:  the notify bridge is missing at" in out
+
+
+def test_an_empty_log_is_named(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport())
+
+    cli.main(["test-notification"])
+
+    # Nothing logged can also mean that no matcher matched (ADR 0008).
+    assert "  (the notification system logged nothing)" in capsys.readouterr().out
+
+
+def test_the_log_lines_are_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(log_lines=("first line", "second line"))
+    install(monkeypatch, transport)
+
+    cli.main(["test-notification"])
+
+    assert "  first line\n  second line\n" in capsys.readouterr().out
+
+
+def test_the_configured_transport_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = Config(notify=NotifySettings(TransportName.MAIL))
+    seen = install(monkeypatch, FakeTransport(), config=config)
+
+    assert cli.main(["test-notification"]) == cli.EXIT_OK
+
+    assert seen[0].transport is TransportName.MAIL
+
+
+def test_the_transport_can_be_overridden(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen = install(monkeypatch, FakeTransport())
+
+    assert cli.main(["test-notification", "--transport", "mail"]) == cli.EXIT_OK
+
+    assert seen[0].transport is TransportName.MAIL
+    assert "Transport: mail" in capsys.readouterr().out
+
+
+def test_a_configuration_error_exits_with_two(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    error = ConfigError('unknown key "timeout" in section [notify]', key="notify.timeout", line=3)
+    install(monkeypatch, FakeTransport(), config_error=error)
+
+    assert cli.main(["test-notification"]) == cli.EXIT_USAGE
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "pve-smart-alert: unknown key" in captured.err
+
+
+def test_a_configuration_error_is_reported_even_with_a_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The next run will not have the override, so the broken file stays an error.
+    install(monkeypatch, FakeTransport(), config_error=ConfigError("not valid TOML"))
+
+    assert cli.main(["test-notification", "--transport", "mail"]) == cli.EXIT_USAGE
+
+
+def test_an_unknown_severity_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    install(monkeypatch, FakeTransport())
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["test-notification", "--severity", "fatal"])
+
+    assert exit_info.value.code == cli.EXIT_USAGE
+
+
+def test_an_unknown_transport_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    install(monkeypatch, FakeTransport())
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["test-notification", "--transport", "carrier-pigeon"])
+
+    assert exit_info.value.code == cli.EXIT_USAGE
+
+
+def test_the_severity_choices_are_the_pve_severities() -> None:
+    assert [severity.value for severity in PveSeverity] == cli.SEVERITY_CHOICES
