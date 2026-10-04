@@ -81,6 +81,8 @@ Deliverables:
 - Collector with timeout and standby handling; parsers for ATA and NVMe; snapshot model ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)).
 - Commands `pve-smart-alert scan` and `pve-smart-alert dump-fixture`.
 - The fake smartctl and the first fixtures, recorded on the test cluster and anonymized.
+- A line `smartctl` in `pve-smart-alert doctor`: present, version.
+- The routing check of [ADR 0020](docs/adr/0020-routing-check.md): a line `routing` in `pve-smart-alert doctor`, and the matching matchers in the output of `pve-smart-alert test-notification`. Fixtures recorded with `pvesh` from at least two matcher configurations, anonymized.
 
 Result you can test, on every cluster node:
 
@@ -88,8 +90,9 @@ Result you can test, on every cluster node:
 2. The wear value shown for each SSD equals the "Wearout" column of the web interface.
 3. `pve-smart-alert dump-fixture --all` writes an archive that contains no real serial number.
 4. With a drive name that does not exist as a manual entry, the scan still completes and reports that device as unreadable.
+5. With the default matcher restricted so that it no longer matches the type `pve-smart-alert`, `pve-smart-alert doctor` reports `routing` as `warn`, names the severities that are not routed and says how to add a matcher. `pve-smart-alert test-notification` says that no matcher matched. With the matcher of M1 in place, both report the matching matcher and `doctor` reports `ok`.
 
-Open questions this milestone answers: Q-S1 to Q-S4.
+Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 
 ## M3: Evaluation and configuration (M)
 
