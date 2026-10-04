@@ -1,7 +1,8 @@
 # ADR 0020: Check the routing of the notifications through the public API
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-04
+- Decided by: the maintainer
 
 ## Context
 

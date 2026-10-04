@@ -24,7 +24,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0017](0017-scope-of-version-1.md) | Scope of version 1 | Accepted | What is in version 1 and what is not |
 | [0018](0018-project-name.md) | Project name `pve-smart-alert` | Accepted | Name of repository, package, command and notification type |
 | [0019](0019-repository-hosting.md) | Repository on GitHub under the maintainer's account | Accepted | Where the project is hosted and released |
-| [0020](0020-routing-check.md) | Check the routing of the notifications through the public API | Proposed | How the tool detects that no matcher matches |
+| [0020](0020-routing-check.md) | Check the routing of the notifications through the public API | Accepted | How the tool detects that no matcher matches |
 
 ## Confirmed by the maintainer
 

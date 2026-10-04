@@ -17,7 +17,17 @@ The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. T
 
 ## Routing
 
-The notifications carry the type `pve-smart-alert`. They reach a target only if a matcher under Datacenter → Notifications matches them. With the unchanged default matcher this is the case without any setup. If the default matcher has been restricted, for example to the types `vzdump` and `system-mail`, the notifications are accepted and then dropped without an error. Add a matcher with the rule `type` as regex `^pve-smart-alert$` and the target you want, then check it with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
+The notifications carry the type `pve-smart-alert`. They reach a target only if a matcher under Datacenter → Notifications matches them. With the unchanged default matcher this is the case without any setup. If the default matcher has been restricted, for example to the types `vzdump` and `system-mail`, the notifications are accepted and then dropped without an error. Add a matcher with the rule `type` as regex `^pve-smart-alert$` and the target you want. In the web interface this is Datacenter → Notifications → Notification Matchers → Add. On the command line, as root on one node:
+
+```sh
+pvesh create /cluster/notifications/matchers \
+  --name pve-smart-alert \
+  --target <TARGET> \
+  --match-field 'regex:type=^pve-smart-alert$' \
+  --match-severity warning,error
+```
+
+Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Leave out `--match-severity` to route every severity, including the `info` messages of recoveries and tests. Then check the routing with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
 
 ## What it will do
 
