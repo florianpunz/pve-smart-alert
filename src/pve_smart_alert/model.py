@@ -95,21 +95,23 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
 class Notification:
     """One message that is ready to be handed to a transport.
 
-    `subject` and `body` are the rendered plain text; both transports send the
-    same text. `fields` are the metadata values of the single drive or event
-    the notification is about (FR-503); `type` and `hostname` are added by
-    `fields_for`. `data` is the structured payload the templates of the
-    notification system can use in addition to the two texts.
+    `node` is the name of the host the message is about, `subject` and `body`
+    are the rendered plain text; both transports send the same text. `fields`
+    are the metadata values of the single drive or event the notification is
+    about (FR-503); `type` and `hostname` are added by `fields_for`. `data` is
+    the structured payload the templates of the notification system can use in
+    addition to the two texts.
     """
 
     event: EventType
     severity: Severity
+    node: str
     subject: str
     body: str
     fields: Mapping[str, str] = field(default_factory=dict)
     data: Mapping[str, object] = field(default_factory=dict)
 
-    def fields_for(self, node: str) -> dict[str, str]:
+    def fields_for(self) -> dict[str, str]:
         """Return the complete metadata fields of this notification.
 
         Every notification carries `type` and `hostname` (FR-502); the other
@@ -119,7 +121,7 @@ class Notification:
         """
         merged = dict(self.fields)
         merged[FIELD_TYPE] = NOTIFICATION_TYPE
-        merged[FIELD_HOSTNAME] = node
+        merged[FIELD_HOSTNAME] = self.node
         return {name: sanitize_field_value(value) for name, value in merged.items()}
 
 

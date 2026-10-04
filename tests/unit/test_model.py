@@ -74,25 +74,25 @@ def test_fields_always_carry_type_and_hostname() -> None:
     notification = Notification(
         event=EventType.TEST,
         severity=Severity.INFO,
+        node="pve1",
         subject="subject",
         body="body",
     )
 
-    fields = notification.fields_for("pve1")
-
-    assert fields == {"type": NOTIFICATION_TYPE, "hostname": "pve1"}
+    assert notification.fields_for() == {"type": NOTIFICATION_TYPE, "hostname": "pve1"}
 
 
 def test_fields_keep_the_fields_of_the_drive() -> None:
     notification = Notification(
         event=EventType.PROBLEM,
         severity=Severity.WARNING,
+        node="pve1",
         subject="subject",
         body="body",
         fields={"event": "problem", "device": "/dev/sdb", "serial": "S5Y1NX0R000001A"},
     )
 
-    fields = notification.fields_for("pve1")
+    fields = notification.fields_for()
 
     assert fields["event"] == "problem"
     assert fields["device"] == "/dev/sdb"
@@ -103,12 +103,13 @@ def test_fields_cannot_replace_type_and_hostname() -> None:
     notification = Notification(
         event=EventType.TEST,
         severity=Severity.INFO,
+        node="pve1",
         subject="subject",
         body="body",
         fields={"type": "other", "hostname": "elsewhere"},
     )
 
-    fields = notification.fields_for("pve1")
+    fields = notification.fields_for()
 
     assert fields["type"] == NOTIFICATION_TYPE
     assert fields["hostname"] == "pve1"
@@ -118,12 +119,13 @@ def test_fields_are_sanitized() -> None:
     notification = Notification(
         event=EventType.PROBLEM,
         severity=Severity.WARNING,
+        node="pve1",
         subject="subject",
         body="body",
         fields={"model": "Samsung SSD,\n1TB"},
     )
 
-    assert notification.fields_for("pve1")["model"] == "Samsung SSD; 1TB"
+    assert notification.fields_for()["model"] == "Samsung SSD; 1TB"
 
 
 def test_node_name_is_the_short_host_name() -> None:
