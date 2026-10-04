@@ -16,4 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pve-smart-alert doctor` reports the state of the configuration, the notify bridge, the notification templates and the mail command (FR-603).
 - A Debian package with a launcher, the bridge, the templates and the configuration file; `make build` builds it together with the Python distribution ([ADR 0013](docs/adr/0013-packaging-and-installation.md)).
 
+### Changed
+
+- `pve-smart-alert test-notification` points out that an empty log can mean that no matcher matched.
+
 [Unreleased]: https://github.com/florianpunz/pve-smart-alert/commits/main

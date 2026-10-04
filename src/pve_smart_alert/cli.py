@@ -140,6 +140,7 @@ def _report(
             print(f"  {log_line}")
     else:
         print("  (the notification system logged nothing)")
+        print("  Nothing logged can also mean that no matcher matched: check the target.")
 
 
 def _labelled(label: str, value: str) -> str:

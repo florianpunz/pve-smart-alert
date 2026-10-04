@@ -200,7 +200,9 @@ def test_an_empty_log_is_named(
     cli.main(["test-notification"])
 
     # Nothing logged can also mean that no matcher matched (ADR 0008).
-    assert "  (the notification system logged nothing)" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "  (the notification system logged nothing)" in out
+    assert "no matcher matched" in out
 
 
 def test_the_log_lines_are_reported(
