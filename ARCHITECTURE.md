@@ -301,6 +301,8 @@ The Python side starts `/usr/libexec/pve-smart-alert/notify-bridge` and writes o
 The bridge loads `PVE::Notify`, checks that the expected function exists, adds the common template data if available, and calls `PVE::Notify::notify($severity, $template, $data, $fields)`.
 It answers on standard output with `{"ok": true}` or `{"ok": false, "error": "..."}` and exits with 0 or non-zero accordingly. What the notification library logs to standard error is passed through and captured by the Python side.
 
+Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `notified via target \`NAME\`` or `could not notify via target \`NAME\`: REASON`. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
+
 ### Templates
 
 Installed in `/usr/share/pve-manager/templates/default/`:
@@ -377,7 +379,7 @@ pve-smart-alert 1.0.0 on pve1
 | Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
-| No matcher matches | Nothing is sent. Not an error. Visible in `pve-smart-alert test-notification` |
+| No matcher matches | Nothing is sent. Not an error. The call succeeds with an empty log, which `pve-smart-alert test-notification` names (Q-N8) |
 | Mail command fails as well | The notification is not delivered. State is not advanced. The run exits non-zero and the failure unit tries a minimal mail |
 | Unhandled error in the program | The service fails. `pve-smart-alert-failure.service` sends a short mail to root, at most once per day |
 | System clock jumps | Timestamps in the future are treated as "now" |
@@ -462,4 +464,4 @@ Sandboxing options of systemd are applied only where they are known not to inter
 
 ## 16. Not yet settled
 
-Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are the feedback behavior of the notification bridge, the exact JSON that smartctl 7.4 produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers.
+Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are how to detect that no matcher matches, the exact JSON that smartctl 7.4 produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers.

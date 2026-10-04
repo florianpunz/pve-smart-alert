@@ -14,17 +14,14 @@ The questions Q-M1 to Q-M8 were answered on 2026-10-03. The answers are recorded
 
 ## Notification route
 
-Answered in milestone M1 on a real host.
+Most of these were answered in milestone M1 on a real host (2026-10-04); what is left needs a degraded cluster, a slow target, or the Proxmox developers.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-N1 | Does a call to `PVE::Notify::notify` from a separate root process work on Proxmox VE 9.2 without further initialization? | Basis of the primary transport. Verified only in source code and in a forum report | Yes |
-| Q-N2 | Does the notification library write its lines "notified via target" and "could not notify via target" to the standard error of the bridge process, and in which exact format? | The only feedback about delivery. The fallback and retry rules depend on it ([ADR 0008](docs/adr/0008-notification-integration.md)) | Yes, readable on standard error |
-| Q-N3 | What exactly happens when a template is missing: does the call return success, and what is logged? | This is the most likely failure after a Proxmox VE upgrade. It must lead to the fallback | The call succeeds and the error is only logged |
 | Q-N4 | How long can the call block when an SMTP or webhook target is slow or unreachable? | Sets the timeout of the bridge | 120 seconds is enough |
-| Q-N5 | How do custom notifications behave in the web interface: is a matcher with a regex on `type` shown and editable normally, and what happens when pmxcfs has no quorum or is not running? | Usability of routing, and behavior in a degraded cluster | Regex matchers work; without pmxcfs the bridge fails and the fallback is used |
+| Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
-| Q-N7 | Does `PVE::Notify::notify` work when the optional configuration argument is left out, and does the module then read the cluster configuration through pmxcfs itself? | The bridge passes four arguments and nothing else. If a configuration has to be passed, the bridge has to build it, which is a second internal interface to depend on | Yes, the module reads it itself; that needs root and a running `pve-cluster` service |
+| Q-N8 | Can the tool tell that no matcher matched? On the test cluster a notification that matched nothing returned success with an empty log, the same as a delivered one that logs nothing. Can the bridge read the matcher configuration, and is that acceptable as a second internal interface? | A tool whose messages are silently dropped looks healthy. `doctor` and `test-notification` could warn. Needs a decision record ([ADR 0008](docs/adr/0008-notification-integration.md)) | No. The test command only names the empty log |
 
 ## smartctl output and discovery
 

@@ -15,6 +15,10 @@ SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of ev
 
 The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. The transport is `auto`, `pve-notify` or `mail`; without the option the configuration decides, and `auto` means the notify bridge with mail to root as the fallback.
 
+## Routing
+
+The notifications carry the type `pve-smart-alert`. They reach a target only if a matcher under Datacenter → Notifications matches them. With the unchanged default matcher this is the case without any setup. If the default matcher has been restricted, for example to the types `vzdump` and `system-mail`, the notifications are accepted and then dropped without an error. Add a matcher with the rule `type` as regex `^pve-smart-alert$` and the target you want, then check it with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
+
 ## What it will do
 
 - Find all SATA, SAS and NVMe drives by itself, including drives behind hardware RAID controllers that smartctl can reach.
