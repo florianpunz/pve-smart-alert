@@ -166,7 +166,7 @@ def test_a_not_delivered_notification_exits_one(
     )
     install(monkeypatch, transport)
 
-    assert cli.main(["test-notification"]) == cli.EXIT_NOT_DELIVERED
+    assert cli.main(["test-notification"]) == cli.EXIT_PROBLEM
 
     out = capsys.readouterr().out
     assert "Delivered: no" in out

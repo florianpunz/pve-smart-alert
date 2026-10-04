@@ -13,6 +13,7 @@ from collections.abc import Sequence
 
 from pve_smart_alert import __version__
 from pve_smart_alert.config import ConfigError, NotifySettings, TransportName, load_config
+from pve_smart_alert.doctor import CheckResult, Status, run_doctor
 from pve_smart_alert.model import (
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
@@ -26,10 +27,12 @@ from pve_smart_alert.transports import TransportOutcome, build_transport
 PROGRAM = "pve-smart-alert"
 DESCRIPTION = "SMART drive alerts for Proxmox VE"
 
-# The command ran and the message was delivered, or it was not: the second
-# one is a finding of the command, not a failure of the tool (FR-520).
+# The command ran and answered well.
 EXIT_OK = 0
-EXIT_NOT_DELIVERED = 1
+# The command ran, but its answer is not a good one: a notification that was
+# not delivered or a check that failed. That is the answer, not a crash
+# (FR-520, FR-603).
+EXIT_PROBLEM = 1
 # A usage error and an unusable configuration both end here, the same status
 # that the argument parser uses for its own errors.
 EXIT_USAGE = 2
@@ -68,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="transport to use instead of the configured one (default: the configuration)",
     )
+
+    commands.add_parser(
+        "doctor",
+        help="check what this host offers for the tool",
+        description="Check the parts of the host the tool works with and report one line each.",
+    )
     return parser
 
 
@@ -78,6 +87,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if arguments.command == "test-notification":
         return _test_notification(arguments)
+    if arguments.command == "doctor":
+        return _doctor()
 
     parser.print_help()
     return EXIT_OK
@@ -103,7 +114,7 @@ def _test_notification(arguments: argparse.Namespace) -> int:
     outcome = build_transport(settings).send(notification)
     _report(notification, settings, outcome)
 
-    return EXIT_OK if outcome.delivered else EXIT_NOT_DELIVERED
+    return EXIT_OK if outcome.delivered else EXIT_PROBLEM
 
 
 def _report(
@@ -134,3 +145,24 @@ def _report(
 def _labelled(label: str, value: str) -> str:
     """Return one line of the report. The labels line up."""
     return f"{label + ':':<10} {value}"
+
+
+def _doctor() -> int:
+    """Report what this host offers for the tool (FR-603)."""
+    results = run_doctor()
+    for result in results:
+        print(_check_line(result))
+        if result.advice is not None:
+            # Starts where the detail of the line above starts.
+            print(f"{'':<12} {'':<5} {result.advice}")
+
+    return EXIT_PROBLEM if any(_failed(result) for result in results) else EXIT_OK
+
+
+def _check_line(result: CheckResult) -> str:
+    """Return one line of the self-diagnosis. Names and statuses line up."""
+    return f"{result.name + ':':<12} {result.status.value:<5} {result.detail}"
+
+
+def _failed(result: CheckResult) -> bool:
+    return result.status is Status.FAIL

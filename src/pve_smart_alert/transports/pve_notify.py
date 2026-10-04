@@ -68,7 +68,7 @@ class PveNotifyTransport:
                 error=f"the notify bridge could not be started: {failure.strerror or failure}",
             )
 
-        error = _reason_for_refusal(result, timeout=self.timeout) or _reason_in_log(result.stderr)
+        error = reason_for_refusal(result, timeout=self.timeout) or _reason_in_log(result.stderr)
         return self._outcome(delivered=error is None, started=started, error=error, result=result)
 
     def _outcome(
@@ -105,8 +105,12 @@ def _request(notification: Notification) -> str:
     )
 
 
-def _reason_for_refusal(result: ProcessResult, *, timeout: float) -> str | None:
-    """Return why the bridge refused the notification, or `None`."""
+def reason_for_refusal(result: ProcessResult, *, timeout: float) -> str | None:
+    """Return why the bridge refused, or `None`.
+
+    Used for a notification and for the self-check of the bridge alike: both
+    times the answer and the exit status decide.
+    """
     if result.timed_out:
         return f"the notify bridge did not answer within {timeout:g} seconds"
 
