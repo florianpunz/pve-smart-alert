@@ -93,7 +93,13 @@ EXPECTED_LICENSE: Final = "AGPL-3.0-or-later"
 LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 
 SOURCE_SUFFIXES: Final = frozenset({".pl", ".pm", ".py", ".sh", ".toml", ".yaml", ".yml"})
-SOURCE_NAMES: Final = frozenset({"Makefile"})
+# Scripts without a suffix, which the installed paths keep as well.
+SOURCE_NAMES: Final = frozenset({"Makefile", "notify-bridge", "pve-smart-alert"})
+
+# The Handlebars templates (`.hbs`) are left out on purpose even though NFR-20
+# asks for an identifier in every source file: their content is nothing but the
+# two expressions they print, and where they come from and under which license
+# they stand is recorded in the copyright file of the package (ADR 0015).
 
 # A shebang, a coding line and an interpreter hint fit in front of it.
 SPDX_SEARCH_LINES: Final = 5

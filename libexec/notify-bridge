@@ -1,0 +1,79 @@
+#!/usr/bin/perl
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The notify bridge: the only part of PVE SMART Alert that touches the internals
+# of Proxmox VE (ADR 0008).
+#
+# One JSON document arrives on standard input and one leaves on standard output.
+# What the notification system logs about rendering and about the targets goes
+# to standard error unchanged; that log is the only feedback about delivery.
+#
+# `--check` loads the module and looks for the expected function without sending
+# anything; `pve-smart-alert doctor` reports that.
+
+use strict;
+use warnings;
+
+# JSON::PP is part of the core since Perl 5.14, so `Depends: perl` covers it.
+# It is loaded at run time on purpose: with `use` the bridge would not even
+# compile on a host where the module is missing.
+require JSON::PP;
+
+my $json = JSON::PP->new->utf8->canonical;
+
+sub answer {
+    my (%reply) = @_;
+
+    my $document = { ok => $reply{ok} ? JSON::PP::true() : JSON::PP::false() };
+    $document->{error} = $reply{error} if defined $reply{error};
+    print $json->encode($document);
+    exit($reply{ok} ? 0 : 1);
+}
+
+sub load_notify {
+    eval { require PVE::Notify; 1 } or return "PVE::Notify could not be loaded: $@";
+    return "PVE::Notify does not offer notify()" unless PVE::Notify->can('notify');
+    # Without it the sub returns the code reference above, which reads as an error.
+    return undef;
+}
+
+sub read_request {
+    local $/;
+    my $text = <STDIN> // '';
+    my $request = eval { $json->decode($text) };
+    answer(ok => 0, error => "the request is not valid JSON: $@") unless defined $request;
+    answer(ok => 0, error => 'the request must be an object') unless ref($request) eq 'HASH';
+    return $request;
+}
+
+die "usage: notify-bridge [--check]\n" if @ARGV && (@ARGV != 1 || $ARGV[0] ne '--check');
+my $check_only = @ARGV ? 1 : 0;
+
+my $load_error = load_notify();
+answer(ok => 0, error => $load_error) if defined $load_error;
+answer(ok => 1) if $check_only;
+
+my $request  = read_request();
+my $severity = $request->{severity};
+my $template = $request->{template};
+my $data     = $request->{data} // {};
+my $fields   = $request->{fields} // {};
+
+my %known = map { $_ => 1 } qw(info notice warning error);
+answer(ok => 0, error => 'the severity is missing or unknown: ' . ($severity // 'none'))
+    unless defined $severity && $known{$severity};
+answer(ok => 0, error => 'the template name is missing')
+    unless defined $template && length $template;
+answer(ok => 0, error => 'data must be an object')   unless ref($data) eq 'HASH';
+answer(ok => 0, error => 'fields must be an object') unless ref($fields) eq 'HASH';
+
+# The module can add host name, FQDN and cluster name for the templates; older
+# versions do not offer that, and the values of the request win.
+my $common = eval { PVE::Notify::common_template_data() };
+$data = { %$common, %$data } if ref($common) eq 'HASH';
+
+# The optional configuration argument stays out (OPEN-QUESTIONS Q-N7).
+my $sent = eval { PVE::Notify::notify($severity, $template, $data, $fields); 1 };
+answer(ok => 0, error => "the notification system refused the notification: $@") unless $sent;
+
+answer(ok => 1);

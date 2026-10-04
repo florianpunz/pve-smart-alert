@@ -61,6 +61,11 @@ typecheck: $(STAMP)
 # Uses the standard library only, so it runs before anything is installed.
 hygiene:
 	$(PYTHON) scripts/check_hygiene.py
+	@if command -v perl >/dev/null 2>&1; then \
+		perl -c libexec/notify-bridge; \
+	else \
+		echo "perl is not installed, the notify bridge is not syntax-checked"; \
+	fi
 
 test: $(STAMP)
 	$(PYTEST)
