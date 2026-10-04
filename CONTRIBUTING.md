@@ -22,7 +22,7 @@ make dev-install   # creates .venv and installs the linter, the type checker, py
 make check         # everything CI runs: lint, format check, type check, repository checks, tests
 make test          # tests only
 make build         # the Debian package and the Python distribution
-make deb           # the Debian package in dist/ (needs dpkg-dev and debhelper)
+make deb           # the Debian package in dist/ (needs build-essential, dpkg-dev and debhelper)
 make python-dist   # wheel and sdist in dist/
 ```
 

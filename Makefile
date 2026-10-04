@@ -93,7 +93,7 @@ python-dist: $(STAMP)
 # on every development machine (ADR 0013).
 deb:
 	@command -v $(DPKG_BUILD) >/dev/null 2>&1 || { \
-		echo "$(DPKG_BUILD) is missing: install dpkg-dev and debhelper,"; \
+		echo "$(DPKG_BUILD) is missing: install build-essential, dpkg-dev and debhelper,"; \
 		echo "or run 'make python-dist' for the wheel and the sdist alone"; \
 		exit 1; \
 	}

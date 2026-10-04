@@ -47,7 +47,7 @@ make check         # lint, format check, type check, repository rules and tests
 make dev-install   # create the virtual environment and install the development tools
 make test          # the test suite
 make build         # the Debian package and the Python distribution
-make deb           # the Debian package in dist/ (needs dpkg-dev and debhelper)
+make deb           # the Debian package in dist/ (needs build-essential, dpkg-dev and debhelper)
 make python-dist   # wheel and sdist in dist/
 ```
 

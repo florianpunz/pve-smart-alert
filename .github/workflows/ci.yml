@@ -42,7 +42,9 @@ jobs:
   # The package is what users install, so it is built and looked at on every
   # push: the file list, the dependencies, the absence of byte code, and
   # lintian. This needs dpkg-dev and debhelper, which the check job does not
-  # have (ADR 0013).
+  # have (ADR 0013). build-essential is required as well: dpkg-checkbuilddeps
+  # always treats it as an implicit build dependency, and the runner image does
+  # not have the package installed.
   package:
     name: Debian package
     runs-on: ubuntu-latest
@@ -53,7 +55,7 @@ jobs:
       - name: Install the packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends debhelper dpkg-dev lintian
+          sudo apt-get install --yes --no-install-recommends build-essential debhelper dpkg-dev lintian
 
       # A checkout that has run the tests carries byte code caches next to the
       # source. They must not reach the package, and an exclusion that is never
