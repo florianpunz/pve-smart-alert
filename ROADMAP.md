@@ -67,7 +67,7 @@ Result you can test, on one cluster node:
 5. `pve-smart-alert doctor` reports both situations correctly.
 6. `apt purge pve-smart-alert` leaves no file behind.
 
-Open questions this milestone answers: Q-N1 to Q-N5.
+Open questions this milestone answers: Q-N1 to Q-N5 and Q-N7.
 
 Decision point: if the primary route cannot be made to work or to fail visibly, [ADR 0008](docs/adr/0008-notification-integration.md) is revised before M2 starts.
 

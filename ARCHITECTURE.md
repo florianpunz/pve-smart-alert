@@ -215,6 +215,8 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
+Milestone M1 reads only `[notify] transport`. Every other key in the example above is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
+
 ## 9. State
 
 File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-storage.md)). Shape:

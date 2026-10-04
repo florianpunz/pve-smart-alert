@@ -4,7 +4,7 @@ Everything that could not be settled during planning.
 Each entry says why it matters, what is assumed until it is answered, and when it gets answered.
 Answered entries are removed from this file; the answer goes into the document it affects, and into a new decision record if it changes a decision.
 
-Last updated: 2026-10-03.
+Last updated: 2026-10-04.
 
 ## For the maintainer
 
@@ -24,6 +24,7 @@ Answered in milestone M1 on a real host.
 | Q-N4 | How long can the call block when an SMTP or webhook target is slow or unreachable? | Sets the timeout of the bridge | 120 seconds is enough |
 | Q-N5 | How do custom notifications behave in the web interface: is a matcher with a regex on `type` shown and editable normally, and what happens when pmxcfs has no quorum or is not running? | Usability of routing, and behavior in a degraded cluster | Regex matchers work; without pmxcfs the bridge fails and the fallback is used |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
+| Q-N7 | Does `PVE::Notify::notify` work when the optional configuration argument is left out, and does the module then read the cluster configuration through pmxcfs itself? | The bridge passes four arguments and nothing else. If a configuration has to be passed, the bridge has to build it, which is a second internal interface to depend on | Yes, the module reads it itself; that needs root and a running `pve-cluster` service |
 
 ## smartctl output and discovery
 
@@ -87,3 +88,4 @@ Recorded here so that nobody has to check them again.
 - A second package installing templates into the vendor template directory has precedent in `pve-ha-manager` ([Research 01](docs/research/01-notification-integration.md)).
 - The REST API has no endpoint for sending a custom notification ([Research 01](docs/research/01-notification-integration.md)).
 - smartd on Debian repeats its mail daily by default ([Research 02](docs/research/02-builtin-smart-handling.md)).
+- `dh_install` of debhelper 13 copies an entry of an install list whose source is a directory with the name of that directory and without the path it has in the repository: it changes into the parent directory and copies with `cp --parents`, so `src/pve_smart_alert` lands as `/usr/share/pve-smart-alert/pve_smart_alert`. The `PYTHONPATH` of the launcher depends on it, and the package job in CI checks the installed tree.
