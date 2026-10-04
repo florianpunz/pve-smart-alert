@@ -15,3 +15,10 @@ __pycache__/
 # Build output
 build/
 dist/
+
+# What dpkg-buildpackage leaves behind in debian/ (see `make clean`)
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/pve-smart-alert/

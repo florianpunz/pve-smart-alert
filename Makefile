@@ -104,6 +104,8 @@ deb:
 
 clean:
 	rm -rf .mypy_cache .pytest_cache .ruff_cache build $(DIST)
+	rm -rf debian/.debhelper debian/pve-smart-alert debian/files debian/debhelper-build-stamp
+	rm -f debian/*.substvars
 	find . -path ./$(VENV) -prune -o -type d -name __pycache__ -print0 | xargs -0 -r rm -rf
 
 distclean: clean
