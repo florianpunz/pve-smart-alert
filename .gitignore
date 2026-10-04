@@ -22,3 +22,4 @@ debian/debhelper-build-stamp
 debian/files
 debian/*.substvars
 debian/pve-smart-alert/
+debian/pve-smart-alert.debhelper.log
