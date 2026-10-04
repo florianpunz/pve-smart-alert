@@ -1,0 +1,21 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Launcher of the installed tool, installed as /usr/sbin/pve-smart-alert.
+#
+# The Python package is installed as source under /usr/share/pve-smart-alert
+# and is imported from there. Nothing is compiled and no byte code is written:
+# /usr belongs to the package manager, and a .pyc file created at run time
+# would be reported by dpkg as belonging to no package (ADR 0013). The
+# interpreter flag and the environment variable say the same thing, so that
+# neither a changed default nor a caller can bring the caches back.
+#
+# The command line is passed through unchanged: the launcher adds nothing to
+# the interface of the tool.
+set -eu
+
+PYTHONPATH=/usr/share/pve-smart-alert
+PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH PYTHONDONTWRITEBYTECODE
+
+exec python3 -B -m pve_smart_alert "$@"

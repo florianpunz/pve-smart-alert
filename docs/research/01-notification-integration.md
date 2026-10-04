@@ -83,6 +83,7 @@ Templates:
 - If no HTML template exists, the plain-text body is escaped and wrapped in `<pre>` for mail targets. Two files are therefore enough.
 - If neither location has the template, rendering fails with "failed to render notification template, all template candidates are erroneous or missing".
 - Plain-text templates are rendered without escaping.
+- A subject template ends with a newline in the files `pve-manager` ships itself, checked against `templates/default/package-updates-subject.txt.hbs` in the `pve-manager` repository. The trailing newline of a template file is therefore not something a caller has to avoid.
 - Precedent for a separate package shipping templates into the vendor directory: `pve-ha-manager` installs its `fencing-*.hbs` files into `/usr/share/pve-manager/templates/default/`.
 
 Error behavior:

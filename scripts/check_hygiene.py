@@ -93,13 +93,18 @@ EXPECTED_LICENSE: Final = "AGPL-3.0-or-later"
 LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 
 SOURCE_SUFFIXES: Final = frozenset({".pl", ".pm", ".py", ".sh", ".toml", ".yaml", ".yml"})
-# Scripts without a suffix, which the installed paths keep as well.
-SOURCE_NAMES: Final = frozenset({"Makefile", "notify-bridge", "pve-smart-alert"})
+# Scripts without a suffix: the ones whose installed path keeps the name, and
+# the two maintainer scripts of the Debian package.
+SOURCE_NAMES: Final = frozenset({"Makefile", "notify-bridge", "postrm", "pve-smart-alert", "rules"})
 
 # The Handlebars templates (`.hbs`) are left out on purpose even though NFR-20
 # asks for an identifier in every source file: their content is nothing but the
 # two expressions they print, and where they come from and under which license
 # they stand is recorded in the copyright file of the package (ADR 0015).
+#
+# The metadata of the Debian package is left out for the same reason: control,
+# changelog, copyright and the install lists are read by the packaging tools,
+# and the license of the whole package is stated in debian/copyright.
 
 # A shebang, a coding line and an interpreter hint fit in front of it.
 SPDX_SEARCH_LINES: Final = 5

@@ -41,6 +41,8 @@ One repository with a `src` layout.
 │   └── pve_smart_alert/      Python package
 │       ├── cli.py            Command-line interface
 │       ├── config.py         Loading and validation
+│       ├── doctor.py         Self-diagnosis of the host
+│       ├── paths.py          Paths of the installed files
 │       ├── discovery/        Scan, probes, enrichment, filters
 │       ├── collect.py        smartctl invocation
 │       ├── parsers/          ata.py, nvme.py, scsi.py
@@ -52,12 +54,13 @@ One repository with a `src` layout.
 │       └── transports/       pve_notify.py, mail.py
 ├── libexec/
 │   ├── notify-bridge         Perl
+│   ├── pve-smart-alert       Launcher, POSIX shell
 │   └── report-failure        Shell
 ├── templates/                pve-smart-alert-*.hbs
 ├── systemd/                  Units
-├── config/                   Shipped config.toml
+├── config/                   Shipped config.toml and its reference
 ├── debian/                   Packaging
-├── scripts/                  install.sh, release helpers
+├── scripts/                  Repository checks, install.sh, release helpers
 ├── tests/
 │   ├── unit/
 │   ├── integration/

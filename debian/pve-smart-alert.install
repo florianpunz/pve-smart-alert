@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Every file of the tool and the place it is installed to. The table in
+# ARCHITECTURE.md section 12 says the same (ADR 0013).
+
+libexec/pve-smart-alert		usr/sbin
+libexec/notify-bridge		usr/libexec/pve-smart-alert
+src/pve_smart_alert		usr/share/pve-smart-alert
+templates/*.hbs			usr/share/pve-manager/templates/default
+config/config.toml		etc/pve-smart-alert
+config/config.reference.toml	usr/share/doc/pve-smart-alert

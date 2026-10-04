@@ -42,6 +42,7 @@ Properties that follow from this shape:
 | Component | Responsibility | Decision record |
 | --- | --- | --- |
 | Command-line interface | Parses commands, sets up logging and locking, maps results to exit codes | – |
+| Self-diagnosis | Checks the parts of the host the tool works with and reports one line per part (FR-603) | – |
 | Configuration | Loads `/etc/pve-smart-alert/config.toml`, validates it, merges it over the built-in defaults, falls back to the last good configuration | [0011](docs/adr/0011-configuration.md) |
 | Discovery | Finds drives, enriches them with system information, filters and de-duplicates them | [0005](docs/adr/0005-drive-discovery-and-identity.md) |
 | Collector | Runs smartctl for one drive with a timeout and returns JSON, exit status and messages | [0004](docs/adr/0004-smartctl-json-as-data-source.md) |

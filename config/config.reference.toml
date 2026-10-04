@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Reference of the configuration of PVE SMART Alert.
+#
+# This file is documentation. The program reads /etc/pve-smart-alert/config.toml
+# and nothing else, and copying this file over the configuration file changes
+# nothing: every key appears here with the value it has when it is not set
+# (ADR 0011).
+#
+# The values are kept in step with the program by tests, and the file grows
+# with the key that arrives.
+
+[notify]
+# How a notification leaves the host (FR-506).
+#   auto        the notify bridge, and mail to root when the bridge fails
+#   pve-notify  the notify bridge only
+#   mail        mail to root only
+transport = "auto"

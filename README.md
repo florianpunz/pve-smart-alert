@@ -2,7 +2,18 @@
 
 SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The repository bootstrap (milestone M0) is done: the package skeleton, the development tooling and the continuous integration are in place. There is nothing to install yet. The first version that can be installed on a host arrives with milestone M5, version 1.0 with M7.
+> **Status: early development.** Milestones M0 and M1 are done: the development tooling, the notification route with its two transports and the Perl bridge, the two commands below, and the Debian package that ships them. No drive is read yet — discovery and collection arrive with milestone M2. The version meant for regular use is planned as 1.0 in M7.
+
+## What works today
+
+`make build` produces the Debian package, which installs the tool together with two commands:
+
+| Command | Does |
+| --- | --- |
+| `pve-smart-alert test-notification [--severity SEVERITY] [--transport TRANSPORT]` | Sends one test notification and prints what the notification system did with it (FR-520). |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates and the mail command (FR-603). |
+
+The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. The transport is `auto`, `pve-notify` or `mail`; without the option the configuration decides, and `auto` means the notify bridge with mail to root as the fallback.
 
 ## What it will do
 
@@ -35,7 +46,9 @@ Requirements: Python 3.11 or later, GNU Make and git.
 make check         # lint, format check, type check, repository rules and tests
 make dev-install   # create the virtual environment and install the development tools
 make test          # the test suite
-make build         # wheel and sdist in dist/
+make build         # the Debian package and the Python distribution
+make deb           # the Debian package in dist/ (needs dpkg-dev and debhelper)
+make python-dist   # wheel and sdist in dist/
 ```
 
 `make check` creates the virtual environment on its own, so a fresh clone needs only that one command.

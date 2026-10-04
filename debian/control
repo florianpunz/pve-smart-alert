@@ -1,0 +1,30 @@
+Source: pve-smart-alert
+Section: admin
+Priority: optional
+Maintainer: Florian Punz <39314759+florianpunz@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/florianpunz/pve-smart-alert
+Vcs-Browser: https://github.com/florianpunz/pve-smart-alert
+Vcs-Git: https://github.com/florianpunz/pve-smart-alert.git
+
+Package: pve-smart-alert
+Architecture: all
+Depends: python3 (>= 3.11), perl, smartmontools (>= 7.0), libpve-notify-perl, ${misc:Depends}
+Description: SMART drive alerts for Proxmox VE
+ PVE SMART Alert reads the SMART data of all drives of a Proxmox VE host at
+ regular intervals, evaluates it against thresholds that predict failure, and
+ reports a problem through the Proxmox VE notification system with a real
+ severity.
+ .
+ A notification goes through the notification system, which is where the
+ targets and matchers configured for the host decide where it ends up. When
+ that route is broken, the message is sent as mail to root instead, so that a
+ broken route cannot silence the tool.
+ .
+ The tool changes nothing on the host except its own files, and it only reads
+ from the drives.
+ .
+ This is an independent project. It is not affiliated with Proxmox Server
+ Solutions GmbH.

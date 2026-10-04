@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Packaging rules. There is nothing to configure, build or compile:
+# debian/pve-smart-alert.install places every file of the tool at the path it
+# is installed to, and the Python package is installed as source, so that no
+# byte code is ever created on a host (ADR 0013).
+
+%:
+	dh $@
+
+# None of debhelper's automatic steps applies to this package. With no
+# commands below an override target, the original command is not run.
+override_dh_auto_clean:
+override_dh_auto_configure:
+override_dh_auto_build:
+override_dh_auto_test:
+override_dh_auto_install:
+
+override_dh_install:
+	# A development checkout can carry byte code caches next to the source.
+	# They never belong in the package, whatever the checkout looked like: the
+	# exclusion is what keeps the source tree installable as it is (ADR 0013).
+	dh_install --exclude=__pycache__

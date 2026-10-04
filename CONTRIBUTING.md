@@ -21,7 +21,9 @@ Requirements: Python 3.11 or later, GNU Make and git. Nothing else has to be ins
 make dev-install   # creates .venv and installs the linter, the type checker, pytest and the build tool
 make check         # everything CI runs: lint, format check, type check, repository checks, tests
 make test          # tests only
-make build         # wheel and sdist in dist/
+make build         # the Debian package and the Python distribution
+make deb           # the Debian package in dist/ (needs dpkg-dev and debhelper)
+make python-dist   # wheel and sdist in dist/
 ```
 
 `make check` creates the virtual environment on its own if it is missing, so a fresh clone needs only that one command. Use `make format` to apply the formatter.
@@ -34,6 +36,14 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - Every check of the catalog and every rule of the notification policy needs a test.
 - The path to smartctl and to the notify bridge is injectable for this reason. Tests that use it do not depend on what is installed on the machine.
 - Run the full suite with `make test` before you open a pull request.
+
+## The Debian package
+
+- `debian/` maps the repository to the installed paths and holds nothing else. Which file ends up where is in `debian/pve-smart-alert.install` and in [ARCHITECTURE.md](ARCHITECTURE.md) section 12; the package installs one file per entry and touches no file of another package ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md), [ADR 0013](docs/adr/0013-packaging-and-installation.md)).
+- The Python package is installed as source under `/usr/share/pve-smart-alert` and imported from there by the launcher. Nothing is byte-compiled: `/usr` belongs to dpkg, and a `.pyc` file written at run time would belong to no package.
+- The maintainer scripts do nothing but the standard debhelper snippets, and `purge` removes the configuration and the state directory of the tool. Nothing else.
+- The version of the package is the version of the program. `make hygiene` compares `src/pve_smart_alert/__init__.py` with the newest entry of `debian/changelog`, so a release changes both in one commit.
+- Building the package needs `dpkg-dev` and `debhelper`: `make deb`, or `make build` for the package and the Python distribution together. It runs in CI and on a Debian or Proxmox VE host, not on every development machine.
 
 ## Fixtures and test data
 
