@@ -29,3 +29,7 @@ BODY_TEMPLATE: Final = TEMPLATE_DIR / "pve-smart-alert-body.txt.hbs"
 TEMPLATE_OVERRIDE_DIR: Final = Path("/etc/pve/notification-templates/default")
 
 CONFIG_PATH: Final = Path("/etc/pve-smart-alert/config.toml")
+
+# The command line client of the Proxmox VE API, part of `pve-manager`. The
+# routing check reads the matchers and targets through it (ADR 0020).
+PVESH_PATH: Final = Path("/usr/bin/pvesh")

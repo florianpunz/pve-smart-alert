@@ -1,0 +1,1 @@
+[{"comment":"Send mails to root@pam's email address","disable":1,"name":"mail-to-root","origin":"modified-builtin","type":"sendmail"},{"name":"smtp-relay","origin":"user-created","type":"smtp"},{"disable":1,"name":"smtp-provider","origin":"user-created","type":"smtp"}]

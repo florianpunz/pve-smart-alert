@@ -1,0 +1,1 @@
+[{"comment":"Route all notifications to mail-to-root","mode":"all","name":"default-matcher","origin":"builtin","target":["mail-to-root"]}]

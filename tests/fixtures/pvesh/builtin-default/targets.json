@@ -1,0 +1,1 @@
+[{"comment":"Send mails to root@pam's email address","name":"mail-to-root","origin":"builtin","type":"sendmail"}]

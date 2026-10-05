@@ -21,6 +21,7 @@ All statements in this section are **Verified** unless marked otherwise.
 - Configuration is cluster-wide: `/etc/pve/notifications.cfg` and `/etc/pve/priv/notifications.cfg` on pmxcfs.
 - Targets: `sendmail`, `smtp`, `gotify`, `webhook`.
 - Matchers route notifications to targets. Rule types: `match-field` (`exact:` or `regex:` on a metadata field), `match-severity`, `match-calendar`. A matcher without rules always matches. If a matched field does not exist in the notification, the rule does not match.
+- How a matcher decides, **Verified** on 2026-10-06 in `matcher.rs` and `lib.rs` of `proxmox-notify` and in `PVE/Notify.pm` (`master`): `mode`, `all` by default or `any`, combines the rules within each rule type and then the results of the rule types. An `exact:` rule lists values separated by commas, each trimmed; a `regex:` rule matches when the expression is found anywhere in the value. `invert-match` inverts the result, except for a matcher without rules, which always matches. A disabled matcher is skipped. Of the targets a matcher returns, a disabled one is skipped and one that does not exist is logged as an error. Neither `PVE::Notify` nor the library adds a field to the fields of the caller; only a mail forwarded into the notification system gets `type` and `hostname` from the library.
 - Severities: `info`, `notice`, `warning`, `error`, `unknown`.
 - Built-in notification types and their metadata:
 

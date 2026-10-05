@@ -23,6 +23,10 @@ NOTIFICATION_TYPE: Final = "pve-smart-alert"
 FIELD_TYPE: Final = "type"
 FIELD_HOSTNAME: Final = "hostname"
 FIELD_EVENT: Final = "event"
+# A notification about a single drive carries these as well (FR-503).
+FIELD_DEVICE: Final = "device"
+FIELD_SERIAL: Final = "serial"
+FIELD_MODEL: Final = "model"
 
 # Longer field values are cut. Field values go into the configuration of the
 # notification system and drive data is untrusted (ARCHITECTURE.md section 14).
