@@ -4,7 +4,7 @@ Everything that could not be settled during planning.
 Each entry says why it matters, what is assumed until it is answered, and when it gets answered.
 Answered entries are removed from this file; the answer goes into the document it affects, and into a new decision record if it changes a decision.
 
-Last updated: 2026-10-05.
+Last updated: 2026-10-06.
 
 ## For the maintainer
 
@@ -14,14 +14,13 @@ The questions Q-M1 to Q-M8 were answered on 2026-10-03. The answers are recorded
 
 ## Notification route
 
-Most of these were answered in milestone M1 on a real host (2026-10-04); what is left needs a degraded cluster, a slow target, or the Proxmox developers.
+Most of these were answered in milestone M1 on a real host (2026-10-04); what is left needs a degraded cluster, a slow target, or the Proxmox developers. Q-N8, whether the tool can tell that no matcher matched, is answered by the routing check of [ADR 0020](docs/adr/0020-routing-check.md), described in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
 | Q-N4 | How long can the call block when an SMTP or webhook target is slow or unreachable? | Sets the timeout of the bridge | 120 seconds is enough |
 | Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
-| Q-N8 | Can the tool tell that no matcher matched? On the test cluster a notification that matched nothing returned success with an empty log, the same as a delivered one that logs nothing. Can the bridge read the matcher configuration, and is that acceptable as a second internal interface? | A tool whose messages are silently dropped looks healthy. `doctor` and `test-notification` could warn. Needs a decision record ([ADR 0008](docs/adr/0008-notification-integration.md)) | No. The test command only names the empty log. [ADR 0020](docs/adr/0020-routing-check.md) decides on a check through `pvesh`; this entry goes when the check is built |
 
 ## smartctl output and discovery
 

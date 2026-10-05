@@ -15,16 +15,25 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.config import ConfigError, NotifySettings, TransportName, load_config
+from pve_smart_alert.model import NOTIFICATION_TYPE, PveSeverity, node_name
 from pve_smart_alert.paths import (
     BODY_TEMPLATE,
     BRIDGE_PATH,
     CONFIG_PATH,
+    PVESH_PATH,
     SENDMAIL_PATH,
     SUBJECT_TEMPLATE,
     TEMPLATE_DIR,
     TEMPLATE_OVERRIDE_DIR,
 )
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
+from pve_smart_alert.routing import (
+    RoutingError,
+    Verdict,
+    evaluate,
+    read_notification_config,
+    tool_metadata,
+)
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 from pve_smart_alert.transports.pve_notify import reason_for_refusal
 
@@ -37,6 +46,13 @@ PENDING: Final = (
     " are checked once their milestones are built"
 )
 
+# How a severity that no matcher routes gets a route (ADR 0020). The README
+# has the complete command.
+ROUTING_ADVICE: Final = (
+    f"add them to a matcher with the rule regex:type=^{NOTIFICATION_TYPE}$,"
+    " under Datacenter > Notifications, see the README"
+)
+
 
 class Status(StrEnum):
     """How one check ended."""
@@ -45,7 +61,8 @@ class Status(StrEnum):
     # Not right, but this host still works: look at it, nothing is broken.
     WARN = "warn"
     FAIL = "fail"
-    # Not part of this version yet.
+    # Not checked: not part of this version yet, or not possible on this host
+    # or with this configuration.
     SKIP = "skip"
 
 
@@ -66,6 +83,8 @@ def run_doctor(
     sendmail_path: Path = SENDMAIL_PATH,
     template_dir: Path = TEMPLATE_DIR,
     override_dir: Path = TEMPLATE_OVERRIDE_DIR,
+    pvesh_path: Path = PVESH_PATH,
+    node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
     """Run every check and return its results in the order they are reported."""
@@ -76,6 +95,12 @@ def run_doctor(
         check_bridge(bridge_path, runner=runner),
         check_templates(template_dir, override_dir=override_dir),
         check_mail(sendmail_path, settings=settings),
+        check_routing(
+            pvesh_path,
+            settings=settings,
+            node=node_name() if node is None else node,
+            runner=runner,
+        ),
         CheckResult("pending", Status.SKIP, PENDING),
     ]
 
@@ -200,6 +225,62 @@ def check_mail(path: Path, *, settings: NotifySettings | None) -> CheckResult:
             f"transport = {transport.value} needs it, and it takes a mail command such as postfix"
         ),
     )
+
+
+def check_routing(
+    pvesh_path: Path,
+    *,
+    settings: NotifySettings | None,
+    node: str,
+    runner: ProcessRunner = run_with_timeout,
+) -> CheckResult:
+    """Check that the matchers route every severity of the tool (ADR 0020).
+
+    A notification that no matcher matches is dropped without an error, so a
+    severity without a route is a warning. What this check cannot decide is
+    reported as such and never as routed; the notification system remains the
+    authority on what is delivered.
+    """
+    transport = TransportName.AUTO if settings is None else settings.transport
+    if transport is TransportName.MAIL:
+        return CheckResult(
+            "routing",
+            Status.SKIP,
+            f"transport = {transport.value}: the notifications arrive as system-mail,"
+            f" and this check follows the type {NOTIFICATION_TYPE}",
+        )
+
+    try:
+        config = read_notification_config(pvesh_path=pvesh_path, runner=runner)
+    except RoutingError as error:
+        return CheckResult("routing", Status.SKIP, f"the matchers cannot be read: {error}")
+
+    routings = [evaluate(config, tool_metadata(severity, node=node)) for severity in PveSeverity]
+    named = list(zip(PveSeverity, routings, strict=True))
+    not_routed = [
+        severity.value for severity, routing in named if routing.verdict is Verdict.NOT_ROUTED
+    ]
+    undecided = [
+        severity.value for severity, routing in named if routing.verdict is Verdict.UNKNOWN
+    ]
+
+    if not_routed:
+        detail = "not routed: " + ", ".join(not_routed)
+        if undecided:
+            detail += "; cannot be decided for: " + ", ".join(undecided)
+        return CheckResult("routing", Status.WARN, detail, advice=ROUTING_ADVICE)
+
+    if undecided:
+        reasons = dict.fromkeys(reason for routing in routings for reason in routing.reasons)
+        return CheckResult(
+            "routing",
+            Status.SKIP,
+            "cannot be decided for: " + ", ".join(undecided),
+            advice="; ".join(reasons),
+        )
+
+    matchers = dict.fromkeys(name for routing in routings for name in routing.matchers)
+    return CheckResult("routing", Status.OK, "every severity is routed, by " + ", ".join(matchers))
 
 
 def _template_path(name: Path, template_dir: Path, override_dir: Path) -> Path | None:

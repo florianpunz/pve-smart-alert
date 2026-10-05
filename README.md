@@ -2,7 +2,7 @@
 
 SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** Milestones M0 and M1 are done: the development tooling, the notification route with its two transports and the Perl bridge, the two commands below, and the Debian package that ships them. No drive is read yet — discovery and collection arrive with milestone M2. The version meant for regular use is planned as 1.0 in M7.
+> **Status: early development.** Milestones M0 and M1 are done: the development tooling, the notification route with its two transports and the Perl bridge, the two commands below, and the Debian package that ships them. Milestone M2 is in progress; its check of the notification routing is built. No drive is read yet — discovery and collection arrive with the rest of M2. The version meant for regular use is planned as 1.0 in M7.
 
 ## What works today
 
@@ -10,8 +10,8 @@ SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of ev
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert test-notification [--severity SEVERITY] [--transport TRANSPORT]` | Sends one test notification and prints what the notification system did with it (FR-520). |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates and the mail command (FR-603). |
+| `pve-smart-alert test-notification [--severity SEVERITY] [--transport TRANSPORT]` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520). |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates, the mail command and the routing of the notifications (FR-603). |
 
 The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. The transport is `auto`, `pve-notify` or `mail`; without the option the configuration decides, and `auto` means the notify bridge with mail to root as the fallback.
 
@@ -27,7 +27,9 @@ pvesh create /cluster/notifications/matchers \
   --match-severity info,notice,warning,error
 ```
 
-Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Route all four severities: the tool also sends `info` messages, for recoveries and for the first summary, and `notice` findings. A matcher that leaves out a severity drops those messages, and `pve-smart-alert doctor` reports the routing as `warn` from milestone M2 on. Then check the routing with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
+Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Route all four severities: the tool also sends `info` messages, for recoveries and for the first summary, and `notice` findings. A matcher that leaves out a severity drops those messages.
+
+`pve-smart-alert doctor` checks this: it reads the matchers and targets with `pvesh` and reports the routing as `warn` when a severity of the tool reaches no enabled target, and names that severity. `pve-smart-alert test-notification --severity warning` names the matchers that route the test, or says that none does. Both evaluate the matchers the way the notification system does, but they are a hint, not a delivery receipt: a rule they cannot decide, such as a time rule, is reported as such, and only the target shows that a message arrived. Run `doctor` again after you change the matchers or upgrade Proxmox VE.
 
 ## What it will do
 

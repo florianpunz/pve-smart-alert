@@ -22,6 +22,13 @@ from pve_smart_alert.model import (
     node_name,
 )
 from pve_smart_alert.render import render_test_notification
+from pve_smart_alert.routing import (
+    RoutingError,
+    Verdict,
+    evaluate,
+    metadata_of,
+    read_notification_config,
+)
 from pve_smart_alert.transports import TransportOutcome, build_transport
 
 PROGRAM = "pve-smart-alert"
@@ -133,6 +140,8 @@ def _report(
         print(_labelled("Fallback", outcome.fallback_reason))
     if outcome.error is not None:
         print(_labelled("Error", outcome.error))
+    if outcome.delivered:
+        print(_labelled("Matchers", _matchers(notification, outcome)))
 
     print("Log:")
     if outcome.log_lines:
@@ -141,6 +150,28 @@ def _report(
     else:
         print("  (the notification system logged nothing)")
         print("  Nothing logged can also mean that no matcher matched: check the target.")
+
+
+def _matchers(notification: Notification, outcome: TransportOutcome) -> str:
+    """Return which matchers route the delivered test notification (ADR 0020).
+
+    The notification system accepts a notification that no matcher matches
+    and drops it without an error, so the answer of the transport alone
+    cannot tell whether it went anywhere.
+    """
+    if outcome.transport is not TransportName.PVE_NOTIFY:
+        return "not checked, the message went as mail to root"
+    try:
+        config = read_notification_config()
+    except RoutingError as error:
+        return f"cannot be read: {error}"
+
+    routing = evaluate(config, metadata_of(notification))
+    if routing.verdict is Verdict.ROUTED:
+        return ", ".join(routing.matchers)
+    if routing.verdict is Verdict.NOT_ROUTED:
+        return "none, no matcher routes this notification to an enabled target"
+    return "cannot be decided: " + "; ".join(routing.reasons)
 
 
 def _labelled(label: str, value: str) -> str:

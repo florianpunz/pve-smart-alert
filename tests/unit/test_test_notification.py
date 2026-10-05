@@ -3,15 +3,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from pve_smart_alert import cli
 from pve_smart_alert.config import Config, ConfigError, NotifySettings, TransportName
 from pve_smart_alert.model import EventType, Notification, PveSeverity, Severity
 from pve_smart_alert.render import render_test_notification
+from pve_smart_alert.routing import NotificationConfig, RoutingError
 from pve_smart_alert.transports import TransportOutcome
 
 NODE = "pve1"
+FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "pvesh"
 
 
 class FakeTransport:
@@ -52,10 +56,13 @@ def install(
     *,
     config: Config | None = None,
     config_error: ConfigError | None = None,
+    matchers: NotificationConfig | None = None,
 ) -> list[NotifySettings]:
     """Let the command see this transport and this configuration.
 
-    Returns the settings the command built its transport from.
+    `matchers` is what the routing check reads; without it, the matchers
+    cannot be read, as on a host without `pvesh`. Returns the settings the
+    command built its transport from.
     """
     seen: list[NotifySettings] = []
 
@@ -68,10 +75,25 @@ def install(
             raise config_error
         return config if config is not None else Config()
 
+    def read_matchers() -> NotificationConfig:
+        if matchers is None:
+            raise RoutingError("pvesh is missing at /usr/bin/pvesh")
+        return matchers
+
     monkeypatch.setattr(cli, "node_name", lambda: NODE)
     monkeypatch.setattr(cli, "build_transport", build)
     monkeypatch.setattr(cli, "load_config", load)
+    monkeypatch.setattr(cli, "read_notification_config", read_matchers)
     return seen
+
+
+def recorded(name: str) -> NotificationConfig:
+    """Return one configuration of `tests/fixtures/pvesh`."""
+    directory = FIXTURES / name
+    return NotificationConfig.from_json(
+        (directory / "matchers.json").read_text(encoding="utf-8"),
+        (directory / "targets.json").read_text(encoding="utf-8"),
+    )
 
 
 # Rendering
@@ -278,3 +300,72 @@ def test_an_unknown_transport_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) 
 
 def test_the_severity_choices_are_the_pve_severities() -> None:
     assert [severity.value for severity in PveSeverity] == cli.SEVERITY_CHOICES
+
+
+# The matchers (ADR 0020)
+
+
+def test_the_matchers_that_route_the_test_are_named(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport(), matchers=recorded("test-cluster-c"))
+
+    cli.main(["test-notification", "--severity", "warning"])
+
+    assert "Matchers:  pve-smart-alert\n" in capsys.readouterr().out
+
+
+def test_a_test_that_no_matcher_routes_is_named(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The matcher left by M1 routes only warning and error (Research 06).
+    install(monkeypatch, FakeTransport(), matchers=recorded("test-cluster-a"))
+
+    assert cli.main(["test-notification", "--severity", "info"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert "Delivered: yes" in out
+    assert "Matchers:  none, no matcher routes this notification to an enabled target\n" in out
+
+
+def test_the_matchers_follow_the_severity_of_the_test(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport(), matchers=recorded("test-cluster-a"))
+
+    cli.main(["test-notification", "--severity", "error"])
+
+    assert "Matchers:  pve-smart-alert\n" in capsys.readouterr().out
+
+
+def test_matchers_that_cannot_be_read_are_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport())
+
+    assert cli.main(["test-notification"]) == cli.EXIT_OK
+
+    assert "Matchers:  cannot be read: pvesh is missing at /usr/bin/pvesh\n" in (
+        capsys.readouterr().out
+    )
+
+
+def test_a_test_sent_as_mail_is_not_followed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(transport=TransportName.MAIL)
+    install(monkeypatch, transport, matchers=recorded("test-cluster-c"))
+
+    cli.main(["test-notification"])
+
+    assert "Matchers:  not checked, the message went as mail to root\n" in (capsys.readouterr().out)
+
+
+def test_a_test_that_was_not_delivered_has_no_matchers(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport(delivered=False), matchers=recorded("test-cluster-c"))
+
+    cli.main(["test-notification"])
+
+    assert "Matchers:" not in capsys.readouterr().out

@@ -53,6 +53,7 @@ Properties that follow from this shape:
 | Renderer | Produces subject, plain-text body and structured data | [0008](docs/adr/0008-notification-integration.md) |
 | Transports | Hand a notification to Proxmox VE: through the Perl bridge or as mail to root | [0008](docs/adr/0008-notification-integration.md) |
 | Notify bridge | Perl script that calls `PVE::Notify` | [0008](docs/adr/0008-notification-integration.md) |
+| Routing check | Reads the matchers and targets through `pvesh` and evaluates them for the notifications of the tool | [0020](docs/adr/0020-routing-check.md) |
 | systemd units | Timer, service and failure reporter | [0006](docs/adr/0006-scheduling.md) |
 | Fixture tooling | Records and anonymizes smartctl output; fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md) |
 
@@ -307,9 +308,22 @@ Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root proc
 
 ### Routing check
 
-Built in milestone M2 ([ADR 0020](docs/adr/0020-routing-check.md)). Observed on Proxmox VE 9.2 (2026-10-05, [Research 06](docs/research/06-test-cluster-recordings.md)): a matcher from `pvesh get /cluster/notifications/matchers` has `name`, `mode`, `target`, `match-field`, `match-severity` and `origin`, and optionally `comment` and `disable: 1`. Rules in `match-field` start with `exact:` or `regex:`; an `exact:` rule and a `match-severity` string can each list several values separated by commas. `invert-match` and `match-calendar` were not observed; a matcher that has them makes the result `unknown`.
+`routing.py` ([ADR 0020](docs/adr/0020-routing-check.md)) runs `pvesh get /cluster/notifications/matchers --output-format json` and the same for the targets, each with a timeout of 30 seconds, and evaluates the answers for each severity of the tool (`info`, `notice`, `warning`, `error`).
 
-A severity of the tool (`info`, `notice`, `warning`, `error`) that no enabled matcher with an enabled target routes makes the line `warn`, and the line names that severity.
+- A matcher in the answer has `name`, `mode`, `target`, `match-field`, `match-severity` and `origin`, and optionally `comment` and `disable: 1`, as observed on Proxmox VE 9.2 ([Research 06](docs/research/06-test-cluster-recordings.md)).
+- The evaluation follows `proxmox-notify` ([Research 01](docs/research/01-notification-integration.md)): the mode combines the rules of each kind and then the kinds, a matcher without rules matches everything, `invert-match` inverts the result of the others, and a disabled matcher and a disabled or missing target take no part.
+- The matchers see the fields `type` and `hostname` of every notification of the tool. A rule on `event`, `device`, `serial` or `model` depends on the notification. A rule on any other field does not match, because the tool does not send it.
+- Undecided, and never counted as routed: a rule that depends on the notification, a `match-calendar` rule, an unknown key or mode, a value that is not understood, and a regular expression that Python cannot compile or compiles only with a warning. The results are combined in three-valued logic, so that a decided result never rests on an undecided part.
+
+`pve-smart-alert doctor` reports the line `routing`:
+
+| Status | When |
+| --- | --- |
+| `ok` | Every severity reaches an enabled target. The line names the matchers |
+| `warn` | A severity reaches no target. The line names it and says how to add a matcher; severities that cannot be decided are named as well |
+| `skip` | The matchers cannot be read (no `pvesh`, an error, a timeout), the routing cannot be decided (the reasons follow), or `transport = mail` |
+
+`pve-smart-alert test-notification` evaluates the delivered test notification with its exact fields and prints the matchers that route it, or says that none does. A test that went as mail is not followed.
 
 ### Templates
 
@@ -387,7 +401,7 @@ pve-smart-alert 1.0.0 on pve1
 | Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
-| No matcher matches | Nothing is sent. Not an error. The call succeeds with an empty log, which `pve-smart-alert test-notification` names (Q-N8) |
+| No matcher matches | Nothing is sent, and the call succeeds with an empty log. Not an error of the run. `pve-smart-alert doctor` reports the severity as not routed, and `pve-smart-alert test-notification` says that no matcher routes the test ([ADR 0020](docs/adr/0020-routing-check.md)) |
 | Mail command fails as well | The notification is not delivered. State is not advanced. The run exits non-zero and the failure unit tries a minimal mail |
 | Unhandled error in the program | The service fails. `pve-smart-alert-failure.service` sends a short mail to root, at most once per day |
 | System clock jumps | Timestamps in the future are treated as "now" |
@@ -453,7 +467,7 @@ Sandboxing options of systemd are applied only where they are known not to inter
 
 - The tool runs as root, because smartctl needs raw device access and the notification configuration is readable by root only.
 - It accepts no input from the network and opens no socket. Network traffic to SMTP, Gotify or webhook targets is made by the Proxmox VE notification library inside the bridge process, according to the administrator's notification configuration.
-- External programs (smartctl, lsblk, the bridge, sendmail) are started with argument lists, never through a shell. Device names and types are checked against strict patterns.
+- External programs (smartctl, lsblk, pvesh, the bridge, sendmail) are started with argument lists, never through a shell. Device names and types are checked against strict patterns.
 - The content of smartctl output is treated as untrusted data: it is parsed as JSON, and strings from drives (model, serial number, firmware) are length-limited and stripped of control characters before they are used in messages or as metadata values.
 - The state file is readable by root only. The configuration file is writable by root only.
 - `dump-fixture` replaces serial numbers, WWNs and other identifying values before anything leaves the host.
@@ -472,4 +486,4 @@ Sandboxing options of systemd are applied only where they are known not to inter
 
 ## 16. Not yet settled
 
-Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are the exact JSON that smartctl produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers. How to detect that no matcher matches is decided in [ADR 0020](docs/adr/0020-routing-check.md) and is built in milestone M2.
+Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are the exact JSON that smartctl produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers.
