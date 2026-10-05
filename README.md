@@ -24,10 +24,10 @@ pvesh create /cluster/notifications/matchers \
   --name pve-smart-alert \
   --target <TARGET> \
   --match-field 'regex:type=^pve-smart-alert$' \
-  --match-severity warning,error
+  --match-severity info,notice,warning,error
 ```
 
-Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Leave out `--match-severity` to route every severity, including the `info` messages of recoveries and tests. Then check the routing with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
+Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Route all four severities: the tool also sends `info` messages, for recoveries and for the first summary, and `notice` findings. A matcher that leaves out a severity drops those messages, and `pve-smart-alert doctor` reports the routing as `warn` from milestone M2 on. Then check the routing with `pve-smart-alert test-notification --severity warning`. A test that reports "Delivered: yes" with an empty log has only been accepted; look at the target to see whether it arrived.
 
 ## What it will do
 

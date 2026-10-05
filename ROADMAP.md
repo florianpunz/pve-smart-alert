@@ -90,7 +90,7 @@ Result you can test, on every cluster node:
 2. The wear value shown for each SSD equals the "Wearout" column of the web interface.
 3. `pve-smart-alert dump-fixture --all` writes an archive that contains no real serial number.
 4. With a drive name that does not exist as a manual entry, the scan still completes and reports that device as unreadable.
-5. With the default matcher restricted so that it no longer matches the type `pve-smart-alert`, `pve-smart-alert doctor` reports `routing` as `warn`, names the severities that are not routed and says how to add a matcher. `pve-smart-alert test-notification` says that no matcher matched. With the matcher of M1 in place, both report the matching matcher and `doctor` reports `ok`.
+5. With the default matcher restricted so that it no longer matches the type `pve-smart-alert`, `pve-smart-alert doctor` reports `routing` as `warn`, names the severities that are not routed and says how to add a matcher. `pve-smart-alert test-notification` says that no matcher matched. With the matcher of M1 in place, which routes only `warning` and `error`, `doctor` reports `routing` as `warn` and names `info` and `notice`. With that matcher extended to `info,notice,warning,error`, both report the matching matcher and `doctor` reports `ok`. A severity of the tool that no matcher routes always means `warn`; this is how the rules for `ok` and `warn` in [ADR 0020](docs/adr/0020-routing-check.md) are read.
 
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 
