@@ -10,6 +10,7 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 | [03 SMART indicators and smartctl JSON](03-smart-indicators.md) | Which values predict failure, and how do SATA, SAS and NVMe differ in `smartctl --json`? |
 | [04 Hardware RAID](04-hardware-raid.md) | How are drives behind RAID controllers found, and which controllers are realistic? |
 | [05 Prior art](05-prior-art.md) | Which existing projects solve something similar, and what follows for PVE SMART Alert? |
+| [06 Recordings from the test cluster](06-test-cluster-recordings.md) | What do the drives, the wear values and the matcher configuration of the test cluster look like? Recorded 2026-10-05 |
 
 ## Scope of validity
 

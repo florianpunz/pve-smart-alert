@@ -25,6 +25,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0018](0018-project-name.md) | Project name `pve-smart-alert` | Accepted | Name of repository, package, command and notification type |
 | [0019](0019-repository-hosting.md) | Repository on GitHub under the maintainer's account | Accepted | Where the project is hosted and released |
 | [0020](0020-routing-check.md) | Check the routing of the notifications through the public API | Accepted | How the tool detects that no matcher matches |
+| [0021](0021-wear-value-source.md) | Take the wear value from the vendor-neutral sources first | Accepted | Which source the wear value of an SSD comes from |
 
 ## Confirmed by the maintainer
 
