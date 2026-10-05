@@ -70,7 +70,7 @@ typecheck: $(STAMP)
 hygiene:
 	$(PYTHON) scripts/check_hygiene.py
 	$(PYTHON) scripts/check_version_sync.py
-	@for script in libexec/pve-smart-alert debian/postrm; do \
+	@for script in libexec/pve-smart-alert debian/postrm scripts/collect-node-data.sh; do \
 		sh -n $$script || exit 1; \
 	done
 	@if command -v perl >/dev/null 2>&1; then \
