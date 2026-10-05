@@ -17,7 +17,7 @@ Proxmox VE 9.2 ships smartmontools 7.5. The notes 02 to 04 and the records [ADR 
 | Node | Model | smartctl type | Class | LVM volume group | Wear, web interface | `endurance_used` |
 | --- | --- | --- | --- | --- | --- | --- |
 | pve5 | Fanxiang S301 256GB | `sat` | SATA SSD | `pve` (partition 3) | 0 % | 44 % |
-| pve5 | USB mass storage stick | – | USB | none (exFAT) | N/A | not in the scan |
+| pve5 | USB mass storage (virtual drive of a KVM-over-IP device) | – | USB | none (exFAT) | N/A | not in the scan |
 | pve6 | WDC PC SN720 SDAPNTW-512G-1016 | `nvme` | NVMe | `pve` (partition 3) | 0 % | 0 % |
 | pve6 | Samsung SSD 750 EVO 500GB | `sat` | SATA SSD | `vg_data` (whole disk as physical volume, no partition table) | 35 % | 35 % |
 | pve7 | Samsung SSD 850 EVO 250GB | `sat` | SATA SSD | `pve` (partition 3) | 12 % | 12 % |
@@ -30,7 +30,7 @@ None of the nodes uses ZFS. Every LVM volume group carries an LVM-thin pool.
 
 - `smartctl --scan-open --json=c` returns `devices`, an array of objects with `name`, `info_name`, `type` and `protocol`, for example `{"name": "/dev/sda", "info_name": "/dev/sda [SAT]", "type": "sat", "protocol": "ATA"}`. NVMe drives appear as the controller device `/dev/nvmeN` with type `nvme`.
 - Every physical drive appears exactly once. Partitions, LVM volumes and namespaces do not appear.
-- The USB stick on `pve5` is listed by the web interface (`pvesh get /nodes/pve5/disks/list`, type `usb`, health `UNKNOWN`) but does not appear in the scan. It is a real case for the list of skipped devices in milestone M2.
+- The USB device on `pve5` is the virtual drive of a KVM-over-IP device, used to mount ISO images. It is listed by the web interface (`pvesh get /nodes/pve5/disks/list`, type `usb`, health `UNKNOWN`) but does not appear in the scan, so discovery never sees it. It is ignored.
 - No device that could not be opened was seen, so the form of such an entry is still open (Q-S1).
 
 ## Drive output of `smartctl -x --json=c`
