@@ -97,7 +97,7 @@ Result you can test, on every cluster node:
 
 How to run it: install the new package on each node, run [`scripts/collect-node-data.sh`](scripts/collect-node-data.sh), which also records the output of `scan` and `doctor`, and check the steps against the archive. Steps 3, 4 and 5 and the test notification need the commands given there in addition. Since 2026-10-05 the matcher of the tool on the test cluster routes all four severities; for the `warn` case of step 5 it is set back to `warning,error` for the test.
 
-Preparation done on 2026-10-05: recordings of all three nodes and of two matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script, and the decision on the wear source ([ADR 0021](docs/adr/0021-wear-value-source.md)).
+Preparation done on 2026-10-05: recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script, and the decision on the wear source ([ADR 0021](docs/adr/0021-wear-value-source.md)).
 
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 

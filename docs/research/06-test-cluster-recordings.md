@@ -1,7 +1,8 @@
 # Research 06: Recordings from the test cluster
 
 What the first recordings from the test cluster show about the drive data, the wear values and the notification configuration.
-They were taken on 2026-10-05 on the three nodes `pve5`, `pve6` and `pve7`, the first by hand and the other two with [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh).
+They were taken on 2026-10-05 on the three nodes `pve5`, `pve6` and `pve7`: first `pve7` by hand, together with two configurations of the notification matchers, then all three nodes with [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh).
+The recording by hand is used only for its two matcher configurations. Everything else comes from the recordings of the script, which are complete and alike on all three nodes.
 Everything in this note is **Verified** on these recordings, unless it is marked otherwise.
 
 The raw archives contain real serial numbers and WWNs and are not part of the repository ([ADR 0016](../adr/0016-test-strategy.md)). Anonymized fixtures made from them are added with milestone M2.
@@ -24,7 +25,11 @@ Proxmox VE 9.2 ships smartmontools 7.5. The notes 02 to 04 and the records [ADR 
 | pve7 | Samsung MZVLW256HEHP (PM961) | `nvme` | NVMe | `pm961-b` (whole disk) | 2 % | 2 % |
 | pve7 | Samsung MZVLW256HEHP (PM961) | `nvme` | NVMe | `pm961-a` (whole disk) | 19 % | 19 % |
 
+The models are those that smartctl reports. The disk list of the web interface (`/nodes/NODE/disks/list`) writes the models of the SATA drives and of the USB device with underscores instead of spaces, for example `Samsung_SSD_850_EVO_250GB`; for the NVMe drives it shows the same model as smartctl.
+
 None of the nodes uses ZFS. Every LVM volume group carries an LVM-thin pool.
+
+On the three nodes the volume group of a drive can be read from `lsblk` alone. `lsblk` shows each physical volume, a whole disk or a partition, with the file system type `LVM2_member`, and the device-mapper devices that use it as its children, with the type `lvm`. The name of such a device starts with the name of the volume group, followed by a single dash; a dash inside the name of a volume group or a logical volume is doubled, as in `pm961--a-data_tmeta` for the volume group `pm961-a`. Read up to the first single dash, with each doubled dash reduced to one, the names give for every physical volume of the three nodes the volume group that `pvs` reports.
 
 ## Device scan
 
@@ -72,7 +77,15 @@ Read with `pvesh get /cluster/notifications/matchers --output-format json` and `
 - `disable` appears on matchers as well as on targets, as `"disable": 1`. It is absent when the matcher or target is enabled.
 - `regex:` is the prefix of a regex rule in `match-field`, as in `regex:type=^pve-smart-alert$`, and `exact:` of an exact rule. One `exact:` rule can list several values separated by commas: `exact:type=vzdump,system-mail`.
 - One string of `match-severity` can list several severities separated by commas: `info,notice,warning,error`.
-- `origin` was seen as `modified-builtin` and `user-created`. That an unchanged built-in matcher has `builtin` is **Assumed**.
+- `origin` was seen as `modified-builtin` and `user-created`. That an unchanged built-in matcher has `builtin` is **Assumed**. No recording contains one, because the default matcher of the test cluster is modified in all of them.
 - `invert-match` and `match-calendar` were not configured on the test cluster and remain unobserved.
 
-Two matcher configurations were recorded on `pve7`: the one left by milestone M1, and one with the matcher of the tool disabled and the default matcher limited to `vzdump`. Both are used as fixtures of the routing check in milestone M2.
+Three matcher configurations were recorded. They are the fixtures of the routing check in milestone M2 and cover the three cases of its acceptance step 5 ([ROADMAP.md](../../ROADMAP.md)).
+
+| Configuration | Recorded on | `default-matcher` | Matcher `pve-smart-alert` |
+| --- | --- | --- | --- |
+| A: as left by milestone M1 | `pve7`, by hand | `exact:type=vzdump,system-mail` | `regex:type=^pve-smart-alert$`, severities `warning,error` |
+| B | `pve7`, by hand | `exact:type=vzdump` | As in A, but disabled |
+| C: in use since 2026-10-05 | All three nodes, by the script | As in A | As in A, with the severities `info,notice,warning,error` |
+
+All matchers have the mode `all` and the same single target, an SMTP target that is enabled. The two disabled targets, `mail-to-root` and a second SMTP target, are used by no matcher, so no recording shows a matcher whose only target is disabled.
