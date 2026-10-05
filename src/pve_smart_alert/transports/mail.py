@@ -18,13 +18,8 @@ from typing import Final
 from pve_smart_alert.config import TransportName
 from pve_smart_alert.model import Notification
 from pve_smart_alert.paths import SENDMAIL_PATH
-from pve_smart_alert.transports.base import TransportOutcome
-from pve_smart_alert.transports.process import (
-    DEFAULT_TIMEOUT_SECONDS,
-    ProcessResult,
-    ProcessRunner,
-    run_with_timeout,
-)
+from pve_smart_alert.process import ProcessResult, ProcessRunner, run_with_timeout
+from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS, TransportOutcome
 
 RECIPIENT: Final = "root"
 

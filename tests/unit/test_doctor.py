@@ -24,7 +24,8 @@ from pve_smart_alert.doctor import (
     check_templates,
     run_doctor,
 )
-from pve_smart_alert.transports.process import DEFAULT_TIMEOUT_SECONDS, ProcessResult
+from pve_smart_alert.process import ProcessResult
+from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 
 
 class StaticRunner:

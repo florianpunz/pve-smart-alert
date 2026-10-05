@@ -4,6 +4,11 @@
 External programs are started with an argument list, never through a shell,
 and in their own process group, so that a timeout ends the program and
 everything it started (ARCHITECTURE.md section 14).
+
+Every component that runs a program uses this module: the transports, the
+self-diagnosis and the routing check. There is no default timeout, because
+how long a program may take depends on what it does: a slow notification
+target is something else than a slow drive.
 """
 
 from __future__ import annotations
@@ -15,12 +20,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Protocol
-
-# How long one transport may take. The delivery to SMTP, Gotify or webhook
-# targets happens inside the call, and a slow target must not hold the run
-# (ADR 0008). The value is the assumption recorded as Q-N4.
-DEFAULT_TIMEOUT_SECONDS: Final = 120.0
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -46,8 +46,9 @@ class ProcessResult:
 class ProcessRunner(Protocol):
     """Runs an external program.
 
-    A protocol so that the transports can be tested on a machine that neither
-    has the bridge nor a mail command (ADR 0014, ADR 0016).
+    A protocol so that the code that runs programs can be tested on a machine
+    that has none of them: no bridge, no mail command, no `pvesh` (ADR 0014,
+    ADR 0016).
     """
 
     def __call__(
@@ -55,7 +56,7 @@ class ProcessRunner(Protocol):
         command: Sequence[str | Path],
         *,
         input_text: str | None = ...,
-        timeout: float = ...,
+        timeout: float,
     ) -> ProcessResult: ...
 
 
@@ -63,7 +64,7 @@ def run_with_timeout(
     command: Sequence[str | Path],
     *,
     input_text: str | None = None,
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    timeout: float,
 ) -> ProcessResult:
     """Run a program and return its output.
 

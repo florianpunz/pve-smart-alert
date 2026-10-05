@@ -19,6 +19,7 @@ import pytest
 
 from pve_smart_alert.config import NotifySettings, TransportName
 from pve_smart_alert.model import EventType, Notification, Severity
+from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.transports import (
     AutoTransport,
     MailTransport,
@@ -26,7 +27,7 @@ from pve_smart_alert.transports import (
     TransportOutcome,
     build_transport,
 )
-from pve_smart_alert.transports.process import DEFAULT_TIMEOUT_SECONDS, ProcessResult
+from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 
 BRIDGE_LOG = "notified via target 'mail-to-root'\n"
 

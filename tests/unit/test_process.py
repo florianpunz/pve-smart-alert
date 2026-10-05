@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from pve_smart_alert.transports.process import run_with_timeout
+from pve_smart_alert.process import run_with_timeout
+
+# Long enough for any program of these tests, short enough to end a hanging
+# test run. The tests of the timeout itself use a shorter one.
+TIMEOUT = 10.0
 
 
 def program_has_ended(pid: int) -> bool:
@@ -26,7 +30,7 @@ def program_has_ended(pid: int) -> bool:
 
 
 def test_output_and_exit_status_are_returned() -> None:
-    result = run_with_timeout(["/bin/sh", "-c", "echo out; echo err >&2; exit 3"])
+    result = run_with_timeout(["/bin/sh", "-c", "echo out; echo err >&2; exit 3"], timeout=TIMEOUT)
 
     assert result.returncode == 3
     assert result.stdout == "out\n"
@@ -36,7 +40,7 @@ def test_output_and_exit_status_are_returned() -> None:
 
 
 def test_a_successful_program_is_ok() -> None:
-    result = run_with_timeout(["/bin/true"])
+    result = run_with_timeout(["/bin/true"], timeout=TIMEOUT)
 
     assert result.ok is True
     assert result.returncode == 0
@@ -44,7 +48,7 @@ def test_a_successful_program_is_ok() -> None:
 
 
 def test_the_input_reaches_the_program() -> None:
-    result = run_with_timeout(["/bin/cat"], input_text="hello\n")
+    result = run_with_timeout(["/bin/cat"], input_text="hello\n", timeout=TIMEOUT)
 
     assert result.stdout == "hello\n"
     assert result.ok is True
@@ -53,7 +57,7 @@ def test_the_input_reaches_the_program() -> None:
 def test_only_lines_with_text_are_log_lines() -> None:
     writer = "import sys; n = chr(10); sys.stderr.write('one' + n + n + '  ' + n + 'two' + n)"
 
-    result = run_with_timeout([sys.executable, "-c", writer])
+    result = run_with_timeout([sys.executable, "-c", writer], timeout=TIMEOUT)
 
     assert result.lines == ("one", "two")
 
@@ -62,14 +66,14 @@ def test_output_that_is_not_utf8_is_replaced() -> None:
     # Drive data is untrusted, it must not end the run.
     writer = "import sys; sys.stdout.buffer.write(bytes([97, 255, 98]))"
 
-    result = run_with_timeout([sys.executable, "-c", writer])
+    result = run_with_timeout([sys.executable, "-c", writer], timeout=TIMEOUT)
 
     assert result.stdout == "a�b"
 
 
 def test_a_missing_program_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        run_with_timeout([tmp_path / "absent"])
+        run_with_timeout([tmp_path / "absent"], timeout=TIMEOUT)
 
 
 def test_a_program_that_is_not_executable_is_an_error(tmp_path: Path) -> None:
@@ -78,14 +82,14 @@ def test_a_program_that_is_not_executable_is_an_error(tmp_path: Path) -> None:
     path.chmod(0o644)
 
     with pytest.raises(PermissionError):
-        run_with_timeout([path])
+        run_with_timeout([path], timeout=TIMEOUT)
 
 
 def test_arguments_are_not_interpreted_by_a_shell(tmp_path: Path) -> None:
     marker = tmp_path / "touched"
     argument = f"; touch {marker}; echo"
 
-    result = run_with_timeout(["/bin/echo", argument])
+    result = run_with_timeout(["/bin/echo", argument], timeout=TIMEOUT)
 
     assert result.stdout.strip() == argument
     assert not marker.exists()
@@ -94,7 +98,7 @@ def test_arguments_are_not_interpreted_by_a_shell(tmp_path: Path) -> None:
 def test_the_program_runs_in_its_own_process_group() -> None:
     printer = "import os; print(os.getpgrp())"
 
-    result = run_with_timeout([sys.executable, "-c", printer])
+    result = run_with_timeout([sys.executable, "-c", printer], timeout=TIMEOUT)
 
     # Without its own group a timeout would end this test run as well.
     assert int(result.stdout.strip()) != os.getpgrp()

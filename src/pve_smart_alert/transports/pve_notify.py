@@ -19,13 +19,8 @@ from typing import Final
 from pve_smart_alert.config import TransportName
 from pve_smart_alert.model import NOTIFICATION_TYPE, PVE_SEVERITY, Notification
 from pve_smart_alert.paths import BRIDGE_PATH
-from pve_smart_alert.transports.base import TransportOutcome
-from pve_smart_alert.transports.process import (
-    DEFAULT_TIMEOUT_SECONDS,
-    ProcessResult,
-    ProcessRunner,
-    run_with_timeout,
-)
+from pve_smart_alert.process import ProcessResult, ProcessRunner, run_with_timeout
+from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS, TransportOutcome
 
 # The notification library writes what it did with each matched target to the
 # standard error of the bridge process. These lines are the only feedback

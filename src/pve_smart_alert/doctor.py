@@ -24,11 +24,8 @@ from pve_smart_alert.paths import (
     TEMPLATE_DIR,
     TEMPLATE_OVERRIDE_DIR,
 )
-from pve_smart_alert.transports.process import (
-    DEFAULT_TIMEOUT_SECONDS,
-    ProcessRunner,
-    run_with_timeout,
-)
+from pve_smart_alert.process import ProcessRunner, run_with_timeout
+from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 from pve_smart_alert.transports.pve_notify import reason_for_refusal
 
 # The two files the notification system renders (ADR 0008).

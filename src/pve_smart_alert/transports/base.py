@@ -10,10 +10,15 @@ transports and `AutoTransport`, which combines them.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Final, Protocol
 
 from pve_smart_alert.config import TransportName
 from pve_smart_alert.model import Notification
+
+# How long one transport may take. The delivery to SMTP, Gotify or webhook
+# targets happens inside the call, and a slow target must not hold the run
+# (ADR 0008). The value is the assumption recorded as Q-N4.
+DEFAULT_TIMEOUT_SECONDS: Final = 120.0
 
 
 @dataclass(frozen=True)
