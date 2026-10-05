@@ -23,6 +23,8 @@ As stated by the maintainer on 2026-10-03:
 - No hardware RAID controller.
 - No disks or controllers passed through to guests, no drives attached through USB, no hard disks that spin down.
 
+Recorded on 2026-10-05 ([Research 06](docs/research/06-test-cluster-recordings.md)): the nodes `pve5`, `pve6` and `pve7` with Proxmox VE 9.2.21 and smartmontools 7.5; four SATA SSDs from Samsung and Fanxiang and three NVMe drives from Samsung and Western Digital, all with LVM-thin, no ZFS. A USB stick is plugged into `pve5`; it is not a monitored drive.
+
 What follows from this:
 
 - SAS drives, hardware RAID, standby handling and false "missing" alerts caused by pass-through can only be tested with recorded data and simulation ([ADR 0016](docs/adr/0016-test-strategy.md)).
@@ -80,17 +82,22 @@ Deliverables:
 - Discovery from the smartctl scan, enrichment, filtering, de-duplication, identity ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)).
 - Collector with timeout and standby handling; parsers for ATA and NVMe; snapshot model ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)).
 - Commands `pve-smart-alert scan` and `pve-smart-alert dump-fixture`.
-- The fake smartctl and the first fixtures, recorded on the test cluster and anonymized.
+- The fake smartctl and the first fixtures, made from the recordings of [Research 06](docs/research/06-test-cluster-recordings.md) and anonymized.
 - A line `smartctl` in `pve-smart-alert doctor`: present, version.
+- The wear value from the sources of [ADR 0021](docs/adr/0021-wear-value-source.md), shown with its source.
 - The routing check of [ADR 0020](docs/adr/0020-routing-check.md): a line `routing` in `pve-smart-alert doctor`, and the matching matchers in the output of `pve-smart-alert test-notification`. Fixtures recorded with `pvesh` from at least two matcher configurations, anonymized.
 
 Result you can test, on every cluster node:
 
 1. `pve-smart-alert scan` lists every physical drive exactly once, with the right model, serial number, class, and pool or volume group, and lists skipped devices with a reason.
-2. The wear value shown for each SSD equals the "Wearout" column of the web interface.
+2. The wear value shown for each SSD equals the "Wearout" column of the web interface, or `scan` names the vendor-neutral source that gives a different value ([ADR 0021](docs/adr/0021-wear-value-source.md)). On the test cluster this applies to the Fanxiang S301 on `pve5`: 44 % from the device statistics against 0 % in the web interface.
 3. `pve-smart-alert dump-fixture --all` writes an archive that contains no real serial number.
 4. With a drive name that does not exist as a manual entry, the scan still completes and reports that device as unreadable.
 5. With the default matcher restricted so that it no longer matches the type `pve-smart-alert`, `pve-smart-alert doctor` reports `routing` as `warn`, names the severities that are not routed and says how to add a matcher. `pve-smart-alert test-notification` says that no matcher matched. With the matcher of M1 in place, which routes only `warning` and `error`, `doctor` reports `routing` as `warn` and names `info` and `notice`. With that matcher extended to `info,notice,warning,error`, both report the matching matcher and `doctor` reports `ok`. A severity of the tool that no matcher routes always means `warn`; this is how the rules for `ok` and `warn` in [ADR 0020](docs/adr/0020-routing-check.md) are read.
+
+How to run it: install the new package on each node, run [`scripts/collect-node-data.sh`](scripts/collect-node-data.sh), which also records the output of `scan` and `doctor`, and check the steps against the archive. Steps 3, 4 and 5 and the test notification need the commands given there in addition. Since 2026-10-05 the matcher of the tool on the test cluster routes all four severities; for the `warn` case of step 5 it is set back to `warning,error` for the test.
+
+Preparation done on 2026-10-05: recordings of all three nodes and of two matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script, and the decision on the wear source ([ADR 0021](docs/adr/0021-wear-value-source.md)).
 
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 

@@ -98,6 +98,8 @@ The first run is the same sequence with empty state. The planner recognizes it a
 | Context | Power-on hours, power cycles |
 | Collection | smartctl version, exit status, messages, duration |
 
+The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The source is stored next to the value as `wear.source`.
+
 **Finding**: check ID, kind (condition or event), severity, current value, threshold that was crossed, short text.
 
 **Notification**: event type (`problem`, `escalated`, `worsened`, `reminder`, `recovered`, `missing`, `summary`, `first-run`, `tool`, `test`), severity, the drives and findings it covers, metadata fields, subject, body, structured data.
@@ -303,6 +305,12 @@ It answers on standard output with `{"ok": true}` or `{"ok": false, "error": "..
 
 Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `notified via target \`NAME\`` or `could not notify via target \`NAME\`: REASON`. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
 
+### Routing check
+
+Built in milestone M2 ([ADR 0020](docs/adr/0020-routing-check.md)). Observed on Proxmox VE 9.2 (2026-10-05, [Research 06](docs/research/06-test-cluster-recordings.md)): a matcher from `pvesh get /cluster/notifications/matchers` has `name`, `mode`, `target`, `match-field`, `match-severity` and `origin`, and optionally `comment` and `disable: 1`. Rules in `match-field` start with `exact:` or `regex:`; an `exact:` rule and a `match-severity` string can each list several values separated by commas. `invert-match` and `match-calendar` were not observed; a matcher that has them makes the result `unknown`.
+
+A severity of the tool (`info`, `notice`, `warning`, `error`) that no enabled matcher with an enabled target routes makes the line `warn`, and the line names that severity.
+
 ### Templates
 
 Installed in `/usr/share/pve-manager/templates/default/`:
@@ -464,4 +472,4 @@ Sandboxing options of systemd are applied only where they are known not to inter
 
 ## 16. Not yet settled
 
-Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are how to detect that no matcher matches, the exact JSON that smartctl 7.4 produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers.
+Points that affect this design and are still open are collected in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md). The most important ones are the exact JSON that smartctl produces for standby and for devices behind MegaRAID, and the probing rules for HPE controllers. How to detect that no matcher matches is decided in [ADR 0020](docs/adr/0020-routing-check.md) and is built in milestone M2.

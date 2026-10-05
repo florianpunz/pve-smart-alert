@@ -57,7 +57,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | FR-309 | A drive that was present and is absent in 2 consecutive runs shall produce a finding, unless it is removable, attached through USB, or has no stable identity. | T |
 | FR-310 | A drive that is listed but returns no usable SMART data in 2 consecutive runs shall produce a finding. | T |
 | FR-311 | A drive with SMART available but disabled shall produce a notice that names the command to enable it. The tool shall not enable it. | T |
-| FR-312 | Where the wear value is taken from a vendor attribute, the tool shall use the same attribute name list as the Proxmox VE web interface, so that both show the same value. | T, A |
+| FR-312 | The wear value shall be taken from the vendor-neutral sources first and from a vendor attribute only when none is present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md). A vendor attribute shall be found through the same attribute name list as the Proxmox VE web interface. The tool shall show which source it used. | T, A |
 
 ### Configuration
 

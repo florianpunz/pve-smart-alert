@@ -33,7 +33,7 @@ Notes:
 
 - `health.failed` is not used for NVMe. The NVMe verdict is the Critical Warning byte, which is evaluated bit by bit below.
 - `temperature`: for SAS drives, critical is also raised at the drive's own trip temperature if it reports one. For NVMe, Critical Warning bit 1 raises at least a warning.
-- `wear`, sources: NVMe `percentage_used`; the SAS endurance indicator; for SATA, the vendor attribute found through the same name list that the Proxmox VE web interface uses, so that both show the same number. If a SATA drive has no such attribute, the vendor-neutral value of smartmontools 7.5 or the ATA device statistics value is used.
+- `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface. The source used is shown with the value.
 - `selftest.failed` only reads logs. The tool never starts a self-test.
 
 ## SATA (ATA attributes)

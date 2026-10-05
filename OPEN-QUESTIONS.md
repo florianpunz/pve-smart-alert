@@ -4,7 +4,7 @@ Everything that could not be settled during planning.
 Each entry says why it matters, what is assumed until it is answered, and when it gets answered.
 Answered entries are removed from this file; the answer goes into the document it affects, and into a new decision record if it changes a decision.
 
-Last updated: 2026-10-04.
+Last updated: 2026-10-05.
 
 ## For the maintainer
 
@@ -25,14 +25,14 @@ Most of these were answered in milestone M1 on a real host (2026-10-04); what is
 
 ## smartctl output and discovery
 
-Answered in milestone M2 with recordings from the test cluster.
+Answered in milestone M2 with recordings from the test cluster. The first recordings ([Research 06](docs/research/06-test-cluster-recordings.md)) were made with smartmontools 7.5, which Proxmox VE 9.2 ships; what they settle is written into the entries. Version 7.4 remains to be covered by public test data, for older 9.x hosts.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-S1 | What does `smartctl --scan-open --json` of version 7.4 contain for each device, and how do devices appear that cannot be opened? | Input format of discovery | An array `devices` with `name`, `info_name`, `type`, `protocol` |
+| Q-S1 | How do devices appear in `smartctl --scan-open --json` that cannot be opened? Is the format of 7.4 the same as that of 7.5? | Input format of discovery | For 7.5 settled: an array `devices` with `name`, `info_name`, `type`, `protocol`. A device that cannot be opened is assumed to carry an `open_error` field |
 | Q-S2 | How does version 7.4 report a drive in standby when `--nocheck=standby` is given, in JSON and in the exit status? | Distinguishing "asleep" from "unreadable" | Exit status 2 and a message in the JSON |
-| Q-S3 | Which JSON keys carry the ATA device statistics (wear), the SCT temperature data and the NVMe self-test log in 7.4? Are the NVMe temperature thresholds of the drive in the JSON? | Sources of the wear, temperature and self-test checks | Present under protocol-specific keys; NVMe thresholds not available before 7.5 |
-| Q-S4 | Does `--xall` cause errors, delays or exit status bit 2 on the cluster's drives, compared with `--all`? | Choice of the default detail level ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)) | `--xall` is safe as default |
+| Q-S3 | Do the JSON keys of 7.4 match those of 7.5 for the ATA device statistics, the SCT temperature data and the NVMe self-test log? | Sources of the wear, temperature and self-test checks on older 9.x hosts | For 7.5 settled: `ata_device_statistics`, `ata_sct_status`, `nvme_self_test_log`, and the NVMe limits in `temperature`. Same keys in 7.4, without `endurance_used` and `spare_available` |
+| Q-S4 | Does `--xall` cause delays on the cluster's drives, compared with `--all`? | Choice of the default detail level ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)) | `--xall` is safe as default. Settled: on all six drives it ran with exit status 0 and no messages. The duration is measured by the collector |
 | Q-S5 | Does the device scan with `--scan-open` wake hard disks that are in standby? | The tool promises not to wake sleeping drives. The scan opens every device before the standby check of the drive query applies. Needs a host with hard disks that spin down. The test cluster has none, so the answer has to come from a contributor | It does not. If it does, discovery has to cache the device type and scan without opening |
 
 ## Thresholds
@@ -73,7 +73,6 @@ Narrowed in milestone M6. Some of these stay open until users with the hardware 
 | ID | Topic | Why it matters |
 | --- | --- | --- |
 | Q-U1 | The health-check framework on the Proxmox VE roadmap, which names "RAID/disk state" and integration into the notification system | Could overlap with this project or offer a better integration point. No design or date was found |
-| Q-U2 | The smartmontools version in Proxmox VE | Version 7.5 adds vendor-neutral wear and spare values and fixes an NVMe self-test log problem |
 | Q-U3 | Proxmox VE 10 | Expected with the next Debian release. The notify bridge and the template location must be checked against its first beta |
 
 ## Verified assumptions that looked risky
