@@ -1,0 +1,560 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      5
+    ],
+    "pre_release": false,
+    "svn_revision": "5714",
+    "platform_info": "x86_64-linux-7.0.14-19-pve",
+    "build_info": "(local build)",
+    "argv": [
+      "smartctl",
+      "-x",
+      "--json=c",
+      "-d",
+      "nvme",
+      "/dev/nvme1"
+    ],
+    "exit_status": 0
+  },
+  "local_time": {
+    "time_t": 1791237665,
+    "asctime": "Tue Oct  6 00:01:05 2026 CEST"
+  },
+  "device": {
+    "name": "/dev/nvme1",
+    "info_name": "/dev/nvme1",
+    "type": "nvme",
+    "protocol": "NVMe"
+  },
+  "model_name": "SAMSUNG MZVLW256HEHP-000H1",
+  "serial_number": "ANON-SN-0003",
+  "firmware_version": "CXB73H1Q",
+  "nvme_pci_vendor": {
+    "id": 5197,
+    "subsystem_id": 5197
+  },
+  "nvme_ieee_oui_identifier": 9528,
+  "nvme_total_capacity": 256060514304,
+  "nvme_unallocated_capacity": 0,
+  "nvme_controller_id": 2,
+  "nvme_version": {
+    "string": "1.2",
+    "value": 66048
+  },
+  "nvme_number_of_namespaces": 1,
+  "nvme_namespaces": [
+    {
+      "id": 1,
+      "size": {
+        "blocks": 500118192,
+        "bytes": 256060514304
+      },
+      "capacity": {
+        "blocks": 500118192,
+        "bytes": 256060514304
+      },
+      "utilization": {
+        "blocks": 217061008,
+        "bytes": 111135236096
+      },
+      "formatted_lba_size": 512,
+      "eui64": {
+        "oui": 9528,
+        "ext_id": 2
+      },
+      "features": {
+        "value": 0,
+        "thin_provisioning": false,
+        "na_fields": false,
+        "dealloc_or_unwritten_block_error": false,
+        "uid_reuse": false,
+        "np_fields": false,
+        "other": 0
+      },
+      "lba_formats": [
+        {
+          "formatted": true,
+          "data_bytes": 512,
+          "metadata_bytes": 0,
+          "relative_performance": 0
+        }
+      ]
+    }
+  ],
+  "user_capacity": {
+    "blocks": 500118192,
+    "bytes": 256060514304
+  },
+  "logical_block_size": 512,
+  "smart_support": {
+    "available": true,
+    "enabled": true
+  },
+  "nvme_firmware_update_capabilities": {
+    "value": 22,
+    "slots": 3,
+    "first_slot_is_read_only": false,
+    "activiation_without_reset": true,
+    "multiple_update_detection": false,
+    "other": 0
+  },
+  "nvme_optional_admin_commands": {
+    "value": 23,
+    "security_send_receive": true,
+    "format_nvm": true,
+    "firmware_download": true,
+    "namespace_management": false,
+    "self_test": true,
+    "directives": false,
+    "mi_send_receive": false,
+    "virtualization_management": false,
+    "doorbell_buffer_config": false,
+    "get_lba_status": false,
+    "command_and_feature_lockdown": false,
+    "other": 0
+  },
+  "nvme_optional_nvm_commands": {
+    "value": 31,
+    "compare": true,
+    "write_uncorrectable": true,
+    "dataset_management": true,
+    "write_zeroes": true,
+    "save_select_feature_nonzero": true,
+    "reservations": false,
+    "timestamp": false,
+    "verify": false,
+    "copy": false,
+    "other": 0
+  },
+  "nvme_log_page_attributes": {
+    "value": 3,
+    "smart_health_per_namespace": true,
+    "commands_effects_log": true,
+    "extended_get_log_page_cmd": false,
+    "telemetry_log": false,
+    "persistent_event_log": false,
+    "supported_log_pages_log": false,
+    "telemetry_data_area_4": false,
+    "other": 0
+  },
+  "nvme_composite_temperature_threshold": {
+    "warning": 68,
+    "critical": 71
+  },
+  "temperature": {
+    "op_limit_max": 68,
+    "critical_limit_max": 71,
+    "current": 42
+  },
+  "nvme_power_states": [
+    {
+      "non_operational_state": false,
+      "relative_read_latency": 0,
+      "relative_read_throughput": 0,
+      "relative_write_latency": 0,
+      "relative_write_throughput": 0,
+      "entry_latency_us": 0,
+      "exit_latency_us": 0,
+      "max_power": {
+        "value": 760,
+        "scale": 2,
+        "units_per_watt": 100
+      }
+    },
+    {
+      "non_operational_state": false,
+      "relative_read_latency": 1,
+      "relative_read_throughput": 1,
+      "relative_write_latency": 1,
+      "relative_write_throughput": 1,
+      "entry_latency_us": 0,
+      "exit_latency_us": 0,
+      "max_power": {
+        "value": 600,
+        "scale": 2,
+        "units_per_watt": 100
+      }
+    },
+    {
+      "non_operational_state": false,
+      "relative_read_latency": 2,
+      "relative_read_throughput": 2,
+      "relative_write_latency": 2,
+      "relative_write_throughput": 2,
+      "entry_latency_us": 0,
+      "exit_latency_us": 0,
+      "max_power": {
+        "value": 510,
+        "scale": 2,
+        "units_per_watt": 100
+      }
+    },
+    {
+      "non_operational_state": true,
+      "relative_read_latency": 3,
+      "relative_read_throughput": 3,
+      "relative_write_latency": 3,
+      "relative_write_throughput": 3,
+      "entry_latency_us": 210,
+      "exit_latency_us": 1500,
+      "max_power": {
+        "value": 400,
+        "scale": 1,
+        "units_per_watt": 10000
+      }
+    },
+    {
+      "non_operational_state": true,
+      "relative_read_latency": 4,
+      "relative_read_throughput": 4,
+      "relative_write_latency": 4,
+      "relative_write_throughput": 4,
+      "entry_latency_us": 2200,
+      "exit_latency_us": 6000,
+      "max_power": {
+        "value": 50,
+        "scale": 1,
+        "units_per_watt": 10000
+      }
+    }
+  ],
+  "smart_status": {
+    "passed": true,
+    "nvme": {
+      "value": 0
+    }
+  },
+  "nvme_smart_health_information_log": {
+    "nsid": -1,
+    "critical_warning": 0,
+    "temperature": 42,
+    "available_spare": 100,
+    "available_spare_threshold": 5,
+    "percentage_used": 19,
+    "data_units_read": 42187241,
+    "data_units_written": 156513220,
+    "host_reads": 686938442,
+    "host_writes": 2600643643,
+    "controller_busy_time": 4750,
+    "power_cycles": 14405,
+    "power_on_hours": 6616,
+    "unsafe_shutdowns": 23,
+    "media_errors": 0,
+    "num_err_log_entries": 3626,
+    "warning_temp_time": 0,
+    "critical_comp_time": 0,
+    "temperature_sensors": [
+      42,
+      51
+    ]
+  },
+  "spare_available": {
+    "current_percent": 100,
+    "threshold_percent": 5
+  },
+  "endurance_used": {
+    "current_percent": 19
+  },
+  "power_cycle_count": 14405,
+  "power_on_time": {
+    "hours": 6616
+  },
+  "nvme_error_information_log": {
+    "size": 64,
+    "read": 16,
+    "unread": 48,
+    "table": [
+      {
+        "error_count": 3626,
+        "submission_queue_id": 0,
+        "command_id": 24,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3625,
+        "submission_queue_id": 0,
+        "command_id": 20,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3624,
+        "submission_queue_id": 0,
+        "command_id": 16,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3623,
+        "submission_queue_id": 0,
+        "command_id": 87,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3622,
+        "submission_queue_id": 0,
+        "command_id": 24,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "parm_error_location": 44,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3621,
+        "submission_queue_id": 0,
+        "command_id": 23,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "parm_error_location": 44,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3620,
+        "submission_queue_id": 0,
+        "command_id": 21,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3619,
+        "submission_queue_id": 0,
+        "command_id": 8,
+        "status_field": {
+          "value": 8203,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 11,
+          "string": "Invalid Namespace or Format"
+        },
+        "phase_tag": false,
+        "parm_error_location": 4,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 1
+      },
+      {
+        "error_count": 3618,
+        "submission_queue_id": 0,
+        "command_id": 18,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3617,
+        "submission_queue_id": 0,
+        "command_id": 18,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3616,
+        "submission_queue_id": 0,
+        "command_id": 142,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3615,
+        "submission_queue_id": 0,
+        "command_id": 24,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "parm_error_location": 44,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3614,
+        "submission_queue_id": 0,
+        "command_id": 23,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "parm_error_location": 44,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      },
+      {
+        "error_count": 3613,
+        "submission_queue_id": 0,
+        "command_id": 21,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3612,
+        "submission_queue_id": 0,
+        "command_id": 23,
+        "status_field": {
+          "value": 8457,
+          "do_not_retry": false,
+          "status_code_type": 1,
+          "status_code": 9,
+          "string": "Invalid Log Page"
+        },
+        "phase_tag": false,
+        "parm_error_location": 40,
+        "lba": {
+          "value": 0
+        }
+      },
+      {
+        "error_count": 3611,
+        "submission_queue_id": 0,
+        "command_id": 24,
+        "status_field": {
+          "value": 8194,
+          "do_not_retry": false,
+          "status_code_type": 0,
+          "status_code": 2,
+          "string": "Invalid Field in Command"
+        },
+        "phase_tag": false,
+        "parm_error_location": 44,
+        "lba": {
+          "value": 0
+        },
+        "nsid": 0
+      }
+    ]
+  },
+  "nvme_self_test_log": {
+    "nsid": -1,
+    "current_self_test_operation": {
+      "value": 0,
+      "string": "No self-test in progress"
+    }
+  }
+}

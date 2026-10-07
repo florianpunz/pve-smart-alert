@@ -1,0 +1,37 @@
+{
+  "origin": "Test cluster of the maintainer, Research 06",
+  "license": "AGPL-3.0-or-later",
+  "node": "pve6",
+  "collected": "20261005T201049Z",
+  "collected_with": "scripts/collect-node-data.sh",
+  "anonymized_with": "scripts/make_fixtures.py (ADR 0023)",
+  "smartmontools": "7.5",
+  "controller": "none, directly attached",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl --scan-open --json=c",
+      "exit_status": 0
+    },
+    {
+      "file": "sda.json",
+      "device": "/dev/sda",
+      "type": "sat",
+      "protocol": "ATA",
+      "class": "ssd",
+      "model": "Samsung SSD 750 EVO 500GB",
+      "command": "smartctl -x --json=c -d sat /dev/sda",
+      "exit_status": 0
+    },
+    {
+      "file": "nvme0.json",
+      "device": "/dev/nvme0",
+      "type": "nvme",
+      "protocol": "NVMe",
+      "class": "nvme",
+      "model": "WDC PC SN720 SDAPNTW-512G-1016",
+      "command": "smartctl -x --json=c -d nvme /dev/nvme0",
+      "exit_status": 0
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "origin": "Test cluster of the maintainer, Research 06",
+  "license": "AGPL-3.0-or-later",
+  "node": "pve5",
+  "collected": "20261005T201052Z",
+  "collected_with": "scripts/collect-node-data.sh",
+  "anonymized_with": "scripts/make_fixtures.py (ADR 0023)",
+  "smartmontools": "7.5",
+  "controller": "none, directly attached",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl --scan-open --json=c",
+      "exit_status": 0
+    },
+    {
+      "file": "sda.json",
+      "device": "/dev/sda",
+      "type": "sat",
+      "protocol": "ATA",
+      "class": "ssd",
+      "model": "Fanxiang S301 256GB",
+      "command": "smartctl -x --json=c -d sat /dev/sda",
+      "exit_status": 0
+    }
+  ]
+}

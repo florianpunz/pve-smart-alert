@@ -1,7 +1,18 @@
 # Sources of the fixtures
 
 Every fixture has its origin and its license recorded here ([ADR 0016](../../docs/adr/0016-test-strategy.md), NFR-20).
-No fixture contains a real serial number or WWN.
+No fixture contains a real serial number or WWN; a test checks every fixture for it.
+
+## Output of smartctl: `smartctl/`
+
+Recordings of whole hosts, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, and `recording.json` with the command line, exit status, protocol and class of every file.
+They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs and EUI-64s are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
+
+| Directory | Origin | Changes | License |
+| --- | --- | --- | --- |
+| `direct/test-cluster-pve5` | [Research 06](../../docs/research/06-test-cluster-recordings.md): the test cluster of the maintainer, node `pve5`, recorded on 2026-10-05 by the collection script. Fanxiang S301 256GB | Anonymized | AGPL-3.0-or-later |
+| `direct/test-cluster-pve6` | Same, node `pve6`. Samsung SSD 750 EVO 500GB, WDC PC SN720 | Anonymized | AGPL-3.0-or-later |
+| `direct/test-cluster-pve7` | Same, node `pve7`. Samsung SSD 850 EVO 250GB, two Samsung MZVLW256HEHP (PM961) | Anonymized | AGPL-3.0-or-later |
 
 ## Notification configuration: `pvesh/`
 
