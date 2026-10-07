@@ -99,6 +99,8 @@ How to run it: install the new package on each node, run [`scripts/collect-node-
 
 Preparation done on 2026-10-05: recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script, and the decision on the wear source ([ADR 0021](docs/adr/0021-wear-value-source.md)).
 
+Step 5 passed on 2026-10-07 on `pve7`, with the routing check built on 2026-10-06 ([ARCHITECTURE.md](ARCHITECTURE.md) section 10).
+
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 
 ## M3: Evaluation and configuration (M)

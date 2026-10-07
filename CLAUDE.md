@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (walking skeleton with notifications) are written; M1 passed its acceptance run on the test cluster on 2026-10-04. M2 in `ROADMAP.md` is in progress: its preparation (recordings from the test cluster, ADR 0021 on the wear source) was finished on 2026-10-05, and its routing check (ADR 0020) was built on 2026-10-06. Discovery, collection, the parsers and the commands `scan` and `dump-fixture` are next.
+Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (walking skeleton with notifications) are written; M1 passed its acceptance run on the test cluster on 2026-10-04. M2 in `ROADMAP.md` is in progress: its preparation (recordings from the test cluster, ADR 0021 on the wear source) was finished on 2026-10-05, and its routing check (ADR 0020) was built on 2026-10-06 and passed acceptance step 5 on 2026-10-07. Discovery, collection, the parsers and the commands `scan` and `dump-fixture` are next.
 
 ### Where things are
 
