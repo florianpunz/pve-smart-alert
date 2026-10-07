@@ -45,6 +45,8 @@ The implementation is the Rust crate `proxmox-notify` (repository `proxmox`), ex
 - The package `proxmox-mail-forward` writes `|/usr/libexec/proxmox-mail-forward` into `/root/.forward`. Mail delivered to the local `root` mailbox is piped to this helper.
 - The helper reads the mail from standard input, builds a notification with `Notification::new_forwarded_mail`, and sends it through the notification configuration.
 - `new_forwarded_mail` hard-codes the metadata: severity `Unknown`, field `type` = `system-mail`, field `hostname` = node name. Nothing in the mail (headers, subject, body) can influence severity or fields.
+- Checked again on 2026-10-07 in `src/main.rs` and `debian/proxmox-mail-forward.postinst` of `proxmox-mail-forward` and in `lib.rs` of `proxmox-notify` (`master`): the helper sends into the notification configuration of Proxmox VE only if `/etc/pve` exists. It reads `/etc/pve/notifications.cfg` and `/etc/pve/priv/notifications.cfg`; a file it cannot read counts as empty. The maintainer script appends `|/usr/libexec/proxmox-mail-forward` to `/root/.forward` whenever the package is configured and the line is missing, and removes an older line with `/usr/bin/proxmox-mail-forward`. The metadata of `new_forwarded_mail` is unchanged.
+- Whether mail to root reaches the helper at all is decided by the mail system. Postfix delivers mail for a local name to its alias first, then to the destinations in `~/.forward`, then to the mailbox (`local(8)`, Debian 13). An alias for `root` that leads elsewhere therefore bypasses `/root/.forward` and with it the notification system.
 - `sendmail` targets forward the original mail unchanged. Other target types receive the subject as title and the first text part as body.
 - `pve-manager` depends on `postfix | mail-transport-agent` and on `proxmox-mail-forward`, so the route exists on every Proxmox VE host.
 
@@ -157,6 +159,7 @@ Consequences:
 - Perl bindings: <https://git.proxmox.com/?p=proxmox-perl-rs.git;a=blob;f=common/src/bindings/notify.rs>, logger <https://git.proxmox.com/?p=proxmox-perl-rs.git;a=blob;f=common/src/logger.rs>
 - `proxmox-mail-forward`: <https://git.proxmox.com/?p=proxmox-mail-forward.git;a=blob;f=src/main.rs>, <https://git.proxmox.com/?p=proxmox-mail-forward.git;a=blob;f=debian/proxmox-mail-forward.postinst>
 - Notification API: <https://git.proxmox.com/?p=pve-manager.git;a=blob;f=PVE/API2/Cluster/Notifications.pm>
+- Postfix local delivery agent, `local(8)`: <https://manpages.debian.org/trixie/postfix/local.8.en.html>
 - Internal caller example: <https://git.proxmox.com/?p=pve-manager.git;a=blob;f=PVE/API2/APT.pm>
 - Vendor templates: <https://git.proxmox.com/?p=pve-manager.git;a=tree;f=templates/default>
 - Templates shipped by another package: <https://git.proxmox.com/?p=pve-ha-manager.git;a=blob;f=src/templates/Makefile>
