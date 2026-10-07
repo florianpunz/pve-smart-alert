@@ -1,0 +1,181 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""An anonymized recording of one host (ADR 0016, ADR 0023).
+
+A recording is what a host answered: the device scan, one drive output per
+device and the block devices of lsblk. `anonymize` turns it into the files of
+a fixture: the identifiers numbered in the order of the scan, every file
+checked for real values, and `recording.json` describing where each file
+comes from. `scripts/make_fixtures.py` makes fixtures of archives of the
+collection script with it, and `pve-smart-alert dump-fixture` (FR-604) the
+archive a user can attach to an issue.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from pve_smart_alert.anonymize import Anonymizer
+
+
+@dataclass
+class Recording:
+    """What one host answered, before anonymization.
+
+    `drives` are the drive outputs by the name of their file without
+    `.json`, `exits` their exit statuses.
+    """
+
+    node: str
+    collected: str | None
+    collected_with: str
+    scan: Mapping[str, object]
+    scan_exit: int | None
+    drives: dict[str, Mapping[str, object]] = field(default_factory=dict)
+    exits: dict[str, int | None] = field(default_factory=dict)
+    lsblk: object = None
+    lsblk_exit: int | None = None
+    lsblk_command: str | None = None
+    controller: str | None = None
+
+
+def anonymize(
+    recording: Recording, *, origin: str, license_id: str, anonymized_with: str
+) -> dict[str, object]:
+    """Return the files of the fixture, by file name, each checked for real values.
+
+    Raises `AnonymizationError` when a real value is left in any of them; then
+    nothing may be written (ADR 0023).
+    """
+    anonymizer = Anonymizer()
+    order = scan_order(recording)
+    for stem in order:
+        anonymizer.learn(recording.drives[stem])
+    # After the drives of the scan, so that drives only lsblk shows come last.
+    if recording.lsblk is not None:
+        anonymizer.learn_lsblk(recording.lsblk)
+
+    files: dict[str, object] = {"scan.json": anonymizer.document(recording.scan)}
+    for stem in order:
+        files[f"{stem}.json"] = anonymizer.drive(recording.drives[stem])
+    if recording.lsblk is not None:
+        files["lsblk.json"] = anonymizer.lsblk(recording.lsblk)
+    files["recording.json"] = _metadata(
+        recording, order, origin=origin, license_id=license_id, anonymized_with=anonymized_with
+    )
+
+    for name, document in files.items():
+        anonymizer.check(document, name=name)
+    return files
+
+
+def serialize(document: object) -> str:
+    """Return a file of a fixture: indented JSON with a final newline."""
+    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+
+
+def write_directory(directory: Path, files: Mapping[str, object]) -> None:
+    """Write the files of one fixture into a directory."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, document in files.items():
+        (directory / name).write_text(serialize(document), encoding="utf-8")
+
+
+def scan_order(recording: Recording) -> list[str]:
+    """Return the drive files in the order of the scan, then the others by name."""
+    devices = recording.scan.get("devices")
+    scanned: list[str] = []
+    if isinstance(devices, list):
+        for entry in devices:
+            name = entry.get("name") if isinstance(entry, dict) else None
+            for stem, drive in recording.drives.items():
+                if stem not in scanned and _device_name(drive) == name:
+                    scanned.append(stem)
+    return scanned + sorted(set(recording.drives) - set(scanned))
+
+
+def drive_class(drive: Mapping[str, object]) -> str:
+    """Return the class of the check catalog: nvme, or ssd and hdd by rotation rate."""
+    access = drive.get("device")
+    if isinstance(access, dict) and access.get("protocol") == "NVMe":
+        return "nvme"
+    # An unknown rotation rate counts as a hard disk (docs/check-catalog.md).
+    return "ssd" if drive.get("rotation_rate") == 0 else "hdd"
+
+
+def _metadata(
+    recording: Recording,
+    order: Sequence[str],
+    *,
+    origin: str,
+    license_id: str,
+    anonymized_with: str,
+) -> dict[str, object]:
+    """Return the content of `recording.json`."""
+    files: list[dict[str, object]] = [
+        {
+            "file": "scan.json",
+            "command": _command(recording.scan),
+            "exit_status": recording.scan_exit,
+        }
+    ]
+    for stem in order:
+        drive = recording.drives[stem]
+        access = drive.get("device")
+        access = access if isinstance(access, dict) else {}
+        files.append(
+            {
+                "file": f"{stem}.json",
+                "device": access.get("name"),
+                "type": access.get("type"),
+                "protocol": access.get("protocol"),
+                "class": drive_class(drive),
+                "model": drive.get("model_name"),
+                "command": _command(drive),
+                "exit_status": recording.exits.get(stem),
+            }
+        )
+    if recording.lsblk is not None:
+        files.append(
+            {
+                "file": "lsblk.json",
+                "command": recording.lsblk_command,
+                "exit_status": recording.lsblk_exit,
+            }
+        )
+    return {
+        "origin": origin,
+        "license": license_id,
+        "node": recording.node,
+        "collected": recording.collected,
+        "collected_with": recording.collected_with,
+        "anonymized_with": anonymized_with,
+        "smartmontools": _version(recording.scan),
+        "controller": recording.controller,
+        "files": files,
+    }
+
+
+def _device_name(drive: Mapping[str, object]) -> object:
+    access = drive.get("device")
+    return access.get("name") if isinstance(access, dict) else None
+
+
+def _command(document: Mapping[str, object]) -> str | None:
+    """Return the command line that produced an output, as smartctl reports it."""
+    smartctl = document.get("smartctl")
+    argv = smartctl.get("argv") if isinstance(smartctl, dict) else None
+    if isinstance(argv, list) and all(isinstance(argument, str) for argument in argv):
+        return " ".join(argv)
+    return None
+
+
+def _version(document: Mapping[str, object]) -> str | None:
+    """Return the version of smartmontools that wrote an output."""
+    smartctl = document.get("smartctl")
+    version = smartctl.get("version") if isinstance(smartctl, dict) else None
+    if isinstance(version, list):
+        return ".".join(str(part) for part in version)
+    return None
