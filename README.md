@@ -2,16 +2,18 @@
 
 SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** Milestones M0 and M1 are done: the development tooling, the notification route with its two transports and the Perl bridge, the two commands below, and the Debian package that ships them. Milestone M2 is in progress; its check of the notification routing is built. No drive is read yet — discovery and collection arrive with the rest of M2. The version meant for regular use is planned as 1.0 in M7.
+> **Status: early development.** Milestones M0 and M1 are done: the development tooling, the notification route with its two transports and the Perl bridge, and the Debian package. Milestone M2 is built and waits for its acceptance run: the tool finds and reads the SATA and NVMe drives of a host and shows them, but it does not evaluate them yet and sends no alert — the checks arrive with M3, the alerts with M4. The version meant for regular use is planned as 1.0 in M7.
 
 ## What works today
 
-`make build` produces the Debian package, which installs the tool together with two commands:
+`make build` produces the Debian package, which installs the tool together with these commands:
 
 | Command | Does |
 | --- | --- |
 | `pve-smart-alert test-notification [--severity SEVERITY] [--transport TRANSPORT]` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520). |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates, the mail command, the routing of the notifications and of the fallback mail to root (FR-603). |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, smartctl, the notify bridge, the templates, the mail command, the routing of the notifications and of the fallback mail to root (FR-603). |
+| `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108). |
+| `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604). |
 
 The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. The transport is `auto`, `pve-notify` or `mail`; without the option the configuration decides, and `auto` means the notify bridge with mail to root as the fallback.
 

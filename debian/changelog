@@ -1,3 +1,11 @@
+pve-smart-alert (0.2.0) unstable; urgency=medium
+
+  * Milestone M2: discovery and collection of SATA and NVMe drives, the
+    parsers and the wear value, the commands scan and dump-fixture, and the
+    lines smartctl, routing and fallback of doctor.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Wed, 07 Oct 2026 21:00:00 +0000
+
 pve-smart-alert (0.1.0) unstable; urgency=medium
 
   * Initial release: the notify bridge, the two notification templates, the

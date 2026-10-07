@@ -222,7 +222,7 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-Milestone M1 reads `[notify] transport`. Milestone M2 adds `[smartctl]` with `path`, `timeout` (from `"1s"` to `"15m"`) and `detail`, and the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type. Every other key in the example above, `exclude` among them, is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
+Milestone M1 reads `[notify] transport`. Milestone M2 adds `[smartctl]` with `path`, `timeout` (from `"1s"` to `"15m"`) and `detail`, the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type, and the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)). Every other key in the example above is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
 
 ## 9. State
 
