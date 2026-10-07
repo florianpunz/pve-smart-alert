@@ -16,3 +16,26 @@
 #   pve-notify  the notify bridge only
 #   mail        mail to root only
 transport = "auto"
+
+[smartctl]
+# The smartctl program (ADR 0004). Tests and acceptance runs can point it at
+# a fake smartctl that replays recordings (ADR 0016).
+path = "/usr/sbin/smartctl"
+# How long one call of smartctl may take, from "1s" to "15m". A drive that
+# does not answer in time counts as unreadable in this run, and the run goes
+# on with the next drive (FR-202).
+timeout = "30s"
+# How much smartctl reads (ADR 0004).
+#   extended  smartctl --xall, with the device statistics and the SCT data
+#   basic     smartctl --all, for hardware that reacts badly to the extended logs
+detail = "extended"
+
+[discovery]
+# Devices that the scan of smartctl does not find, each with its device name
+# and its smartctl device type (FR-104). There are none by default. One entry
+# looks like this:
+#
+#   [[discovery.device]]
+#   name = "/dev/sg3"
+#   type = "areca,2"
+device = []

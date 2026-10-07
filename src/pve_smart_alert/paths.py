@@ -30,6 +30,15 @@ TEMPLATE_OVERRIDE_DIR: Final = Path("/etc/pve/notification-templates/default")
 
 CONFIG_PATH: Final = Path("/etc/pve-smart-alert/config.toml")
 
+# Every key of the configuration with its default, shipped with the
+# documentation (ADR 0011).
+REFERENCE_PATH: Final = Path("/usr/share/doc/pve-smart-alert/config.reference.toml")
+
+# smartctl of the package smartmontools, the default of `smartctl.path`
+# (ADR 0004). The key exists so that tests and acceptance runs can use the
+# fake smartctl instead (ADR 0016).
+SMARTCTL_PATH: Final = Path("/usr/sbin/smartctl")
+
 # The command line client of the Proxmox VE API, part of `pve-manager`. The
 # routing check reads the matchers and targets through it (ADR 0020).
 PVESH_PATH: Final = Path("/usr/bin/pvesh")

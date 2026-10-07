@@ -12,7 +12,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from pve_smart_alert.config import _SCHEMA, NotifySettings, load_config
+from pve_smart_alert.config import _SCHEMA, Config, load_config
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONFIG = REPOSITORY / "config" / "config.toml"
@@ -30,7 +30,7 @@ def test_the_shipped_configuration_is_only_a_header() -> None:
     # raises no configuration prompt for an administrator who edited the file
     # (ADR 0011).
     assert documented_keys(CONFIG) == {}
-    assert load_config(CONFIG).notify == NotifySettings()
+    assert load_config(CONFIG) == Config(source=CONFIG)
 
 
 def test_the_shipped_configuration_points_to_the_reference() -> None:
@@ -44,4 +44,4 @@ def test_the_reference_documents_every_key_of_the_program() -> None:
 
 def test_the_reference_holds_the_defaults() -> None:
     # Copying the reference over the configuration file must change nothing.
-    assert load_config(REFERENCE).notify == NotifySettings()
+    assert load_config(REFERENCE) == Config(source=REFERENCE)

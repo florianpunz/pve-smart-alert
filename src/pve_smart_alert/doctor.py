@@ -21,6 +21,7 @@ from pve_smart_alert.paths import (
     BRIDGE_PATH,
     CONFIG_PATH,
     PVESH_PATH,
+    REFERENCE_PATH,
     ROOT_FORWARD_PATH,
     SENDMAIL_PATH,
     SUBJECT_TEMPLATE,
@@ -133,7 +134,7 @@ def check_config(path: Path) -> tuple[CheckResult, NotifySettings | None]:
                 "config",
                 Status.FAIL,
                 f"{path}: {error}",
-                advice="this version reads only the key notify.transport",
+                advice=f"the keys this version reads are listed in {REFERENCE_PATH}",
             ),
             None,
         )
