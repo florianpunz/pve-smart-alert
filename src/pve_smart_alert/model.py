@@ -1,9 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The notification model.
+"""The models of the tool: notifications and drives.
 
 One notification is one message that the tool hands to a transport. This
 module holds its shape, the severity vocabulary of the tool, and the mapping
 onto the severities of the Proxmox VE notification system (ADR 0008).
+
+One snapshot is what one run learned about one drive (ARCHITECTURE.md
+section 4). The parsers translate the output of smartctl into snapshots, and
+the checks read nothing else: they never see smartctl JSON (ADR 0004).
 """
 
 from __future__ import annotations
@@ -144,3 +148,182 @@ def node_name(hostname: str | None = None) -> str:
     """
     value = socket.gethostname() if hostname is None else hostname
     return value.split(".", 1)[0]
+
+
+class DriveClass(StrEnum):
+    """The class of a drive, which decides the checks and limits that apply.
+
+    SATA and SAS drives are `hdd` or `ssd` by their rotation rate, and an
+    unknown rate counts as `hdd` (docs/check-catalog.md).
+    """
+
+    HDD = "hdd"
+    SSD = "ssd"
+    NVME = "nvme"
+
+
+class WearSource(StrEnum):
+    """Where the wear value of a drive comes from, in the order of ADR 0021.
+
+    `pve-smart-alert scan` shows it next to the value, for example
+    "44 % (device statistics)".
+    """
+
+    # The value smartmontools 7.5 and later computes itself.
+    ENDURANCE_USED = "endurance_used"
+    # ATA: the Percentage Used Endurance Indicator of the device statistics.
+    DEVICE_STATISTICS = "device statistics"
+    # NVMe: `percentage_used` of the SMART health log.
+    HEALTH_LOG = "health log"
+    # SAS: the percentage used endurance indicator.
+    ENDURANCE_INDICATOR = "endurance indicator"
+    # ATA only: the attribute the web interface of Proxmox VE reads.
+    VENDOR_ATTRIBUTE = "vendor attribute"
+
+
+def normalize(value: str) -> str:
+    """Return a value a drive reports, trimmed and with inner whitespace collapsed.
+
+    Drives pad their model names and serial numbers, and the padding differs
+    between protocols and bridges (ADR 0005).
+    """
+    return " ".join(value.split())
+
+
+@dataclass(frozen=True)
+class DriveIdentity:
+    """Who a drive is: model and serial number, and the WWN where known.
+
+    Device node, smartctl type and controller ID are attributes of a drive and
+    never part of its identity (ADR 0005, FR-105). Two identities are the same
+    drive when they are equal.
+    """
+
+    model: str
+    serial: str | None = None
+    wwn: str | None = None
+
+    @classmethod
+    def of(
+        cls, model: str | None, *, serial: str | None = None, wwn: str | None = None
+    ) -> DriveIdentity:
+        """Return the identity from the values a drive reports.
+
+        Values are normalized, an empty value counts as missing, and a WWN is
+        written as lowercase hexadecimal digits without a prefix.
+        """
+        return cls(
+            model=normalize(model or ""),
+            serial=_present(serial),
+            wwn=_normal_wwn(wwn),
+        )
+
+    @property
+    def stable(self) -> bool:
+        """Whether the identity survives a change of path.
+
+        It needs a serial number or a WWN. A drive without either is monitored,
+        but it is exempt from the detection of missing drives (ADR 0005,
+        FR-309).
+        """
+        return self.serial is not None or self.wwn is not None
+
+
+@dataclass(frozen=True)
+class DeviceAccess:
+    """How a drive is reached: the arguments smartctl gets (ADR 0004).
+
+    `aliases` are the other paths to the same drive that discovery set aside
+    (ADR 0005).
+    """
+
+    name: str
+    type: str
+    protocol: str
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Location:
+    """Where a drive sits, as far as the host tells. Shown, never part of the identity."""
+
+    transport: str | None = None
+    removable: bool | None = None
+    by_id: tuple[str, ...] = ()
+    by_path: str | None = None
+    controller: str | None = None
+    device_id: str | None = None
+
+
+@dataclass(frozen=True)
+class Membership:
+    """What uses a drive, if that is known (FR-110)."""
+
+    zfs_pool: str | None = None
+    md_array: str | None = None
+    volume_group: str | None = None
+
+
+@dataclass(frozen=True)
+class FailingAttribute:
+    """An ATA attribute whose normalized value is at or below its threshold now."""
+
+    id: int
+    name: str
+    prefailure: bool
+
+
+@dataclass(frozen=True)
+class Collection:
+    """How the data of a snapshot was obtained in this run (ADR 0004)."""
+
+    smartctl_version: tuple[int, ...]
+    exit_status: int
+    messages: tuple[str, ...] = ()
+    duration_seconds: float = 0.0
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    """What one run learned about one drive (ARCHITECTURE.md section 4).
+
+    `metrics` maps a metric name to its value, for example `ata.attr.5.raw`,
+    `nvme.available_spare`, `temperature.current` or `wear.percent_used`. A
+    missing metric or flag is not applicable, and a check never guesses it
+    (FR-206). `wear_source` says where `wear.percent_used` comes from
+    (ADR 0021).
+    """
+
+    identity: DriveIdentity
+    access: DeviceAccess
+    drive_class: DriveClass
+    collection: Collection
+    firmware: str | None = None
+    capacity_bytes: int | None = None
+    location: Location = field(default_factory=Location)
+    membership: Membership = field(default_factory=Membership)
+    smart_available: bool | None = None
+    smart_enabled: bool | None = None
+    health_passed: bool | None = None
+    nvme_critical_warning: int | None = None
+    failing_attributes: tuple[FailingAttribute, ...] = ()
+    last_self_test_passed: bool | None = None
+    power_on_hours: int | None = None
+    power_cycles: int | None = None
+    metrics: Mapping[str, int] = field(default_factory=dict)
+    wear_source: WearSource | None = None
+
+
+def _present(value: str | None) -> str | None:
+    """Return a value normalized, or `None` when it is missing or empty."""
+    if value is None:
+        return None
+    return normalize(value) or None
+
+
+def _normal_wwn(value: str | None) -> str | None:
+    """Return a WWN as lowercase hexadecimal digits without a prefix, or `None`."""
+    if value is None:
+        return None
+    digits = value.strip().lower().removeprefix("0x")
+    return digits or None

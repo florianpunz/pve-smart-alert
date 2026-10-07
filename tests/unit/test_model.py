@@ -1,17 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests for the notification model."""
+"""Tests for the models: notifications and drives."""
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
 
 from pve_smart_alert.model import (
     MAX_FIELD_VALUE,
     NOTIFICATION_TYPE,
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
+    Collection,
+    DeviceAccess,
+    DriveClass,
+    DriveIdentity,
     EventType,
+    Location,
+    Membership,
     Notification,
     PveSeverity,
     Severity,
+    Snapshot,
+    WearSource,
     node_name,
     sanitize_field_value,
 )
@@ -140,3 +153,90 @@ def test_fields_are_sanitized() -> None:
 def test_node_name_is_the_short_host_name() -> None:
     assert node_name("pve1") == "pve1"
     assert node_name("pve1.lab.example.com") == "pve1"
+
+
+# The drive model (ARCHITECTURE.md section 4)
+
+
+RECORDED = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl" / "direct"
+
+
+def recorded_identity(recording: str, device: str) -> DriveIdentity:
+    """Return the identity of one drive of the anonymized recordings."""
+    drive = json.loads((RECORDED / recording / f"{device}.json").read_text(encoding="utf-8"))
+    return DriveIdentity.of(drive["model_name"], serial=drive["serial_number"])
+
+
+def test_reported_values_are_normalized() -> None:
+    identity = DriveIdentity.of("  Samsung  SSD 850 EVO\t250GB ", serial=" ANON-SN-0001 ")
+
+    assert identity == DriveIdentity("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001")
+
+
+@pytest.mark.parametrize("serial", [None, "", "   "])
+def test_a_missing_or_empty_serial_number_is_missing(serial: str | None) -> None:
+    assert DriveIdentity.of("QEMU HARDDISK", serial=serial).serial is None
+
+
+def test_a_wwn_is_written_as_lowercase_digits() -> None:
+    identity = DriveIdentity.of("Model", wwn="0x5002538E40000001")
+
+    assert identity.wwn == "5002538e40000001"
+
+
+def test_an_identity_is_stable_with_a_serial_number_or_a_wwn() -> None:
+    # Without either, the drive is exempt from missing-drive detection (FR-309).
+    assert DriveIdentity.of("Model", serial="ANON-SN-0001").stable
+    assert DriveIdentity.of("Model", wwn="5002538000000001").stable
+    assert not DriveIdentity.of("Model").stable
+
+
+def test_the_path_is_not_part_of_the_identity() -> None:
+    # FR-105: the same drive behind another device node is the same drive.
+    identity = recorded_identity("test-cluster-pve7", "sda")
+    collection = Collection(smartctl_version=(7, 5), exit_status=0)
+    first = Snapshot(identity, DeviceAccess("/dev/sda", "sat", "ATA"), DriveClass.SSD, collection)
+    second = Snapshot(identity, DeviceAccess("/dev/sdb", "sat", "ATA"), DriveClass.SSD, collection)
+
+    assert first.identity == second.identity
+    assert first.access != second.access
+
+
+def test_the_recorded_drives_have_stable_and_distinct_identities() -> None:
+    identities = [
+        recorded_identity("test-cluster-pve7", device) for device in ("sda", "nvme0", "nvme1")
+    ]
+
+    assert all(identity.stable for identity in identities)
+    assert len(set(identities)) == 3
+    assert identities[0] == DriveIdentity("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001")
+
+
+def test_the_drive_classes_are_those_of_the_check_catalog() -> None:
+    assert [drive_class.value for drive_class in DriveClass] == ["hdd", "ssd", "nvme"]
+
+
+def test_the_wear_sources_follow_the_order_of_adr_0021() -> None:
+    assert [source.value for source in WearSource] == [
+        "endurance_used",
+        "device statistics",
+        "health log",
+        "endurance indicator",
+        "vendor attribute",
+    ]
+
+
+def test_a_snapshot_knows_only_what_it_is_given() -> None:
+    # Missing values are not applicable, never guessed (FR-206).
+    snapshot = Snapshot(
+        DriveIdentity.of("Model", serial="ANON-SN-0001"),
+        DeviceAccess("/dev/nvme0", "nvme", "NVMe"),
+        DriveClass.NVME,
+        Collection(smartctl_version=(7, 5), exit_status=0),
+    )
+
+    assert snapshot.metrics == {}
+    assert snapshot.health_passed is None
+    assert snapshot.wear_source is None
+    assert snapshot.membership == Membership()
+    assert snapshot.location == Location()
