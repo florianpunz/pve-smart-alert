@@ -27,6 +27,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0020](0020-routing-check.md) | Check the routing of the notifications through the public API | Accepted | How the tool detects that no matcher matches |
 | [0021](0021-wear-value-source.md) | Take the wear value from the vendor-neutral sources first | Accepted | Which source the wear value of an SSD comes from |
 | [0022](0022-fallback-routing-check.md) | Check the route of the fallback, mail to root, as well | Accepted | How the tool detects that its fallback mail would be dropped |
+| [0023](0023-anonymization-of-recordings.md) | Anonymize recordings with counters per archive | Accepted | Which values of a recording identify a drive and what replaces them |
 
 ## Confirmed by the maintainer
 
