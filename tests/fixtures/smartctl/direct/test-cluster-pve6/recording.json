@@ -32,6 +32,11 @@
       "model": "WDC PC SN720 SDAPNTW-512G-1016",
       "command": "smartctl -x --json=c -d nvme /dev/nvme0",
       "exit_status": 0
+    },
+    {
+      "file": "lsblk.json",
+      "command": "lsblk -J -O",
+      "exit_status": 0
     }
   ]
 }

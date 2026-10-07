@@ -60,12 +60,28 @@ def nvme() -> dict[str, object]:
     }
 
 
+def lsblk() -> dict[str, object]:
+    return {
+        "blockdevices": [
+            {"name": "sda", "type": "disk", "serial": SERIALS[0], "wwn": "0x5002538e40a1b2c3"},
+            {
+                "name": "nvme0n1",
+                "type": "disk",
+                "serial": SERIALS[1],
+                "wwn": "eui.0025385b71b02a7f",
+            },
+        ]
+    }
+
+
 def archive(tmp_path: Path, *, drives: dict[str, dict[str, object]] | None = None) -> Path:
     """Write an archive of one node as the collection script does."""
     files = {
         "info.txt": "node: pve9\nlabel: \ncollected: 20261007T120000Z\n",
         "scan.json": json.dumps(scan()),
         "scan.json.exit": "0\n",
+        "lsblk.json": json.dumps(lsblk()),
+        "lsblk.json.exit": "0\n",
     }
     for device, drive in (drives or {"sda": sata(), "nvme0": nvme()}).items():
         files[f"smart/{device}.json"] = json.dumps(drive)
@@ -106,11 +122,15 @@ def test_an_archive_becomes_an_anonymized_fixture(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     directory = tmp_path / "out" / "lab-pve9"
     assert sorted(path.name for path in directory.iterdir()) == [
+        "lsblk.json",
         "nvme0.json",
         "recording.json",
         "scan.json",
         "sda.json",
     ]
+    devices = json.loads((directory / "lsblk.json").read_text(encoding="utf-8"))["blockdevices"]
+    assert devices[0]["serial"] == "ANON-SN-0002"
+    assert devices[1]["wwn"] == "eui.0025380000000001"
     nvme0 = json.loads((directory / "nvme0.json").read_text(encoding="utf-8"))
     sda = json.loads((directory / "sda.json").read_text(encoding="utf-8"))
     # Numbered in the order of the scan (ADR 0023).
@@ -138,6 +158,11 @@ def test_the_recording_describes_every_file(tmp_path: Path) -> None:
     assert recording["files"][0] == {
         "file": "scan.json",
         "command": "smartctl --scan-open --json=c",
+        "exit_status": 0,
+    }
+    assert recording["files"][-1] == {
+        "file": "lsblk.json",
+        "command": "lsblk -J -O",
         "exit_status": 0,
     }
     assert recording["files"][2] == {

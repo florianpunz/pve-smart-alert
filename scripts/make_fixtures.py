@@ -6,8 +6,8 @@ Fixtures are written by this script only, never by hand (ADR 0023). For each
 archive it reads the device scan and the drive outputs of smartctl, numbers
 the identifying values in the order of the scan, replaces them with
 placeholders, checks every output for real values that are left, and only
-then writes a directory with `scan.json`, one file per device and
-`recording.json`:
+then writes a directory with `scan.json`, one file per device, `lsblk.json`
+when the archive has it, and `recording.json`:
 
     tests/fixtures/smartctl/<controller>/<prefix>-<node>/
 
@@ -37,6 +37,8 @@ from pve_smart_alert.anonymize import AnonymizationError, Anonymizer
 
 DEFAULT_LICENSE: Final = "AGPL-3.0-or-later"
 COLLECTED_WITH: Final = "scripts/collect-node-data.sh"
+# The command scripts/collect-node-data.sh records the block devices with.
+LSBLK_COMMAND: Final = "lsblk -J -O"
 ANONYMIZED_WITH: Final = "scripts/make_fixtures.py (ADR 0023)"
 
 
@@ -49,6 +51,8 @@ class Recording:
     scan_exit: int | None
     drives: dict[str, dict[str, object]] = field(default_factory=dict)
     exits: dict[str, int | None] = field(default_factory=dict)
+    lsblk: object = None
+    lsblk_exit: int | None = None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -90,6 +94,9 @@ def read_archive(path: Path) -> Recording:
         scan=json.loads(contents["scan.json"]),
         scan_exit=_exit(contents.get("scan.json.exit")),
     )
+    if "lsblk.json" in contents:
+        recording.lsblk = json.loads(contents["lsblk.json"])
+        recording.lsblk_exit = _exit(contents.get("lsblk.json.exit"))
     for name, text in sorted(contents.items()):
         if name.startswith("smart/") and name.endswith(".json"):
             device = name.removeprefix("smart/").removesuffix(".json")
@@ -105,9 +112,15 @@ def anonymize(recording: Recording, *, origin: str, license_id: str) -> dict[str
     for device in order:
         anonymizer.learn(recording.drives[device])
 
+    # After the drives of the scan, so that drives only lsblk shows come last.
+    if recording.lsblk is not None:
+        anonymizer.learn_lsblk(recording.lsblk)
+
     files: dict[str, object] = {"scan.json": anonymizer.document(recording.scan)}
     for device in order:
         files[f"{device}.json"] = anonymizer.drive(recording.drives[device])
+    if recording.lsblk is not None:
+        files["lsblk.json"] = anonymizer.lsblk(recording.lsblk)
     files["recording.json"] = _metadata(recording, order, origin=origin, license_id=license_id)
 
     for name, document in files.items():
@@ -162,6 +175,10 @@ def _metadata(
                 "command": _command(drive),
                 "exit_status": recording.exits.get(device),
             }
+        )
+    if recording.lsblk is not None:
+        files.append(
+            {"file": "lsblk.json", "command": LSBLK_COMMAND, "exit_status": recording.lsblk_exit}
         )
     return {
         "origin": origin,

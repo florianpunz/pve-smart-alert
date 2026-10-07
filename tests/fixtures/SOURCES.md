@@ -5,8 +5,8 @@ No fixture contains a real serial number or WWN; a test checks every fixture for
 
 ## Output of smartctl: `smartctl/`
 
-Recordings of whole hosts, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, and `recording.json` with the command line, exit status, protocol and class of every file.
-They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs and EUI-64s are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
+Recordings of whole hosts, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, `lsblk.json` from `lsblk -J -O`, and `recording.json` with the command line, exit status, protocol and class of every file.
+They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs, EUI-64s, NGUIDs and UUIDs are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
 
 | Directory | Origin | Changes | License |
 | --- | --- | --- | --- |

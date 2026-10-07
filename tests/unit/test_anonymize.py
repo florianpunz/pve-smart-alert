@@ -162,3 +162,101 @@ def test_more_values_than_four_digits_hold_are_refused() -> None:
 
     with pytest.raises(AnonymizationError, match="more than 9999"):
         anonymizer.learn({"serial_number": "ONE-TOO-MANY"})
+
+
+# The output of lsblk (ADR 0023)
+
+
+def lsblk_of(*devices: Mapping[str, object]) -> dict[str, object]:
+    return {"blockdevices": list(devices)}
+
+
+SATA_DISK: Final[dict[str, object]] = {
+    "name": "sda",
+    "type": "disk",
+    "serial": "S2R5NX0H123456A",
+    "wwn": "0x5002538e40a1b2c3",
+    "id": "Samsung_SSD_850_EVO_250GB_S2R5NX0H123456A",
+    "id-link": "wwn-0x5002538e40a1b2c3",
+    "ptuuid": "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31",
+    "children": [
+        {
+            "name": "sda3",
+            "type": "part",
+            "wwn": "0x5002538e40a1b2c3",
+            "uuid": "Xy12Ab-cD34-eF56-gH78-iJ90-kL12-mN34oP",
+            "partuuid": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+            "fstype": "LVM2_member",
+        }
+    ],
+}
+
+
+def test_lsblk_gets_the_placeholders_of_the_scan() -> None:
+    anonymizer = anonymizer_of(SATA)
+
+    anonymized = anonymizer.lsblk(lsblk_of(SATA_DISK))
+
+    assert isinstance(anonymized, dict)
+    disk = anonymized["blockdevices"][0]
+    assert disk["serial"] == "ANON-SN-0001"
+    assert disk["wwn"] == "0x5002538000000001"
+    assert disk["id"] == "Samsung_SSD_850_EVO_250GB_ANON-SN-0001"
+    assert disk["id-link"] == "wwn-0x5002538000000001"
+    assert disk["children"][0]["wwn"] == "0x5002538000000001"
+    anonymizer.check(anonymized, name="lsblk.json")
+
+
+def test_a_uuid_becomes_a_counter_in_its_notation() -> None:
+    anonymizer = anonymizer_of(SATA)
+
+    anonymized = anonymizer.lsblk(lsblk_of(SATA_DISK))
+
+    assert isinstance(anonymized, dict)
+    disk = anonymized["blockdevices"][0]
+    assert disk["ptuuid"] == "00000000-0000-0000-0000-000000000001"
+    assert disk["children"][0]["uuid"] == "000000-0000-0000-0000-0000-0000-000002"
+    assert disk["children"][0]["partuuid"] == "00000000-0000-0000-0000-000000000003"
+    # What is not an identifier stays.
+    assert disk["children"][0]["fstype"] == "LVM2_member"
+
+
+def test_a_drive_only_lsblk_shows_continues_the_counters() -> None:
+    # Such as the USB drive of a KVM-over-IP device (Research 06).
+    usb = {"name": "sdb", "type": "disk", "serial": "USB0123456789", "wwn": None}
+    anonymizer = anonymizer_of(SATA, NVME)
+
+    anonymized = anonymizer.lsblk(lsblk_of(SATA_DISK, usb))
+
+    assert isinstance(anonymized, dict)
+    assert anonymized["blockdevices"][1]["serial"] == "ANON-SN-0003"
+
+
+def test_an_nguid_keeps_the_vendor_part_of_its_eui64() -> None:
+    # The first half is vendor-specific, the second half the EUI-64.
+    nvme = {"name": "nvme0n1", "type": "disk", "wwn": "eui.e8238fa6bf5300010025385b71b02a7f"}
+    anonymizer = anonymizer_of(NVME)
+
+    anonymized = anonymizer.lsblk(lsblk_of(nvme))
+
+    assert isinstance(anonymized, dict)
+    assert anonymized["blockdevices"][0]["wwn"] == "eui.00000000000000010025380000000001"
+    anonymizer.check(anonymized, name="lsblk.json")
+
+
+def test_a_wwn_in_an_unknown_form_fails_the_check() -> None:
+    disk = {"name": "sdc", "type": "disk", "wwn": "naa.5002538e40a1b2c3"}
+    anonymizer = anonymizer_of(SATA)
+
+    anonymized = anonymizer.lsblk(lsblk_of(disk))
+
+    with pytest.raises(AnonymizationError, match=r"lsblk\.json still contains a real value: WWN"):
+        anonymizer.check(anonymized, name="lsblk.json")
+
+
+def test_a_real_uuid_left_in_a_text_fails_the_check() -> None:
+    anonymizer = anonymizer_of(SATA)
+    anonymizer.lsblk(lsblk_of(SATA_DISK))
+
+    with pytest.raises(AnonymizationError, match="UUID"):
+        anonymizer.check({"note": "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31"}, name="other.json")

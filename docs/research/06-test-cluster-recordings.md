@@ -65,6 +65,8 @@ For the other five drives all sources that exist agree with the web interface.
 
 ## Quirks seen
 
+- WDC PC SN720: `lsblk` writes its WWN as `eui.` with 32 hexadecimal digits, the NGUID of the namespace. Its second half is the EUI-64 that smartctl reports, with the OUI at byte 8; the first half is a vendor-specific extension. The Samsung NVMe drives have a WWN of 16 digits, their EUI-64.
+
 - Fanxiang S301: attribute 187 `Reported_Uncorrect` has the worst value 0 with a raw value of 0 and a threshold of 0. A check must not read the worst value as a failure.
 - Fanxiang S301: the temperature limits are reported as -127 and 127, which are placeholders and not limits.
 - Fanxiang S301: attribute 194 has the raw value 214,750,527,538, a packed value. The current temperature has to come from `temperature.current` (50 °C), not from the raw attribute value.

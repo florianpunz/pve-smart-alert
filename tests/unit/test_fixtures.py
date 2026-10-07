@@ -26,6 +26,9 @@ COUNTER_LIMIT: Final = 9999
 # The forms in which lsblk and the web interface write a WWN or an EUI-64.
 WWN_TEXT: Final = re.compile(r"(?:0x)?([0-9a-f]{16})", re.IGNORECASE)
 EUI_TEXT: Final = re.compile(r"eui\.([0-9a-f]{16})", re.IGNORECASE)
+NGUID_TEXT: Final = re.compile(r"eui\.([0-9a-f]{16})([0-9a-f]{16})", re.IGNORECASE)
+# The fields of lsblk that hold a UUID of a file system, partition or table.
+UUID_KEYS: Final = ("uuid", "partuuid", "ptuuid")
 
 
 def fixture_files() -> list[Path]:
@@ -59,7 +62,17 @@ def _holds_a_real_identifier(key: str, value: object) -> bool:
         return not _placeholder_wwn(value)
     if key == "eui64":
         return not (isinstance(value, dict) and _small(value.get("ext_id")))
+    if key in UUID_KEYS:
+        return not _placeholder_uuid(value)
     return False
+
+
+def _placeholder_uuid(value: object) -> bool:
+    """Whether a UUID is a counter in its notation: zeros, separators, the number."""
+    if not isinstance(value, str) or not set(value) <= set("0123456789-"):
+        return False
+    digits = value.replace("-", "")
+    return digits != "" and int(digits) <= COUNTER_LIMIT
 
 
 def _placeholder_wwn(value: object) -> bool:
@@ -68,6 +81,13 @@ def _placeholder_wwn(value: object) -> bool:
         return _small(value.get("id"))
     if not isinstance(value, str):
         return False
+    nguid = NGUID_TEXT.fullmatch(value)
+    if nguid is not None:
+        # The vendor-specific half is a counter, the other half an EUI-64.
+        return (
+            int(nguid.group(1), 16) <= COUNTER_LIMIT
+            and int(nguid.group(2), 16) & (2**40 - 1) <= COUNTER_LIMIT
+        )
     eui = EUI_TEXT.fullmatch(value)
     if eui is not None:
         return int(eui.group(1), 16) & (2**40 - 1) <= COUNTER_LIMIT
@@ -101,6 +121,9 @@ def test_there_are_fixtures_to_check() -> None:
         {"blockdevices": [{"wwn": "0x5002538e40a1b2c3"}]},
         {"blockdevices": [{"wwn": "eui.0025385b71b02a7f"}]},
         {"blockdevices": [{"wwn": "naa.5002538e40a1b2c3"}]},
+        {"blockdevices": [{"wwn": "eui.e8238fa6bf530001001b448b4a1b2c3d"}]},
+        {"blockdevices": [{"uuid": "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31"}]},
+        {"blockdevices": [{"ptuuid": "abcd1234"}]},
     ],
 )
 def test_the_guard_finds_real_identifiers(document: object) -> None:
@@ -115,6 +138,9 @@ def test_the_guard_finds_real_identifiers(document: object) -> None:
         {"nvme_namespaces": [{"eui64": {"oui": 9528, "ext_id": 2}}]},
         {"blockdevices": [{"serial": "ANON-SN-0003", "wwn": "0x5002538000000001"}]},
         {"blockdevices": [{"serial": None, "wwn": "eui.0025380000000001"}]},
+        {"blockdevices": [{"wwn": "eui.0000000000000001001b440000000001"}]},
+        {"blockdevices": [{"uuid": "00000000-0000-0000-0000-000000000001", "ptuuid": None}]},
+        {"blockdevices": [{"partuuid": "00000001-23"}]},
     ],
 )
 def test_the_guard_accepts_placeholders(document: object) -> None:

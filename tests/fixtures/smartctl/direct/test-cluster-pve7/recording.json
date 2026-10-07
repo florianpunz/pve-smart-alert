@@ -42,6 +42,11 @@
       "model": "SAMSUNG MZVLW256HEHP-000H1",
       "command": "smartctl -x --json=c -d nvme /dev/nvme1",
       "exit_status": 0
+    },
+    {
+      "file": "lsblk.json",
+      "command": "lsblk -J -O",
+      "exit_status": 0
     }
   ]
 }

@@ -11,7 +11,13 @@ scan, and the same real value gets the same placeholder in every file:
 - EUI-64: `oui` stays, `ext_id` becomes the counter.
 
 Where a WWN or an EUI-64 is written as 16 hexadecimal digits in a text, the
-digits of its placeholder replace it. The anonymizer fails closed: `check`
+digits of its placeholder replace it. In the output of `lsblk`, drives that
+the scan does not list continue the counters, and a UUID becomes the counter
+in its own notation, `00000000-0000-0000-0000-000000000001`. An NGUID, which
+lsblk writes as `eui.` and 32 hexadecimal digits, is the vendor-specific
+extension in its first half and the EUI-64 of the namespace in its second
+(Research 06): the first half becomes a counter of its own, the EUI-64 its
+placeholder. The anonymizer fails closed: `check`
 raises when any real value is left in a document, in any of its forms, and
 nothing may be written then.
 
@@ -33,6 +39,16 @@ from typing import Final
 SERIAL_PLACEHOLDER: Final = "ANON-SN-{:04d}"
 SERIAL_PLACEHOLDER_PATTERN: Final = re.compile(r"ANON-SN-\d{4}")
 COUNTER_LIMIT: Final = 9999
+
+# The fields of `lsblk` that hold the UUID of a file system, a partition or
+# a partition table. They identify an installation (ADR 0023).
+UUID_KEYS: Final = ("uuid", "partuuid", "ptuuid")
+
+# How lsblk writes the WWN of an ATA or SCSI drive and the EUI-64 of an NVMe
+# namespace (Research 06).
+_LSBLK_WWN: Final = re.compile(r"0x([0-9a-f]{16})", re.IGNORECASE)
+_LSBLK_EUI: Final = re.compile(r"eui\.([0-9a-f]{16})", re.IGNORECASE)
+_LSBLK_NGUID: Final = re.compile(r"eui\.([0-9a-f]{16})([0-9a-f]{16})", re.IGNORECASE)
 
 # A real value shorter than this is replaced only in its own field: in a
 # text it could stand for something else, and it carries no identity anyway
@@ -81,6 +97,9 @@ class Anonymizer:
         self._serials: dict[str, str] = {}
         self._wwns: dict[Wwn, Wwn] = {}
         self._euis: dict[Eui64, Eui64] = {}
+        self._uuids: dict[str, str] = {}
+        # An NGUID by its 32 lowercase digits, with the digits of its placeholder.
+        self._nguids: dict[str, str] = {}
 
     def learn(self, drive: Mapping[str, object]) -> None:
         """Number the identifiers of one drive output that are new.
@@ -122,6 +141,64 @@ class Anonymizer:
         """Return a copy of any other document, with the known values replaced in its texts."""
         return self._replace_text(copy.deepcopy(document))
 
+    def learn_lsblk(self, document: object) -> None:
+        """Number the identifiers that only the output of `lsblk` shows.
+
+        Call it after the drives of the scan: a drive the scan does not list,
+        such as the USB drive of a KVM-over-IP device, continues the counters,
+        and so do the UUIDs (ADR 0023).
+        """
+        for node in _nodes(document):
+            serial = node.get("serial")
+            if isinstance(serial, str) and serial.strip() and serial.strip() not in self._serials:
+                self._serials[serial.strip()] = SERIAL_PLACEHOLDER.format(_next(self._serials))
+            wwn = node.get("wwn")
+            if isinstance(wwn, str):
+                self._learn_lsblk_wwn(wwn)
+            for key in UUID_KEYS:
+                value = node.get(key)
+                if isinstance(value, str) and value and value not in self._uuids:
+                    self._uuids[value] = _counter_like(value, _next(self._uuids))
+
+    def lsblk(self, document: object) -> object:
+        """Return an anonymized copy of the output of `lsblk --json`."""
+        self.learn_lsblk(document)
+        result = copy.deepcopy(document)
+        for node in _nodes(result):
+            serial = node.get("serial")
+            if isinstance(serial, str) and serial.strip() in self._serials:
+                node["serial"] = self._serials[serial.strip()]
+            for key in UUID_KEYS:
+                value = node.get(key)
+                if isinstance(value, str) and value in self._uuids:
+                    node[key] = self._uuids[value]
+        return self._replace_text(result)
+
+    def _learn_lsblk_wwn(self, text: str) -> None:
+        wwn = _LSBLK_WWN.fullmatch(text)
+        if wwn is not None:
+            value = int(wwn.group(1), 16)
+            real = Wwn(value >> 60, (value >> 36) & 0xFFFFFF, value & (2**36 - 1))
+            if real not in self._wwns:
+                self._wwns[real] = Wwn(real.naa, real.oui, _next(self._wwns))
+        eui = _LSBLK_EUI.fullmatch(text)
+        if eui is not None:
+            self._learn_eui(eui.group(1))
+        nguid = _LSBLK_NGUID.fullmatch(text)
+        if nguid is not None:
+            digits = (nguid.group(1) + nguid.group(2)).lower()
+            anonymized_eui = self._learn_eui(nguid.group(2))
+            if digits not in self._nguids:
+                self._nguids[digits] = f"{_next(self._nguids):016x}{anonymized_eui.hex}"
+
+    def _learn_eui(self, digits: str) -> Eui64:
+        """Number an EUI-64 written as 16 digits, if it is new, and return its placeholder."""
+        value = int(digits, 16)
+        real = Eui64(value >> 40, value & (2**40 - 1))
+        if real not in self._euis:
+            self._euis[real] = Eui64(real.oui, _next(self._euis))
+        return self._euis[real]
+
     def check(self, document: object, *, name: str) -> None:
         """Raise `AnonymizationError` when a real value is left in a document.
 
@@ -148,21 +225,38 @@ class Anonymizer:
             yield "WWN", wwn.hex
         for eui in self._euis:
             yield "EUI-64", eui.hex
+        for uuid in self._uuids:
+            yield "UUID", uuid
+        for nguid in self._nguids:
+            yield "NGUID", nguid
 
     def _unreplaced_fields(self, document: object) -> Iterator[str]:
         """Return the kinds of identifier fields that do not hold a placeholder."""
-        anonymized_wwns = set(self._wwns.values())
-        anonymized_euis = set(self._euis.values())
         for key, value in _fields(document):
-            if key == "serial_number" and not (
-                isinstance(value, str) and SERIAL_PLACEHOLDER_PATTERN.fullmatch(value)
-            ):
-                yield "serial number"
-            elif key == "wwn" and isinstance(value, dict):
-                if _wwn(value) not in anonymized_wwns:
-                    yield "WWN"
-            elif key == "eui64" and isinstance(value, dict) and _eui(value) not in anonymized_euis:
-                yield "EUI-64"
+            kind = self._unreplaced(key, value)
+            if kind is not None:
+                yield kind
+
+    def _unreplaced(self, key: str, value: object) -> str | None:
+        """Return the kind of one identifier field without a placeholder, or `None`."""
+        if key in ("serial_number", "serial") and value is not None:
+            placeholder = isinstance(value, str) and SERIAL_PLACEHOLDER_PATTERN.fullmatch(value)
+            return None if placeholder else "serial number"
+        if key == "wwn" and isinstance(value, dict):
+            return None if _wwn(value) in set(self._wwns.values()) else "WWN"
+        if key == "wwn" and isinstance(value, str):
+            # Also a WWN in a form the anonymizer does not know.
+            return None if value in self._anonymized_wwn_texts() else "WWN"
+        if key == "eui64" and isinstance(value, dict):
+            return None if _eui(value) in set(self._euis.values()) else "EUI-64"
+        return None
+
+    def _anonymized_wwn_texts(self) -> set[str]:
+        """Return the forms in which lsblk writes the placeholders of WWNs and EUI-64s."""
+        texts = {f"0x{wwn.hex}" for wwn in self._wwns.values()}
+        texts |= {f"eui.{eui.hex}" for eui in self._euis.values()}
+        texts |= {f"eui.{digits}" for digits in self._nguids.values()}
+        return texts
 
     def _replace_text(self, node: object) -> object:
         """Replace the learned values in every text of a document."""
@@ -175,10 +269,15 @@ class Anonymizer:
         return node
 
     def _replace_in(self, text: str) -> str:
-        for serial, placeholder in self._serials.items():
-            if len(serial) >= MIN_SEARCHED_LENGTH:
-                text = text.replace(serial, placeholder)
-        pairs = [(real.hex, anonymized.hex) for real, anonymized in self._wwns.items()]
+        # The longest values first, so that one that contains another is
+        # replaced as a whole.
+        values = [*self._serials.items(), *self._uuids.items()]
+        for real, placeholder in sorted(values, key=lambda pair: -len(pair[0])):
+            if len(real) >= MIN_SEARCHED_LENGTH:
+                text = text.replace(real, placeholder)
+        # An NGUID before the EUI-64 inside it.
+        pairs = list(self._nguids.items())
+        pairs += [(real.hex, anonymized.hex) for real, anonymized in self._wwns.items()]
         pairs += [(real.hex, anonymized.hex) for real, anonymized in self._euis.items()]
         for real_hex, anonymized_hex in pairs:
             text = re.sub(re.escape(real_hex), anonymized_hex, text, flags=re.IGNORECASE)
@@ -233,6 +332,34 @@ def _euis(drive: Mapping[str, object]) -> Iterator[Eui64]:
         eui = _eui(namespace.get("eui64"))
         if eui is not None:
             yield eui
+
+
+def _nodes(document: object) -> Iterator[dict[str, object]]:
+    """Return every device of the output of `lsblk --json`, children included."""
+    stack = list(document.get("blockdevices", [])) if isinstance(document, dict) else []
+    while stack:
+        node = stack.pop(0)
+        if isinstance(node, dict):
+            yield node
+            children = node.get("children")
+            if isinstance(children, list):
+                stack.extend(children)
+
+
+def _counter_like(value: str, number: int) -> str:
+    """Return a counter in the notation of a value: its separators kept, the rest digits.
+
+    "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31" becomes
+    "00000000-0000-0000-0000-000000000001" for the counter 1.
+    """
+    positions = [index for index, character in enumerate(value) if character.isalnum()]
+    digits = str(number)
+    if len(positions) < len(digits):
+        raise AnonymizationError("a UUID too short for its placeholder")
+    characters = ["0" if character.isalnum() else character for character in value]
+    for position, digit in zip(positions[-len(digits) :], digits, strict=True):
+        characters[position] = digit
+    return "".join(characters)
 
 
 def _fields(node: object) -> Iterator[tuple[str, object]]:

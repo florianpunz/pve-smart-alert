@@ -22,6 +22,11 @@
       "model": "Fanxiang S301 256GB",
       "command": "smartctl -x --json=c -d sat /dev/sda",
       "exit_status": 0
+    },
+    {
+      "file": "lsblk.json",
+      "command": "lsblk -J -O",
+      "exit_status": 0
     }
   ]
 }
