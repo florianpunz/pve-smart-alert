@@ -14,7 +14,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from pve_smart_alert.config import ConfigError, NotifySettings, TransportName, load_config
+from pve_smart_alert.config import (
+    Config,
+    ConfigError,
+    NotifySettings,
+    SmartctlSettings,
+    TransportName,
+    load_config,
+)
+from pve_smart_alert.discovery.sources import parse_scan
 from pve_smart_alert.model import NOTIFICATION_TYPE, PveSeverity, node_name
 from pve_smart_alert.paths import (
     BODY_TEMPLATE,
@@ -52,9 +60,12 @@ TEMPLATES: Final = (SUBJECT_TEMPLATE, BODY_TEMPLATE)
 
 # What FR-603 asks for and what arrives with its own milestone.
 PENDING: Final = (
-    "smartctl, the Proxmox VE version, the timer, the state file and smartd"
+    "the Proxmox VE version, the timer, the state file, unsupported controllers and smartd"
     " are checked once their milestones are built"
 )
+
+# The oldest smartctl that writes JSON (ADR 0002, ADR 0004).
+MINIMUM_SMARTCTL: Final = (7, 0)
 
 # How severities that no matcher routes get a route (ADR 0020). The README
 # has the complete command.
@@ -108,13 +119,16 @@ def run_doctor(
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
     """Run every check and return its results in the order they are reported."""
-    config_result, settings = check_config(config_path)
+    config_result, config = check_config(config_path)
+    settings = None if config is None else config.notify
+    smartctl = SmartctlSettings() if config is None else config.smartctl
     node = node_name() if node is None else node
     # Read once for both routes: every call of pvesh takes seconds.
     routes = read_routes(pvesh_path, runner=runner)
 
     return [
         config_result,
+        check_smartctl(smartctl, runner=runner),
         check_bridge(bridge_path, runner=runner),
         check_templates(template_dir, override_dir=override_dir),
         check_mail(sendmail_path, settings=settings),
@@ -124,8 +138,8 @@ def run_doctor(
     ]
 
 
-def check_config(path: Path) -> tuple[CheckResult, NotifySettings | None]:
-    """Check the configuration file and return it as the settings of the run."""
+def check_config(path: Path) -> tuple[CheckResult, Config | None]:
+    """Check the configuration file and return it, or `None` when it cannot be used."""
     try:
         config = load_config(path)
     except ConfigError as error:
@@ -141,7 +155,7 @@ def check_config(path: Path) -> tuple[CheckResult, NotifySettings | None]:
 
     if config.source is None:
         result = CheckResult("config", Status.OK, f"no file at {path}, the defaults apply")
-        return result, config.notify
+        return result, config
 
     return (
         CheckResult(
@@ -149,7 +163,55 @@ def check_config(path: Path) -> tuple[CheckResult, NotifySettings | None]:
             Status.OK,
             f"{config.source}: transport = {config.notify.transport.value}",
         ),
-        config.notify,
+        config,
+    )
+
+
+def check_smartctl(
+    settings: SmartctlSettings, *, runner: ProcessRunner = run_with_timeout
+) -> CheckResult:
+    """Check that smartctl is there and writes JSON, and report its version.
+
+    The version comes from the JSON of a device scan that opens no device
+    (`--scan`), because `--version` writes no JSON (Research 03).
+    """
+    path = settings.path
+    if not path.is_file():
+        return CheckResult(
+            "smartctl",
+            Status.FAIL,
+            f"missing at {path}",
+            advice="it comes with the package smartmontools",
+        )
+    if not os.access(path, os.X_OK):
+        return CheckResult("smartctl", Status.FAIL, f"{path} is not executable")
+
+    try:
+        result = runner([path, "--scan", "--json=c"], timeout=settings.timeout_seconds)
+    except OSError as failure:
+        return CheckResult(
+            "smartctl",
+            Status.FAIL,
+            f"{path} could not be started: {failure.strerror or failure}",
+        )
+    if result.timed_out:
+        return CheckResult(
+            "smartctl",
+            Status.FAIL,
+            f"{path} did not answer within {settings.timeout_seconds:g} seconds",
+        )
+
+    version = parse_scan(result.stdout).smartctl_version
+    if not version or version < MINIMUM_SMARTCTL:
+        shown = ".".join(str(part) for part in version) if version else "a version"
+        return CheckResult(
+            "smartctl",
+            Status.FAIL,
+            f"{path} answered without JSON of smartctl 7.0 or later, found {shown}",
+            advice="the tool needs smartmontools 7.0 or later (ADR 0002)",
+        )
+    return CheckResult(
+        "smartctl", Status.OK, f"{path}: smartctl {'.'.join(str(part) for part in version)}"
     )
 
 

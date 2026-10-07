@@ -7,13 +7,14 @@ instead of the host (ADR 0016).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
 from pve_smart_alert import cli
-from pve_smart_alert.config import NotifySettings, TransportName
+from pve_smart_alert.config import NotifySettings, SmartctlSettings, TransportName
 from pve_smart_alert.doctor import (
     FALLBACK_ADVICE,
     TEMPLATES,
@@ -24,6 +25,7 @@ from pve_smart_alert.doctor import (
     check_fallback,
     check_mail,
     check_routing,
+    check_smartctl,
     check_templates,
     read_routes,
     run_doctor,
@@ -82,35 +84,35 @@ def vendor_dir(tmp_path: Path) -> Path:
 
 
 def test_a_missing_configuration_is_fine(tmp_path: Path) -> None:
-    result, settings = check_config(tmp_path / "config.toml")
+    result, config = check_config(tmp_path / "config.toml")
 
     assert result.status is Status.OK
     assert "the defaults apply" in result.detail
-    assert settings is not None
-    assert settings.transport is TransportName.AUTO
+    assert config is not None
+    assert config.notify.transport is TransportName.AUTO
 
 
 def test_the_configuration_is_reported_with_its_transport(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_text('[notify]\ntransport = "mail"\n', encoding="utf-8")
 
-    result, settings = check_config(path)
+    result, config = check_config(path)
 
     assert result.status is Status.OK
     assert result.detail == f"{path}: transport = mail"
-    assert settings is not None
-    assert settings.transport is TransportName.MAIL
+    assert config is not None
+    assert config.notify.transport is TransportName.MAIL
 
 
 def test_an_unusable_configuration_fails(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
 
-    result, settings = check_config(path)
+    result, config = check_config(path)
 
     assert result.status is Status.FAIL
     assert "unknown key" in result.detail
-    assert settings is None
+    assert config is None
 
 
 # The bridge
@@ -626,15 +628,99 @@ def test_only_the_automatic_transport_has_a_fallback(
     assert result == CheckResult("fallback", Status.SKIP, detail)
 
 
+# smartctl
+
+
+FAKE = Path(__file__).resolve().parent.parent / "fake-smartctl"
+RECORDINGS = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl" / "direct"
+
+
+def scan_answer(version: list[int]) -> ProcessResult:
+    stdout = json.dumps(
+        {"json_format_version": [1, 0], "smartctl": {"version": version}, "devices": []}
+    )
+    return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
+
+
+def test_smartctl_is_reported_with_its_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The real program code against the fake smartctl and a recording of 7.5.
+    monkeypatch.setenv("FAKE_SMARTCTL_RECORDING", str(RECORDINGS / "test-cluster-pve7"))
+
+    result = check_smartctl(SmartctlSettings(path=FAKE))
+
+    assert result == CheckResult("smartctl", Status.OK, f"{FAKE}: smartctl 7.5")
+
+
+def test_the_version_comes_from_a_scan_that_opens_nothing(bridge: Path) -> None:
+    runner = StaticRunner(scan_answer([7, 4]))
+
+    result = check_smartctl(SmartctlSettings(path=bridge), runner=runner)
+
+    assert result.detail.endswith("smartctl 7.4")
+    assert runner.calls[0][0] == [str(bridge), "--scan", "--json=c"]
+
+
+def test_a_missing_smartctl_fails(tmp_path: Path) -> None:
+    result = check_smartctl(SmartctlSettings(path=tmp_path / "smartctl"))
+
+    assert result.status is Status.FAIL
+    assert result.advice == "it comes with the package smartmontools"
+
+
+def test_a_smartctl_older_than_7_fails(bridge: Path) -> None:
+    result = check_smartctl(SmartctlSettings(path=bridge), runner=StaticRunner(scan_answer([6, 6])))
+
+    assert result.status is Status.FAIL
+    assert "found 6.6" in result.detail
+
+
+def test_a_smartctl_without_json_fails(bridge: Path) -> None:
+    # smartctl before 7.0 does not understand --json.
+    answer = ProcessResult(returncode=1, stdout="smartctl 6.6 ...\n", stderr="", timed_out=False)
+
+    result = check_smartctl(SmartctlSettings(path=bridge), runner=StaticRunner(answer))
+
+    assert result.status is Status.FAIL
+    assert result.advice == "the tool needs smartmontools 7.0 or later (ADR 0002)"
+
+
+def test_a_smartctl_that_does_not_answer_fails(bridge: Path) -> None:
+    runner = StaticRunner(ProcessResult(None, "", "", True))
+
+    result = check_smartctl(SmartctlSettings(path=bridge, timeout_seconds=30.0), runner=runner)
+
+    assert result.detail.endswith("did not answer within 30 seconds")
+
+
 # The whole run
 
 
-def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_dir: Path) -> None:
-    sendmail = tmp_path / "sendmail"
-    sendmail.write_text("#!/bin/sh\n", encoding="utf-8")
+class HostRunner:
+    """Answers the bridge, and smartctl with a scan of 7.5, and records the calls."""
 
-    results = run_doctor(
-        config_path=tmp_path / "config.toml",
+    def __init__(self) -> None:
+        self.calls: list[tuple[list[str], str | None, float]] = []
+
+    def __call__(
+        self,
+        command: Sequence[str | Path],
+        *,
+        input_text: str | None = None,
+        timeout: float,
+    ) -> ProcessResult:
+        arguments = [str(argument) for argument in command]
+        self.calls.append((arguments, input_text, timeout))
+        return scan_answer([7, 5]) if "--scan" in arguments else good_bridge()
+
+
+def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) -> list[CheckResult]:
+    smartctl = tmp_path / "smartctl"
+    smartctl.write_text("#!/bin/sh\n", encoding="utf-8")
+    smartctl.chmod(0o755)
+    config = tmp_path / "config.toml"
+    config.write_text(f'[smartctl]\npath = "{smartctl}"\n', encoding="utf-8")
+    return run_doctor(
+        config_path=config,
         bridge_path=bridge,
         sendmail_path=sendmail,
         template_dir=vendor_dir,
@@ -642,11 +728,19 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         pvesh_path=tmp_path / "pvesh",
         forward_path=tmp_path / "forward",
         node="pve1",
-        runner=StaticRunner(good_bridge()),
+        runner=HostRunner(),
     )
+
+
+def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_dir: Path) -> None:
+    sendmail = tmp_path / "sendmail"
+    sendmail.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    results = doctor_on(tmp_path, bridge, vendor_dir, sendmail)
 
     assert [result.name for result in results] == [
         "config",
+        "smartctl",
         "bridge",
         "templates",
         "mail",
@@ -655,24 +749,16 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "pending",
     ]
     assert all(result.status is not Status.FAIL for result in results)
+    assert results[1].detail.endswith("smartctl 7.5")
 
 
 def test_what_is_not_checked_yet_is_named(tmp_path: Path, bridge: Path, vendor_dir: Path) -> None:
-    results = run_doctor(
-        config_path=tmp_path / "config.toml",
-        bridge_path=bridge,
-        sendmail_path=tmp_path / "sendmail",
-        template_dir=vendor_dir,
-        override_dir=tmp_path / "override",
-        pvesh_path=tmp_path / "pvesh",
-        forward_path=tmp_path / "forward",
-        node="pve1",
-        runner=StaticRunner(good_bridge()),
-    )
+    results = doctor_on(tmp_path, bridge, vendor_dir, tmp_path / "sendmail")
 
     pending = results[-1]
     assert pending.status is Status.SKIP
-    assert "smartctl" in pending.detail
+    assert "smartd" in pending.detail
+    assert "smartctl" not in pending.detail
 
 
 # The command
