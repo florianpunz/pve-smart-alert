@@ -5,7 +5,7 @@ They were taken on 2026-10-05 on the three nodes `pve5`, `pve6` and `pve7`: firs
 The recording by hand is used only for its two matcher configurations. Everything else comes from the recordings of the script, which are complete and alike on all three nodes.
 Everything in this note is **Verified** on these recordings, unless it is marked otherwise.
 
-The raw archives contain real serial numbers and WWNs and are not part of the repository ([ADR 0016](../adr/0016-test-strategy.md)). Anonymized fixtures made from them are added with milestone M2.
+The raw archives contain real serial numbers and WWNs and are not part of the repository ([ADR 0016](../adr/0016-test-strategy.md)). The anonymized fixtures made from the recordings of the script are in `tests/fixtures/smartctl/direct/` ([ADR 0023](../adr/0023-anonymization-of-recordings.md)).
 
 ## Versions
 

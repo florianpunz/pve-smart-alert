@@ -55,7 +55,7 @@ Properties that follow from this shape:
 | Notify bridge | Perl script that calls `PVE::Notify` | [0008](docs/adr/0008-notification-integration.md) |
 | Routing check | Reads the matchers and targets through `pvesh` and evaluates them for the notifications of the tool and for its fallback, mail to root | [0020](docs/adr/0020-routing-check.md), [0022](docs/adr/0022-fallback-routing-check.md) |
 | systemd units | Timer, service and failure reporter | [0006](docs/adr/0006-scheduling.md) |
-| Fixture tooling | Records and anonymizes smartctl output; fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md) |
+| Fixture tooling | Records and anonymizes smartctl output (`anonymize.py`, `scripts/make_fixtures.py`); fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md), [0023](docs/adr/0023-anonymization-of-recordings.md) |
 
 Dependencies point in one direction: command-line interface → run orchestration → components. Components do not call each other sideways. Discovery, collector, checks, planner and renderer are free of side effects other than running smartctl and reading system files, which makes them testable in isolation.
 
@@ -82,7 +82,9 @@ The first run is the same sequence with empty state. The planner recognizes it a
 
 ## 4. Data model
 
-**Drive identity**: model, serial number, WWN if known. Key in the state file. See [ADR 0005](docs/adr/0005-drive-discovery-and-identity.md).
+Both models are in `model.py`. The drive model exists since milestone M2; the parsers fill it and the checks read it.
+
+**Drive identity**: model, serial number, WWN if known, normalized: trimmed, inner whitespace collapsed, the WWN as lowercase hexadecimal digits. Key in the state file. An identity is stable only with a serial number or a WWN. See [ADR 0005](docs/adr/0005-drive-discovery-and-identity.md).
 
 **Drive snapshot**: what one run learned about one drive.
 
@@ -218,7 +220,7 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-Milestone M1 reads only `[notify] transport`. Every other key in the example above is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
+Milestone M1 reads `[notify] transport`. Milestone M2 adds `[smartctl]` with `path`, `timeout` (from `"1s"` to `"15m"`) and `detail`, and the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type. Every other key in the example above, `exclude` among them, is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
 
 ## 9. State
 
