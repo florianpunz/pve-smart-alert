@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The wear value of an SSD is taken from the vendor-neutral sources first and from the vendor attribute of the Proxmox VE web interface last, and the source is shown ([ADR 0021](docs/adr/0021-wear-value-source.md)).
 - The example matcher in the README routes all four severities of the tool.
 - With `transport = mail`, the line `routing` of `pve-smart-alert doctor` checks the route of mail to root instead of being skipped, and `pve-smart-alert test-notification` follows a test that went as mail.
+- `pve-smart-alert test-notification` mentions that an empty log can mean that no matcher matched only when the line `Matchers` cannot decide it, and no longer after a test that went as mail.
 - When a matcher would route a notification but it or its targets are disabled, `pve-smart-alert doctor` and `pve-smart-alert test-notification` name it instead of advising a new matcher.
 
 [Unreleased]: https://github.com/florianpunz/pve-smart-alert/commits/main

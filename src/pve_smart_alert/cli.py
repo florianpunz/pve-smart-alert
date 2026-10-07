@@ -145,20 +145,30 @@ def _report(
         print(_labelled("Fallback", outcome.fallback_reason))
     if outcome.error is not None:
         print(_labelled("Error", outcome.error))
+    decided = False
     if outcome.delivered:
-        print(_labelled("Matchers", _matchers(notification, outcome)))
+        matchers, decided = _matchers(notification, outcome)
+        print(_labelled("Matchers", matchers))
 
     print("Log:")
     if outcome.log_lines:
         for log_line in outcome.log_lines:
             print(f"  {log_line}")
+    elif outcome.transport is not TransportName.PVE_NOTIFY:
+        # Mail to root never brings an answer of the notification system.
+        print("  (the mail command logged nothing)")
     else:
         print("  (the notification system logged nothing)")
-        print("  Nothing logged can also mean that no matcher matched: check the target.")
+        if outcome.delivered and not decided:
+            # Only when the line Matchers could not answer it (ADR 0020).
+            print("  Nothing logged can also mean that no matcher matched: check the target.")
 
 
-def _matchers(notification: Notification, outcome: TransportOutcome) -> str:
+def _matchers(notification: Notification, outcome: TransportOutcome) -> tuple[str, bool]:
     """Return which matchers route the delivered test notification.
+
+    The second value says whether that was decided: whether the line answers
+    where the notification went, or only why it cannot.
 
     The notification system accepts a notification that no matcher matches
     and drops it without an error, so the answer of the transport alone
@@ -176,9 +186,9 @@ def _matchers(notification: Notification, outcome: TransportOutcome) -> str:
             return (
                 "none, mail to root does not reach the notification system:"
                 f" {ROOT_FORWARD_PATH} has no line for {FORWARDER}"
-            )
+            ), True
         if forwarded is None:
-            return f"cannot be decided: {ROOT_FORWARD_PATH} cannot be read"
+            return f"cannot be decided: {ROOT_FORWARD_PATH} cannot be read", False
         metadata = forwarded_mail_metadata(node=notification.node)
         what = "mail to root"
         suffix = f", as {FORWARDED_MAIL_TYPE}"
@@ -186,15 +196,15 @@ def _matchers(notification: Notification, outcome: TransportOutcome) -> str:
     try:
         config = read_notification_config()
     except RoutingError as error:
-        return f"cannot be read: {error}"
+        return f"cannot be read: {error}", False
 
     routing = evaluate(config, metadata)
     if routing.verdict is Verdict.ROUTED:
-        return ", ".join(routing.matchers) + suffix
+        return ", ".join(routing.matchers) + suffix, True
     if routing.verdict is Verdict.NOT_ROUTED:
         hints = [blocked.describe() for blocked in routing.blocked]
-        return "; ".join([f"none, no matcher routes {what} to an enabled target", *hints])
-    return "cannot be decided: " + "; ".join(routing.reasons)
+        return "; ".join([f"none, no matcher routes {what} to an enabled target", *hints]), True
+    return "cannot be decided: " + "; ".join(routing.reasons), False
 
 
 def _labelled(label: str, value: str) -> str:

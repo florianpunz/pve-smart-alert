@@ -416,3 +416,69 @@ def test_a_test_that_was_not_delivered_has_no_matchers(
     cli.main(["test-notification"])
 
     assert "Matchers:" not in capsys.readouterr().out
+
+
+# The hint about an empty log
+
+
+HINT = "Nothing logged can also mean that no matcher matched"
+
+
+def test_a_test_sent_as_mail_gets_no_hint_about_matchers(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The mail route never brings an answer of the notification system, and
+    # the line Matchers already says where the mail goes.
+    transport = FakeTransport(transport=TransportName.MAIL)
+    install(monkeypatch, transport, matchers=recorded("test-cluster-c"))
+
+    cli.main(["test-notification", "--transport", "mail"])
+
+    out = capsys.readouterr().out
+    assert "Log:\n  (the mail command logged nothing)\n" in out
+    assert HINT not in out
+    assert "the notification system logged nothing" not in out
+
+
+def test_a_test_sent_as_mail_without_readable_matchers_gets_no_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport(transport=TransportName.MAIL))
+
+    cli.main(["test-notification"])
+
+    assert HINT not in capsys.readouterr().out
+
+
+def test_a_routing_that_is_decided_needs_no_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name, severity in (("test-cluster-c", "warning"), ("test-cluster-a", "info")):
+        install(monkeypatch, FakeTransport(), matchers=recorded(name))
+
+        cli.main(["test-notification", "--severity", severity])
+
+        out = capsys.readouterr().out
+        assert "  (the notification system logged nothing)\n" in out
+        assert HINT not in out
+
+
+def test_a_routing_that_cannot_be_decided_keeps_the_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Without pvesh, the empty log is the only clue (ADR 0020).
+    install(monkeypatch, FakeTransport())
+
+    cli.main(["test-notification"])
+
+    assert HINT in capsys.readouterr().out
+
+
+def test_a_test_that_was_not_delivered_gets_no_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, FakeTransport(delivered=False))
+
+    cli.main(["test-notification"])
+
+    assert HINT not in capsys.readouterr().out

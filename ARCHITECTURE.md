@@ -332,9 +332,11 @@ Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root proc
 
 With `transport = mail` every notification goes as mail to root, so the line `routing` reports that route, prefixed with `transport = mail:`.
 
-`pve-smart-alert test-notification` evaluates the delivered test notification with its exact fields and prints the matchers that route it, or says that none does and names a matcher that matches but routes nowhere. A test that went as mail is evaluated as `system-mail`.
+`pve-smart-alert test-notification` evaluates the delivered test notification with its exact fields and prints the matchers that route it, or says that none does and names a matcher that matches but routes nowhere. A test that went as mail is evaluated as `system-mail`. The remark that an empty log can mean that no matcher matched appears only when the notify route was used and the line `Matchers` could not decide; the mail route never returns a log of the notification system.
 
 Checked on Proxmox VE 9.2 (2026-10-07, node `pve7`, acceptance step 5 of M2): with the matcher of the tool routing all four severities, `doctor` reports `routing` as `ok`, by `pve-smart-alert`, and `test-notification --severity info` is delivered and names `pve-smart-alert`. With the matcher limited to `warning,error`, `doctor` reports `warn` and names `info` and `notice`. With the matcher disabled, `doctor` names all four severities, `test-notification` says that no matcher routes the test, and the library logs `skipping disabled matcher 'pve-smart-alert'` instead of nothing.
+
+Checked on Proxmox VE 9.2 (2026-10-07, node `pve7`, [ADR 0022](docs/adr/0022-fallback-routing-check.md)): in the configuration of the cluster, `doctor` reports `routing` as `ok`, by `pve-smart-alert`, and `fallback` as `ok`, mail to root routed as `system-mail` by `default-matcher`. `test-notification --transport mail` is delivered as mail, names `default-matcher, as system-mail`, and the mail arrives. With the matcher of the tool disabled, `routing` warns and the advice names `pve-smart-alert` as the matcher that matches all four severities but is disabled. With the default matcher limited to `exact:type=vzdump`, `fallback` warns that no matcher routes the type `system-mail` to an enabled target.
 
 ### Templates
 
