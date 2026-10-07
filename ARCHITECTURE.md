@@ -114,25 +114,27 @@ Checks read only the snapshot. They never see smartctl JSON. A new data source w
 Sources, in this order ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)):
 
 1. `smartctl --scan-open --json`.
-2. Probes. Version 1: `cciss,N` for HPE Smart Array, only if an `hpsa` or `smartpqi` host is present. Experimental.
-3. Manual entries from the configuration.
+2. Probes. Version 1: `cciss,N` for HPE Smart Array, only if an `hpsa` or `smartpqi` host is present. Experimental. Arrives with milestone M6.
+3. Manual entries from the configuration, `[[discovery.device]]`. An entry that has the name and type of a device of the scan is not read a second time.
 
-Enrichment reads `lsblk --json` and sysfs once per run. It adds transport, removable flag, links and membership. Errors here are logged and ignored.
+The package `discovery/` implements this since milestone M2. A device found is read once per run, in the order of the scan and then of the manual entries, and every device is reported with its source and what became of it: monitored, in standby, unreadable, or skipped with a reason.
+
+Enrichment reads `lsblk --json` with the columns `NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL` once per run, the links below `/dev/disk/by-id` and `/dev/disk/by-path`, and for an NVMe controller its transport in sysfs. It adds transport, removable flag, links and membership; an NVMe controller is described by its namespaces. The volume group comes from the device-mapper names of the LVM devices below a drive, as [Research 06](docs/research/06-test-cluster-recordings.md) verified against `pvs`, which is not called because it reads from the disks. A ZFS pool comes from the label of a `zfs_member` file system, an md array from the name of a `raid` device (Q-S6). Errors here are reported and do not affect the run (FR-110).
 
 Filter rules, each with a reason code shown by `pve-smart-alert scan`:
 
 | Reason | Rule |
 | --- | --- |
-| `excluded` | Matches an exclude rule or a per-drive override with `exclude = true` |
-| `remote` | Transport is iSCSI, Fibre Channel or NVMe over Fabrics |
-| `not-a-disk` | Device type is not a disk (enclosure, tape, optical) |
-| `logical-volume` | Logical volume of a RAID controller or a virtual disk of a hypervisor |
+| `excluded` | Matches an exclude rule ([ADR 0024](docs/adr/0024-drive-selectors.md)) or, from M3 on, a per-drive override with `exclude = true` |
+| `remote` | Transport is iSCSI, Fibre Channel or NVMe over Fabrics; the device is not read (Q-S6) |
+| `not-a-disk` | Device type is not a disk (enclosure, tape, optical); the device is not read |
+| `logical-volume` | Logical volume of a RAID controller or a virtual disk of a hypervisor. Recognized from milestone M6 on, with recordings of such hardware; until then a virtual disk is skipped by an exclude rule such as `{ model = "QEMU HARDDISK" }` |
 | `no-smart` | The device reports that it has no SMART capability |
-| `duplicate` | Same identity as a device already kept; recorded as an alias |
+| `duplicate` | Same identity as a device already kept; recorded as an alias. A block device of the host is kept before a pass-through path, the scan before a manual entry. Drives without a stable identity are never merged |
 
-Classification as `logical-volume` and `no-smart` needs the identify data, so it happens after the smartctl call for that device. It is repeated on every run, because a device name can be taken over by a different device. Skipped devices are recorded in state only so that `pve-smart-alert status` can show them.
+Classification as `excluded`, `logical-volume` and `no-smart` needs the identify data, so it happens after the smartctl call for that device. A device of the scan whose name or type does not have the form that may reach smartctl is reported as unreadable and not read. It is repeated on every run, because a device name can be taken over by a different device. Skipped devices are recorded in state only so that `pve-smart-alert status` can show them.
 
-Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from sysfs and reported as `tool.unsupported_controller`.
+Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from sysfs and reported as `tool.unsupported_controller`. This arrives with milestone M6.
 
 ## 6. Evaluation
 

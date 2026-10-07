@@ -39,6 +39,13 @@ REFERENCE_PATH: Final = Path("/usr/share/doc/pve-smart-alert/config.reference.to
 # fake smartctl instead (ADR 0016).
 SMARTCTL_PATH: Final = Path("/usr/sbin/smartctl")
 
+# What discovery reads besides smartctl, best effort (ADR 0005): the block
+# devices from lsblk of util-linux, the links udev keeps below /dev/disk, and
+# the transport of NVMe controllers in sysfs.
+LSBLK_PATH: Final = Path("/usr/bin/lsblk")
+DISK_LINKS_DIR: Final = Path("/dev/disk")
+SYSFS_DIR: Final = Path("/sys")
+
 # The command line client of the Proxmox VE API, part of `pve-manager`. The
 # routing check reads the matchers and targets through it (ADR 0020).
 PVESH_PATH: Final = Path("/usr/bin/pvesh")

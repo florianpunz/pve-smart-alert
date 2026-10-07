@@ -74,8 +74,8 @@ _SECONDS: Final[Mapping[str, int]] = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 # Device names and types reach smartctl as arguments, so they are checked
 # against strict patterns (ARCHITECTURE.md section 14): a name below /dev, a
 # type made of the words, numbers and separators of `smartctl --device`.
-_DEVICE_NAME: Final = re.compile(r"/dev/[A-Za-z0-9._:+@/-]{1,250}")
-_DEVICE_TYPE: Final = re.compile(r"[a-z0-9]+(?:[,/+-][a-z0-9]+){0,15}")
+DEVICE_NAME_PATTERN: Final = re.compile(r"/dev/[A-Za-z0-9._:+@/-]{1,250}")
+DEVICE_TYPE_PATTERN: Final = re.compile(r"[a-z0-9]+(?:[,/+-][a-z0-9]+){0,15}")
 
 
 class ConfigError(Exception):
@@ -384,13 +384,13 @@ def _device(entry: Mapping[str, object], number: int, text: str) -> ManualDevice
         values[key] = value
 
     name, device_type = values["name"], values["type"]
-    if not _DEVICE_NAME.fullmatch(name) or ".." in PurePosixPath(name).parts:
+    if not DEVICE_NAME_PATTERN.fullmatch(name) or ".." in PurePosixPath(name).parts:
         raise ConfigError(
             f'"name" in {where} must be a device below /dev, found "{name}"',
             key="discovery.device.name",
             line=_find_line(text, "name"),
         )
-    if not _DEVICE_TYPE.fullmatch(device_type):
+    if not DEVICE_TYPE_PATTERN.fullmatch(device_type):
         raise ConfigError(
             f'"type" in {where} must be a device type of smartctl such as "sat" or'
             f' "megaraid,0", found "{device_type}"',

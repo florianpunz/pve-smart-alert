@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pve-smart-alert test-notification` names the matchers that route the test notification, or says that none does.
 - The configuration accepts `[smartctl]` with `path`, `timeout` and `detail`, and manual devices in `[[discovery.device]]` (FR-104); the reference configuration documents them.
 - The collector runs smartctl for one drive with a timeout, leaves a drive in standby asleep, and tells usable data from an unreadable drive by the exit status and the JSON ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)).
+- Discovery finds the drives of a host from the device scan of smartctl and the manual devices, reads each once, adds transport, links and the volume group, pool or array from lsblk, skips remote devices, devices that are not disks, drives without SMART and drives an exclude rule selects, and keeps a drive reached through several paths once ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)).
+- The configuration accepts exclude rules in `[discovery]`, which select drives by model pattern, serial number or WWN ([ADR 0024](docs/adr/0024-drive-selectors.md)).
 - Parsers for ATA and NVMe turn the JSON of smartctl into snapshots of the drive model; values a drive does not report are left out instead of guessed (FR-206).
 - `tests/fake-smartctl` replays recordings for the tests, including drives that sleep, hang or cannot be opened ([ADR 0016](docs/adr/0016-test-strategy.md)).
 - `scripts/make_fixtures.py` turns an archive of the collection script into anonymized fixtures ([ADR 0023](docs/adr/0023-anonymization-of-recordings.md)).
