@@ -12,11 +12,14 @@ from pve_smart_alert.config import (
     ConfigError,
     Detail,
     DiscoverySettings,
+    DriveSelector,
     ManualDevice,
+    SelectorKind,
     SmartctlSettings,
     TransportName,
     load_config,
 )
+from pve_smart_alert.model import DriveIdentity
 
 
 def write_config(tmp_path: Path, content: str) -> Path:
@@ -291,12 +294,108 @@ def test_manual_devices_must_be_tables(tmp_path: Path) -> None:
     with pytest.raises(ConfigError) as error:
         load_config(path)
 
-    assert "written as [[discovery.device]]" in str(error.value)
+    assert "must be a list of tables, such as [[discovery.device]]" in str(error.value)
 
 
-def test_the_exclude_rules_are_not_read_yet(tmp_path: Path) -> None:
-    # They arrive with the filtering of discovery.
-    path = write_config(tmp_path, '[discovery]\nexclude = [{ model = "QEMU HARDDISK" }]\n')
+def test_the_exclude_rules_are_read(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        "[discovery]\n"
+        "exclude = [\n"
+        '    { model = "QEMU *" },\n'
+        '    { serial = "S2R5NX0H123456A" },\n'
+        '    { wwn = "0x5002538E40A1B2C3" },\n'
+        "]\n",
+    )
 
-    with pytest.raises(ConfigError, match='unknown key "exclude"'):
+    assert load_config(path).discovery.exclude == (
+        DriveSelector(SelectorKind.MODEL, "QEMU *"),
+        DriveSelector(SelectorKind.SERIAL, "S2R5NX0H123456A"),
+        DriveSelector(SelectorKind.WWN, "0x5002538E40A1B2C3"),
+    )
+
+
+def test_exclude_rules_can_be_written_as_tables(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[[discovery.exclude]]\nmodel = "QEMU HARDDISK"\n')
+
+    assert load_config(path).discovery.exclude == (
+        DriveSelector(SelectorKind.MODEL, "QEMU HARDDISK"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("rule", "message"),
+    [
+        ('{ model = "QEMU*", serial = "X" }', 'needs exactly one of "model", "serial", "wwn"'),
+        ("{}", "needs exactly one of"),
+        ('{ label = "boot" }', 'unknown key "label" in exclude rule number 1'),
+        ('{ model = "" }', "must not be empty"),
+        ('{ wwn = "not-hex" }', "must be hexadecimal digits"),
+        ("{ serial = 12 }", "must be a string, found int"),
+    ],
+)
+def test_an_exclude_rule_that_is_not_one_is_an_error(
+    tmp_path: Path, rule: str, message: str
+) -> None:
+    path = write_config(tmp_path, f"[discovery]\nexclude = [{rule}]\n")
+
+    with pytest.raises(ConfigError) as error:
         load_config(path)
+
+    assert message in str(error.value)
+
+
+def test_exclude_rules_must_be_tables(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[discovery]\nexclude = ["QEMU HARDDISK"]\n')
+
+    with pytest.raises(ConfigError, match="must be a list of tables"):
+        load_config(path)
+
+
+# The selectors of a drive (ADR 0024)
+
+
+QEMU = DriveIdentity("QEMU HARDDISK", serial="QM00001")
+SAMSUNG = DriveIdentity("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001", wwn="5002538000000001")
+
+
+@pytest.mark.parametrize(
+    ("pattern", "selected"),
+    [
+        ("QEMU HARDDISK", True),
+        ("QEMU*", True),
+        ("QEMU HARDDIS?", True),
+        ("*HARDDISK", True),
+        ("*", True),
+        # The pattern matches the whole name.
+        ("HARDDISK", False),
+        ("QEMU", False),
+        # Upper and lower case count.
+        ("qemu*", False),
+        # Only * and ? are special; brackets and dots mean themselves.
+        ("QEMU [H]ARDDISK", False),
+        ("QEMU.HARDDISK", False),
+    ],
+)
+def test_a_model_is_a_pattern_with_star_and_question_mark(pattern: str, selected: bool) -> None:
+    assert DriveSelector(SelectorKind.MODEL, pattern).matches(QEMU) is selected
+
+
+def test_brackets_in_a_pattern_are_characters() -> None:
+    drive = DriveIdentity("Odd [Model] 1")
+
+    assert DriveSelector(SelectorKind.MODEL, "Odd [Model] ?").matches(drive)
+
+
+def test_a_serial_number_is_compared_exactly() -> None:
+    assert DriveSelector(SelectorKind.SERIAL, "ANON-SN-0001").matches(SAMSUNG)
+    assert not DriveSelector(SelectorKind.SERIAL, "anon-sn-0001").matches(SAMSUNG)
+    assert not DriveSelector(SelectorKind.SERIAL, "ANON-SN-000").matches(SAMSUNG)
+
+
+def test_a_wwn_is_compared_in_its_digits() -> None:
+    # The notations of the tool, lsblk and the web interface differ.
+    for notation in ("5002538000000001", "0x5002538000000001", "0X5002538000000001"):
+        assert DriveSelector(SelectorKind.WWN, notation).matches(SAMSUNG)
+    assert not DriveSelector(SelectorKind.WWN, "5002538000000002").matches(SAMSUNG)
+    assert not DriveSelector(SelectorKind.WWN, "5002538000000001").matches(QEMU)

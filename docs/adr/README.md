@@ -28,6 +28,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0021](0021-wear-value-source.md) | Take the wear value from the vendor-neutral sources first | Accepted | Which source the wear value of an SSD comes from |
 | [0022](0022-fallback-routing-check.md) | Check the route of the fallback, mail to root, as well | Accepted | How the tool detects that its fallback mail would be dropped |
 | [0023](0023-anonymization-of-recordings.md) | Anonymize recordings with counters per archive | Accepted | Which values of a recording identify a drive and what replaces them |
+| [0024](0024-drive-selectors.md) | Select drives by model pattern, serial number and WWN | Accepted | What the selectors of exclude rules and per-drive overrides mean |
 
 ## Confirmed by the maintainer
 

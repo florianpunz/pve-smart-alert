@@ -39,3 +39,16 @@ detail = "extended"
 #   name = "/dev/sg3"
 #   type = "areca,2"
 device = []
+
+# Drives that are not monitored. Each rule selects drives by exactly one of
+# model, serial or wwn (ADR 0024). A model is a pattern in which * stands for
+# any characters and ? for one, matched against the whole name, with upper
+# and lower case counting; serial and wwn are compared exactly. An excluded
+# drive is shown by `pve-smart-alert scan` with the reason "excluded". None
+# by default. For example:
+#
+#   exclude = [
+#       { model = "QEMU HARDDISK" },
+#       { serial = "S2R5NX0H123456A" },
+#   ]
+exclude = []

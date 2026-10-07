@@ -5,8 +5,9 @@ The file is `/etc/pve-smart-alert/config.toml`, its format and its failure
 behavior are described in ADR 0011 and ARCHITECTURE.md section 8.
 
 This module reads the keys that are implemented: `[notify] transport` since
-milestone M1, `[smartctl]` with `path`, `timeout` and `detail`, and the
-manual devices of `[[discovery.device]]` since milestone M2. The validation
+milestone M1, `[smartctl]` with `path`, `timeout` and `detail`, the manual
+devices of `[[discovery.device]]` and the exclude rules of `[discovery]`
+since milestone M2. The validation
 is strict: an unknown section, an unknown key, a wrong type and a value out
 of range are errors that name the place (FR-405). The remaining keys arrive
 with the milestone that uses them; the last-good configuration and the
@@ -25,6 +26,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
 
+from pve_smart_alert.model import DriveIdentity
 from pve_smart_alert.paths import CONFIG_PATH, SMARTCTL_PATH
 
 
@@ -53,7 +55,7 @@ _DETAIL_VALUES: Final = tuple(item.value for item in Detail)
 _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
     "notify": frozenset({"transport"}),
     "smartctl": frozenset({"path", "timeout", "detail"}),
-    "discovery": frozenset({"device"}),
+    "discovery": frozenset({"device", "exclude"}),
 }
 
 # The keys of one manual device, both required (FR-104).
@@ -118,11 +120,60 @@ class ManualDevice:
     type: str
 
 
+class SelectorKind(StrEnum):
+    """What a selector of a drive compares (ADR 0024)."""
+
+    MODEL = "model"
+    SERIAL = "serial"
+    WWN = "wwn"
+
+
+_SELECTOR_KEYS: Final = tuple(kind.value for kind in SelectorKind)
+_WWN_VALUE: Final = re.compile(r"(?:0[xX])?[0-9a-fA-F]{1,32}")
+
+
+@dataclass(frozen=True)
+class DriveSelector:
+    """One selector of a drive, as exclude rules and per-drive overrides use it (ADR 0024).
+
+    A model is a pattern in which `*` stands for any sequence of characters
+    and `?` for one, and which has to match the whole name; upper and lower
+    case count. A serial number is compared exactly, a WWN exactly in its
+    digits, without a `0x` and without regard to their case.
+    """
+
+    kind: SelectorKind
+    value: str
+
+    def matches(self, identity: DriveIdentity) -> bool:
+        """Whether this selector selects the drive with this identity."""
+        if self.kind is SelectorKind.MODEL:
+            return model_pattern(self.value).fullmatch(identity.model) is not None
+        if self.kind is SelectorKind.SERIAL:
+            return identity.serial == self.value
+        wanted = self.value.lower().removeprefix("0x")
+        return identity.wwn is not None and identity.wwn == wanted
+
+    def describe(self) -> str:
+        """Return the selector as it is written in the configuration."""
+        return f'{self.kind.value} = "{self.value}"'
+
+
+def model_pattern(pattern: str) -> re.Pattern[str]:
+    """Return the regular expression of a model pattern (ADR 0024)."""
+    translated = "".join(
+        ".*" if character == "*" else "." if character == "?" else re.escape(character)
+        for character in pattern
+    )
+    return re.compile(translated, re.DOTALL)
+
+
 @dataclass(frozen=True)
 class DiscoverySettings:
     """The `[discovery]` section (ADR 0005)."""
 
     devices: tuple[ManualDevice, ...] = ()
+    exclude: tuple[DriveSelector, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -255,18 +306,61 @@ def _smartctl(section: Mapping[str, object], text: str) -> SmartctlSettings:
 
 
 def _discovery(section: Mapping[str, object], text: str) -> DiscoverySettings:
-    entries = section.get("device")
+    devices = _tables(section, "device", text)
+    rules = _tables(section, "exclude", text)
+    return DiscoverySettings(
+        devices=tuple(_device(entry, number, text) for number, entry in enumerate(devices, 1)),
+        exclude=tuple(_selector(rule, number, text) for number, rule in enumerate(rules, 1)),
+    )
+
+
+def _tables(section: Mapping[str, object], key: str, text: str) -> list[Mapping[str, object]]:
+    """Return a list of tables of `[discovery]`, or an empty one when it is absent."""
+    entries = section.get(key)
     if entries is None:
-        return DiscoverySettings()
+        return []
     if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
         raise ConfigError(
-            '"discovery.device" must be a list of tables, written as [[discovery.device]]',
-            key="discovery.device",
-            line=_find_line(text, "device"),
+            f'"discovery.{key}" must be a list of tables, such as [[discovery.{key}]]',
+            key=f"discovery.{key}",
+            line=_find_line(text, key),
         )
-    return DiscoverySettings(
-        devices=tuple(_device(entry, number, text) for number, entry in enumerate(entries, 1))
-    )
+    return entries
+
+
+def _selector(rule: Mapping[str, object], number: int, text: str) -> DriveSelector:
+    """Return one exclude rule; `number` counts the rules from 1 (ADR 0024)."""
+    where = f"exclude rule number {number}"
+    for key in rule:
+        if key not in _SELECTOR_KEYS:
+            raise ConfigError(
+                f'unknown key "{key}" in {where}',
+                key=f"discovery.exclude.{key}",
+                line=_find_line(text, "exclude"),
+            )
+    if len(rule) != 1:
+        names = ", ".join(f'"{key}"' for key in _SELECTOR_KEYS)
+        raise ConfigError(
+            f"{where} needs exactly one of {names}",
+            key="discovery.exclude",
+            line=_find_line(text, "exclude"),
+        )
+
+    (key,) = rule
+    value = _string(rule, key, f"discovery.exclude.{key}", text)
+    if not value:
+        raise ConfigError(
+            f'"{key}" in {where} must not be empty',
+            key=f"discovery.exclude.{key}",
+            line=_find_line(text, "exclude"),
+        )
+    if key == SelectorKind.WWN.value and not _WWN_VALUE.fullmatch(value):
+        raise ConfigError(
+            f'"wwn" in {where} must be hexadecimal digits, found "{value}"',
+            key="discovery.exclude.wwn",
+            line=_find_line(text, "exclude"),
+        )
+    return DriveSelector(SelectorKind(key), value)
 
 
 def _device(entry: Mapping[str, object], number: int, text: str) -> ManualDevice:
