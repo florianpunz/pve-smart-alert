@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The parser for ATA drives: SATA hard disks and SSDs (ADR 0004).
 
-The metrics of the attribute table are `ata.attr.ID.raw` and
+The wear value and its source follow ADR 0021 (`wear.py`). The metrics of
+the attribute table are `ata.attr.ID.raw` and
 `ata.attr.ID.value`. The checks read the raw value only of the attributes
 the catalog names; raw values of other attributes are packed on some drives
 (docs/check-catalog.md). The temperature comes from `temperature.current`,
@@ -30,6 +31,7 @@ from pve_smart_alert.parsers.common import (
     section,
     text,
 )
+from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC, ata_wear
 
 
 def parse(
@@ -37,7 +39,10 @@ def parse(
 ) -> Snapshot:
     """Return the snapshot of the output of smartctl for one ATA drive."""
     support = section(document, "smart_support")
+    wear = ata_wear(document)
     metrics: dict[str, int] = {}
+    put(metrics, WEAR_METRIC, wear.percent_used)
+    put(metrics, WEB_INTERFACE_METRIC, wear.web_interface)
     put(metrics, "temperature.current", integer(section(document, "temperature"), "current"))
     put(metrics, "ata.error_log.count", _error_log_count(document))
     for attribute in entries(document, "ata_smart_attributes", "table"):
@@ -62,6 +67,7 @@ def parse(
         power_on_hours=integer(section(document, "power_on_time"), "hours"),
         power_cycles=integer(document, "power_cycle_count"),
         metrics=metrics,
+        wear_source=wear.source,
     )
 
 

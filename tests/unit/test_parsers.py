@@ -19,6 +19,7 @@ from pve_smart_alert.model import (
     DriveClass,
     DriveIdentity,
     Snapshot,
+    WearSource,
 )
 from pve_smart_alert.parsers import ParseError, parse
 
@@ -215,3 +216,22 @@ def test_an_output_without_a_model_is_refused() -> None:
 
     with pytest.raises(ParseError, match="no model name"):
         parse(document, access=DeviceAccess("/dev/sdb", "sat", "ATA"), collection=COLLECTION)
+
+
+# The wear value (ADR 0021)
+
+
+def test_the_snapshot_carries_the_wear_and_its_source() -> None:
+    snapshot = snapshot_of("pve5", "sda")
+
+    assert snapshot.metrics["wear.percent_used"] == 44
+    assert snapshot.wear_source is WearSource.ENDURANCE_USED
+    # The web interface shows 0 % for the Fanxiang S301 (Research 06).
+    assert snapshot.metrics["wear.web_interface_percent_used"] == 0
+
+
+def test_an_nvme_snapshot_carries_the_wear() -> None:
+    snapshot = snapshot_of("pve7", "nvme1")
+
+    assert snapshot.metrics["wear.percent_used"] == 19
+    assert snapshot.wear_source is WearSource.ENDURANCE_USED

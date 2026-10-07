@@ -101,7 +101,7 @@ Both models are in `model.py`. The drive model exists since milestone M2; the pa
 | Context | Power-on hours, power cycles |
 | Collection | smartctl version, exit status, messages, duration |
 
-The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The source is stored next to the value as `wear.source`.
+The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The source is stored next to the value as `wear_source` of the snapshot, and the value the web interface shows as the metric `wear.web_interface_percent_used`: for ATA the vendor attribute, searched exactly as `PVE/Diskmanage.pm` does, for NVMe `percentage_used` ([Research 02](docs/research/02-builtin-smart-handling.md)). `parsers/wear.py` implements it.
 
 **Finding**: check ID, kind (condition or event), severity, current value, threshold that was crossed, short text.
 

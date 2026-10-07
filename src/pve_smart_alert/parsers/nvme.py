@@ -23,6 +23,7 @@ from pve_smart_alert.parsers.common import (
     section,
     text,
 )
+from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC, nvme_wear
 
 # The keys of `nvme_smart_health_information_log` and their metric names.
 HEALTH_METRICS: Final[Mapping[str, str]] = {
@@ -46,7 +47,10 @@ def parse(
     temperature = section(document, "temperature")
     support = section(document, "smart_support")
 
+    wear = nvme_wear(document)
     metrics: dict[str, int] = {}
+    put(metrics, WEAR_METRIC, wear.percent_used)
+    put(metrics, WEB_INTERFACE_METRIC, wear.web_interface)
     for key, metric in HEALTH_METRICS.items():
         put(metrics, metric, integer(health, key))
     put(
@@ -78,6 +82,7 @@ def parse(
             integer(health, "power_cycles"), integer(document, "power_cycle_count")
         ),
         metrics=metrics,
+        wear_source=wear.source,
     )
 
 
