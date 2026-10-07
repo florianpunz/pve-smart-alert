@@ -27,7 +27,7 @@ Proxmox VE 9.2 ships smartmontools 7.5. The notes 02 to 04 and the records [ADR 
 
 The models are those that smartctl reports. The disk list of the web interface (`/nodes/NODE/disks/list`) writes the models of the SATA drives and of the USB device with underscores instead of spaces, for example `Samsung_SSD_850_EVO_250GB`; for the NVMe drives it shows the same model as smartctl.
 
-None of the nodes uses ZFS. Every LVM volume group carries an LVM-thin pool.
+None of the nodes uses ZFS. Every LVM volume group carries an LVM-thin pool. Below some thin volumes `lsblk` shows what the guests keep inside their disks: the disks `vm-100-disk-0` on `pve5` and `vm-116-disk-0` on `pve7` hold a file system of the type `zfs_member` with the label `zroot`, the ZFS pool of a virtual machine. It is not a pool of the host.
 
 On the three nodes the volume group of a drive can be read from `lsblk` alone. `lsblk` shows each physical volume, a whole disk or a partition, with the file system type `LVM2_member`, and the device-mapper devices that use it as its children, with the type `lvm`. The name of such a device starts with the name of the volume group, followed by a single dash; a dash inside the name of a volume group or a logical volume is doubled, as in `pm961--a-data_tmeta` for the volume group `pm961-a`. Read up to the first single dash, with each doubled dash reduced to one, the names give for every physical volume of the three nodes the volume group that `pvs` reports.
 

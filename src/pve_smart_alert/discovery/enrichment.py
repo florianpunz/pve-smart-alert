@@ -12,7 +12,7 @@ devices, as Research 06 verified against `pvs` on the test cluster: the name
 up to the first single dash, with each doubled dash reduced to one. `pvs`
 itself is not called; it reads labels from the disks. A ZFS pool is taken
 from the label of a `zfs_member` file system and an md array from the name
-of a `raid` device; both are assumed (Q-S6).
+of a `raid` device on the disk or its partitions; both are assumed (Q-S6).
 """
 
 from __future__ import annotations
@@ -172,29 +172,50 @@ def _disks(base: str, block_devices: BlockDevices) -> list[Mapping[str, object]]
 
 
 def _membership(disks: Sequence[Mapping[str, object]]) -> Membership:
+    """Return what the host builds on these disks.
+
+    The volume groups come from every LVM device below a disk. A ZFS pool or
+    an md array counts only on the disk itself or on its partitions: below a
+    logical volume, lsblk also shows the file systems inside the disks of
+    guests, such as the pool `zroot` of a virtual machine on the test cluster
+    (Research 06).
+    """
     groups: list[str] = []
     pools: list[str] = []
     arrays: list[str] = []
     for node in _walk(disks):
-        kind, name, fstype, label = (
-            _text(node, "type"),
-            _text(node, "name"),
-            _text(node, "fstype"),
-            _text(node, "label"),
-        )
-        if kind == "lvm" and name is not None:
+        name = _text(node, "name")
+        if _text(node, "type") == "lvm" and name is not None:
             group = volume_group_of(name)
             if group is not None:
                 groups.append(group)
-        if fstype == "zfs_member" and label:
+    for node in _own_devices(disks):
+        label = _text(node, "label")
+        if _text(node, "fstype") == "zfs_member" and label:
             pools.append(label)
-        if kind is not None and kind.startswith("raid") and name is not None:
-            arrays.append(name)
+        for child in _children(node):
+            kind, name = _text(child, "type"), _text(child, "name")
+            if kind is not None and kind.startswith("raid") and name is not None:
+                arrays.append(name)
     return Membership(
         zfs_pool=_joined(pools),
         md_array=_joined(arrays),
         volume_group=_joined(groups),
     )
+
+
+def _own_devices(disks: Sequence[Mapping[str, object]]) -> Iterator[Mapping[str, object]]:
+    """Return the disks and their partitions."""
+    for disk in disks:
+        yield disk
+        yield from (child for child in _children(disk) if _text(child, "type") == "part")
+
+
+def _children(node: Mapping[str, object]) -> list[Mapping[str, object]]:
+    children = node.get("children")
+    if not isinstance(children, list):
+        return []
+    return [child for child in children if isinstance(child, Mapping)]
 
 
 def _joined(values: Sequence[str]) -> str | None:

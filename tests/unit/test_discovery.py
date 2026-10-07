@@ -190,6 +190,34 @@ def test_every_drive_of_a_node_is_found_once(
     assert discovery.enrichment_error is None
 
 
+@pytest.mark.parametrize("node", ["pve5", "pve6", "pve7"])
+def test_the_pools_of_guests_are_not_the_pools_of_the_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, node: str
+) -> None:
+    # The disks of virtual machines on pve5 and pve7 hold a ZFS pool "zroot"
+    # of the guest, which lsblk shows below the logical volume; the host uses
+    # no ZFS (Research 06).
+    for found in Host(tmp_path, monkeypatch, node).discover().devices:
+        assert found.snapshot is not None
+        assert found.snapshot.membership.zfs_pool is None
+        assert found.snapshot.membership.md_array is None
+
+
+def test_a_pool_on_a_partition_is_the_pool_of_the_host(pve7: Host) -> None:
+    path = pve7.recording / "lsblk.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    partition = document["blockdevices"][0]["children"][0]
+    partition.update(fstype="zfs_member", label="tank")
+    partition["children"] = [{"name": "md127", "kname": "md127", "type": "raid1"}]
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    membership = pve7.discover().devices[0].details.membership
+
+    assert membership.zfs_pool == "tank"
+    assert membership.md_array == "md127"
+    assert membership.volume_group == "pve"
+
+
 def test_the_transport_comes_from_lsblk(pve7: Host) -> None:
     transports = [found.details.location.transport for found in pve7.discover().devices]
 
