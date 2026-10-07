@@ -1,0 +1,185 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Tests for `pve-smart-alert scan` (FR-108).
+
+The report is checked against the anonymized recordings of the test
+cluster, which is what acceptance steps 1, 2 and 4 of M2 look at on the
+real nodes.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from hosts import Host
+
+from pve_smart_alert import cli
+from pve_smart_alert.config import Config, ConfigError, DriveSelector, ManualDevice, SelectorKind
+from pve_smart_alert.discovery import Discovery, discover
+from pve_smart_alert.scan_report import render
+
+SMARTCTL = Path("/usr/sbin/smartctl")
+
+
+def report(discovery: Discovery) -> str:
+    return "\n".join(render(discovery, smartctl_path=SMARTCTL)) + "\n"
+
+
+def test_a_drive_is_shown_with_what_the_tool_knows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    discovery = Host.of_node(tmp_path, monkeypatch, "pve7").discover()
+
+    text = report(discovery)
+
+    assert text.startswith("smartctl 7.5 at /usr/sbin/smartctl\n\n")
+    block = text.split("\n\n")[1]
+    lines = block.splitlines()
+    assert lines[0] == "/dev/sda [sat], from the scan: monitored"
+    assert lines[1:9] == [
+        "  Model:     Samsung SSD 850 EVO 250GB",
+        "  Serial:    ANON-SN-0001",
+        "  WWN:       5002538000000001",
+        "  Firmware:  EMT01B6Q",
+        "  Capacity:  250.06 GB",
+        "  Class:     ssd, transport sata",
+        "  Used by:   LVM volume group pve",
+        "  Wear:      12 % (endurance_used)",
+    ]
+    assert lines[9].startswith("  Read in:   ")
+    assert text.endswith("\n3 monitored, 0 in standby, 0 unreadable, 0 skipped\n")
+
+
+def test_the_nvme_drives_show_their_volume_groups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = report(Host.of_node(tmp_path, monkeypatch, "pve7").discover())
+
+    assert "/dev/nvme0 [nvme], from the scan: monitored" in text
+    assert "  Used by:   LVM volume group pm961-b\n" in text
+    assert "  Used by:   LVM volume group pm961-a\n" in text
+    assert "  Wear:      19 % (endurance_used)\n" in text
+
+
+def test_a_wear_value_that_differs_from_the_web_interface_names_both(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Acceptance step 2 of M2: the Fanxiang S301 on pve5 (ADR 0021).
+    text = report(Host.of_node(tmp_path, monkeypatch, "pve5").discover())
+
+    assert "  Wear:      44 % (endurance_used), the web interface shows 0 %\n" in text
+
+
+def test_a_small_difference_names_only_the_value_of_the_tool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    drive = host.drive("sda.json")
+    drive["endurance_used"] = {"current_percent": 21}
+    host.behave("sda.json", stdout=json.dumps(drive), exit_status=0)
+
+    text = report(host.discover())
+
+    # 21 against 12 in the web interface: less than 10 points apart.
+    assert "  Wear:      21 % (endurance_used)\n" in text
+
+
+def test_an_unreadable_manual_device_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Acceptance step 4 of M2.
+    discovery = Host.of_node(tmp_path, monkeypatch, "pve7").discover(
+        devices=(ManualDevice("/dev/sdz", "sat"),)
+    )
+
+    text = report(discovery)
+
+    assert (
+        "/dev/sdz [sat], manual entry: unreadable\n"
+        "  Reason:    Smartctl open device: /dev/sdz failed: No such device\n"
+    ) in text
+    assert text.endswith("\n3 monitored, 0 in standby, 1 unreadable, 0 skipped\n")
+
+
+def test_skipped_and_sleeping_devices_name_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    host.behave("sda.json", standby="STANDBY")
+    rule = DriveSelector(SelectorKind.MODEL, "SAMSUNG MZVLW256HEHP-000H1")
+
+    text = report(host.discover(exclude=(rule,)))
+
+    assert "/dev/sda [sat], from the scan: in standby (STANDBY), not woken\n" in text
+    assert (
+        '/dev/nvme1 [nvme], from the scan: skipped, excluded (model = "SAMSUNG MZVLW256HEHP-000H1")'
+    ) in text
+    assert text.endswith("\n1 monitored, 1 in standby, 0 unreadable, 1 skipped\n")
+
+
+def test_a_failed_scan_and_a_missing_lsblk_are_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    host.behave("scan.json", stdout="not json", exit_status=0)
+    host.lsblk_fails = True
+
+    lines = render(host.discover(), smartctl_path=SMARTCTL)
+
+    assert lines[:3] == [
+        "smartctl at /usr/sbin/smartctl, version not known",
+        "Device scan failed: the device scan answered without valid JSON",
+        "Without lsblk: lsblk did not answer; transport, links and use are missing",
+    ]
+
+
+# The command
+
+
+def install(monkeypatch: pytest.MonkeyPatch, host: Host, config: Config | None = None) -> None:
+    """Let the command see this host and this configuration."""
+    chosen = config if config is not None else host.config()
+    monkeypatch.setattr(cli, "load_config", lambda: chosen)
+
+    def discover_here(config: Config, **keywords: object) -> Discovery:
+        return discover(config, runner=host, paths=host.paths, **keywords)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "discover", discover_here)
+
+
+def test_the_command_prints_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    install(monkeypatch, Host.of_node(tmp_path, monkeypatch, "pve6"))
+
+    assert cli.main(["scan"]) == cli.EXIT_OK
+
+    captured = capsys.readouterr()
+    assert "/dev/nvme0 [nvme], from the scan: monitored" in captured.out
+    assert "  Used by:   LVM volume group vg_data\n" in captured.out
+    # Progress goes to standard error, so that the report stays clean.
+    assert "reading /dev/sda [sat] ...\n" in captured.err
+
+
+def test_a_failed_scan_ends_with_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    host = Host.of_node(tmp_path, monkeypatch, "pve6")
+    host.behave("scan.json", stdout="not json", exit_status=0)
+    install(monkeypatch, host)
+
+    assert cli.main(["scan"]) == cli.EXIT_PROBLEM
+    assert "Device scan failed" in capsys.readouterr().out
+
+
+def test_an_unusable_configuration_ends_with_two(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def broken() -> Config:
+        raise ConfigError('unknown key "exclud" in section [discovery]')
+
+    monkeypatch.setattr(cli, "load_config", broken)
+
+    assert cli.main(["scan"]) == cli.EXIT_USAGE
+    assert "unknown key" in capsys.readouterr().err

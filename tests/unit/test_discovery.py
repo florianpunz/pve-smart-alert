@@ -9,107 +9,28 @@ recordings of the test cluster; lsblk is answered from the same recording
 from __future__ import annotations
 
 import json
-import shutil
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Final
 
 import pytest
+from hosts import Host
 
 from pve_smart_alert.config import (
-    Config,
-    DiscoverySettings,
     DriveSelector,
     ManualDevice,
     SelectorKind,
-    SmartctlSettings,
 )
 from pve_smart_alert.discovery import (
-    Discovery,
-    HostPaths,
     Outcome,
     SkipReason,
     Source,
-    discover,
 )
 from pve_smart_alert.discovery.enrichment import parse_block_devices, volume_group_of
 from pve_smart_alert.model import DriveClass
-from pve_smart_alert.process import ProcessResult, run_with_timeout
-
-TESTS: Final = Path(__file__).resolve().parent.parent
-FAKE: Final = TESTS / "fake-smartctl"
-RECORDINGS: Final = TESTS / "fixtures" / "smartctl" / "direct"
-LSBLK: Final = Path("/test/lsblk")
-
-
-class Host:
-    """A host made of a copy of one recording: smartctl is the fake, lsblk the record."""
-
-    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, node: str) -> None:
-        self.recording = tmp_path / "recording"
-        shutil.copytree(RECORDINGS / f"test-cluster-{node}", self.recording)
-        self.paths = HostPaths(lsblk=LSBLK, disk_links=tmp_path / "disk", sysfs=tmp_path / "sys")
-        self.log = tmp_path / "calls.log"
-        self.lsblk_fails = False
-        monkeypatch.setenv("FAKE_SMARTCTL_RECORDING", str(self.recording))
-        monkeypatch.setenv("FAKE_SMARTCTL_LOG", str(self.log))
-
-    def __call__(
-        self, command: Sequence[str | Path], *, input_text: str | None = None, timeout: float
-    ) -> ProcessResult:
-        if str(command[0]) == str(LSBLK):
-            if self.lsblk_fails:
-                return ProcessResult(returncode=1, stdout="", stderr="", timed_out=False)
-            stdout = (self.recording / "lsblk.json").read_text(encoding="utf-8")
-            return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
-        return run_with_timeout(command, input_text=input_text, timeout=timeout)
-
-    def discover(self, **discovery: object) -> Discovery:
-        config = Config(
-            smartctl=SmartctlSettings(path=FAKE, timeout_seconds=10.0),
-            discovery=DiscoverySettings(**discovery),  # type: ignore[arg-type]
-        )
-        return discover(config, runner=self, paths=self.paths)
-
-    def read_devices(self) -> list[str]:
-        """Return the devices smartctl was asked for, the scan left out."""
-        calls = [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
-        return [call[-1] for call in calls if "--scan-open" not in call]
-
-    def behave(self, file: str, **behavior: object) -> None:
-        path = self.recording / "behavior.json"
-        current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        current[file] = behavior
-        path.write_text(json.dumps(current), encoding="utf-8")
-
-    def add_file(self, file: str, document: object, *, device: str, device_type: str) -> None:
-        """Add a drive output to the recording, as reached through `device`."""
-        (self.recording / file).write_text(json.dumps(document), encoding="utf-8")
-        recording = json.loads((self.recording / "recording.json").read_text(encoding="utf-8"))
-        recording["files"].append(
-            {"file": file, "device": device, "type": device_type, "exit_status": 0}
-        )
-        (self.recording / "recording.json").write_text(json.dumps(recording), encoding="utf-8")
-
-    def drive(self, file: str) -> dict[str, object]:
-        loaded: dict[str, object] = json.loads((self.recording / file).read_text("utf-8"))
-        return loaded
-
-    def change_lsblk(self, name: str, **values: object) -> None:
-        path = self.recording / "lsblk.json"
-        document = json.loads(path.read_text(encoding="utf-8"))
-        for device in document["blockdevices"]:
-            if device["name"] == name:
-                device.update(values)
-                break
-        else:
-            document["blockdevices"].append({"name": name, "kname": name, **values})
-        path.write_text(json.dumps(document), encoding="utf-8")
 
 
 @pytest.fixture
 def pve7(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Host:
-    return Host(tmp_path, monkeypatch, "pve7")
+    return Host.of_node(tmp_path, monkeypatch, "pve7")
 
 
 # The recordings of the test cluster
@@ -167,7 +88,7 @@ def test_every_drive_of_a_node_is_found_once(
     expected: list[tuple[str, str, str, DriveClass, str]],
 ) -> None:
     # Acceptance step 1 of M2, on the recordings (Research 06).
-    discovery = Host(tmp_path, monkeypatch, node).discover()
+    discovery = Host.of_node(tmp_path, monkeypatch, node).discover()
 
     seen = []
     for found in discovery.devices:
@@ -197,7 +118,7 @@ def test_the_pools_of_guests_are_not_the_pools_of_the_host(
     # The disks of virtual machines on pve5 and pve7 hold a ZFS pool "zroot"
     # of the guest, which lsblk shows below the logical volume; the host uses
     # no ZFS (Research 06).
-    for found in Host(tmp_path, monkeypatch, node).discover().devices:
+    for found in Host.of_node(tmp_path, monkeypatch, node).discover().devices:
         assert found.snapshot is not None
         assert found.snapshot.membership.zfs_pool is None
         assert found.snapshot.membership.md_array is None
@@ -228,7 +149,7 @@ def test_a_drive_only_lsblk_shows_is_not_monitored(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The USB drive of the KVM-over-IP device on pve5 is not in the scan.
-    discovery = Host(tmp_path, monkeypatch, "pve5").discover()
+    discovery = Host.of_node(tmp_path, monkeypatch, "pve5").discover()
 
     assert [found.candidate.name for found in discovery.devices] == ["/dev/sda"]
 

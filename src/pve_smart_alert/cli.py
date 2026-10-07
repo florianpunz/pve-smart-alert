@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Command-line interface of PVE SMART Alert.
 
-The commands of later milestones (`check`, `status`, `scan`, `config`,
-`dump-fixture`) are added here as they arrive.
+The commands of later milestones (`check`, `status`, `config`) are added here
+as they arrive.
 """
 
 from __future__ import annotations
@@ -10,10 +10,15 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 
 from pve_smart_alert import __version__
+from pve_smart_alert.anonymize import AnonymizationError
 from pve_smart_alert.config import ConfigError, NotifySettings, TransportName, load_config
+from pve_smart_alert.discovery import Candidate, discover
 from pve_smart_alert.doctor import CheckResult, Status, run_doctor
+from pve_smart_alert.dump import DumpError, dump_fixture
 from pve_smart_alert.model import (
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
@@ -34,6 +39,7 @@ from pve_smart_alert.routing import (
     metadata_of,
     read_notification_config,
 )
+from pve_smart_alert.scan_report import render
 from pve_smart_alert.transports import TransportOutcome, build_transport
 
 PROGRAM = "pve-smart-alert"
@@ -89,6 +95,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="check what this host offers for the tool",
         description="Check the parts of the host the tool works with and report one line each.",
     )
+
+    commands.add_parser(
+        "scan",
+        help="find the drives of this host and show what each one is",
+        description=(
+            "Find the drives of this host, read each of them once, and show every device"
+            " found with its source and what became of it."
+        ),
+    )
+
+    dump = commands.add_parser(
+        "dump-fixture",
+        help="record the drive data of this host as an anonymized archive",
+        description=(
+            "Record the device scan, lsblk and the output of smartctl for the drives,"
+            " with serial numbers, WWNs and UUIDs replaced by placeholders, as one archive."
+        ),
+    )
+    dump.add_argument(
+        "devices", nargs="*", metavar="DEVICE", help="a device to record, such as /dev/sda"
+    )
+    dump.add_argument("--all", action="store_true", help="record every device found")
+    dump.add_argument(
+        "--output",
+        type=Path,
+        default=Path(),
+        help="the directory the archive is written to (default: the current one)",
+    )
     return parser
 
 
@@ -101,6 +135,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _test_notification(arguments)
     if arguments.command == "doctor":
         return _doctor()
+    if arguments.command == "scan":
+        return _scan()
+    if arguments.command == "dump-fixture":
+        if arguments.all == bool(arguments.devices):
+            parser.error("dump-fixture needs either --all or the devices to record")
+        return _dump_fixture(arguments)
 
     parser.print_help()
     return EXIT_OK
@@ -210,6 +250,52 @@ def _matchers(notification: Notification, outcome: TransportOutcome) -> tuple[st
 def _labelled(label: str, value: str) -> str:
     """Return one line of the report. The labels line up."""
     return f"{label + ':':<10} {value}"
+
+
+def _scan() -> int:
+    """Find the drives of this host and show what each one is (FR-108)."""
+    try:
+        config = load_config()
+    except ConfigError as error:
+        print(f"{PROGRAM}: {error}", file=sys.stderr)
+        return EXIT_USAGE
+
+    discovery = discover(config, on_device=_reading)
+    for line in render(discovery, smartctl_path=config.smartctl.path):
+        print(line)
+    return EXIT_PROBLEM if discovery.scan_error is not None else EXIT_OK
+
+
+def _reading(candidate: Candidate) -> None:
+    """Show on standard error which device is read, since a read can take long."""
+    print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
+
+
+def _dump_fixture(arguments: argparse.Namespace) -> int:
+    """Record the drive data of this host, anonymized, as one archive (FR-604)."""
+    try:
+        config = load_config()
+    except ConfigError as error:
+        print(f"{PROGRAM}: {error}", file=sys.stderr)
+        return EXIT_USAGE
+
+    try:
+        dump = dump_fixture(
+            config,
+            devices=None if arguments.all else arguments.devices,
+            output=arguments.output,
+            node=node_name(),
+            now=datetime.now(UTC),
+        )
+    except (DumpError, AnonymizationError, OSError) as error:
+        print(f"{PROGRAM}: nothing was written: {error}", file=sys.stderr)
+        return EXIT_PROBLEM
+
+    print(_labelled("Written", str(dump.archive)))
+    print(_labelled("Devices", ", ".join(dump.devices) or "none"))
+    print("Serial numbers, WWNs and UUIDs are replaced by placeholders. Model names, firmware")
+    print("versions and the node name are kept; look at the archive before you share it.")
+    return EXIT_OK
 
 
 def _doctor() -> int:
