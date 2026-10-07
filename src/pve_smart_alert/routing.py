@@ -20,6 +20,11 @@ notifications, a regular expression that Python reads differently, a key this
 module does not know. The result is a hint; the notification system remains
 the authority on what is delivered (ADR 0020).
 
+The same evaluation covers the fallback route, mail to root, which the mail
+forwarder of Proxmox VE turns into a notification of the type `system-mail`
+(ADR 0022). Whether a mail reaches the forwarder at all depends on
+`/root/.forward`, which is read but never changed.
+
 Only `pvesh` is run, a documented command. No Proxmox VE code is imported
 (ADR 0008).
 """
@@ -47,7 +52,7 @@ from pve_smart_alert.model import (
     Notification,
     PveSeverity,
 )
-from pve_smart_alert.paths import PVESH_PATH
+from pve_smart_alert.paths import PVESH_PATH, ROOT_FORWARD_PATH
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
 # pvesh loads a large part of the Proxmox VE code on every start; on a healthy
@@ -83,6 +88,13 @@ MATCHER_KEYS: Final = frozenset(
 # The severities of `proxmox-notify`. `unknown` is the one of forwarded mail.
 SEVERITY_NAMES: Final = frozenset({"info", "notice", "warning", "error", "unknown"})
 
+# What the mail forwarder of Proxmox VE makes of a mail to root, the fallback
+# route of the tool (Research 01, ADR 0022), and the name of its program,
+# which `/root/.forward` pipes mail to.
+FORWARDED_MAIL_TYPE: Final = "system-mail"
+FORWARDED_MAIL_SEVERITY: Final = "unknown"
+FORWARDER: Final = "proxmox-mail-forward"
+
 # True, False, or None for "cannot be decided here". The values are combined
 # like Kleene's three-valued logic, so that a decided result never rests on an
 # undecided part.
@@ -116,16 +128,35 @@ class Metadata:
 
 
 @dataclass(frozen=True)
+class Blocked:
+    """A matcher whose rules match, but that routes to no enabled target.
+
+    `reason` completes the sentence "matcher NAME matches, but ...".
+    """
+
+    matcher: str
+    reason: str
+
+    def describe(self, what: str = "") -> str:
+        """Return the sentence, naming `what` the matcher matches if given."""
+        matches = f"matches {what}" if what else "matches"
+        return f"matcher {self.matcher} {matches}, but {self.reason}"
+
+
+@dataclass(frozen=True)
 class Routing:
     """Where notifications with one set of metadata go.
 
     `matchers` are the matchers that route them to an enabled target, in the
     order of the configuration. `reasons` say why the verdict is unknown.
+    `blocked` names, for a notification that is not routed, the matchers that
+    would route it if they or their targets were enabled.
     """
 
     verdict: Verdict
     matchers: tuple[str, ...] = ()
     reasons: tuple[str, ...] = ()
+    blocked: tuple[Blocked, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -165,6 +196,43 @@ def metadata_of(notification: Notification) -> Metadata:
     )
 
 
+def forwarded_mail_metadata(*, node: str) -> Metadata:
+    """Return what the matchers see of a mail to root, the fallback route.
+
+    The mail forwarder of Proxmox VE sets the same metadata for every mail:
+    the type `system-mail`, the host name and the severity `unknown`
+    (Research 01, ADR 0022). Nothing of the mail itself is seen.
+    """
+    return Metadata(
+        severity=FORWARDED_MAIL_SEVERITY,
+        fields={FIELD_TYPE: FORWARDED_MAIL_TYPE, FIELD_HOSTNAME: node},
+    )
+
+
+def mail_is_forwarded(path: Path = ROOT_FORWARD_PATH) -> Truth:
+    """Return whether mail to root reaches the notification system.
+
+    Mail to root is handed to the mail forwarder of Proxmox VE by a line in
+    `/root/.forward`, which the package `proxmox-mail-forward` writes
+    (Research 01). Without that line the mail ends in the local mailbox.
+    `None` when the file cannot be read. An alias of the mail system that
+    sends mail for root elsewhere is not seen here.
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return None
+    return any(_pipes_to_forwarder(line) for line in text.splitlines())
+
+
+def _pipes_to_forwarder(line: str) -> bool:
+    """Whether one line of a `.forward` file pipes mail to the mail forwarder."""
+    entry = line.strip().strip('"').strip()
+    return entry.startswith("|") and FORWARDER in entry
+
+
 def read_notification_config(
     *,
     pvesh_path: Path = PVESH_PATH,
@@ -192,6 +260,7 @@ def evaluate(config: NotificationConfig, metadata: Metadata) -> Routing:
     result: Truth = False
     matchers: list[str] = []
     reasons: list[str] = []
+    blocked: list[Blocked] = []
     for matcher in config.matchers:
         routes, why = _routes(matcher, metadata, enabled_targets)
         result = _any(result, routes)
@@ -199,12 +268,16 @@ def evaluate(config: NotificationConfig, metadata: Metadata) -> Routing:
             matchers.append(_name(matcher))
         elif routes is None:
             reasons.extend(why)
+        else:
+            hint = _blocked(matcher, metadata, enabled_targets)
+            if hint is not None:
+                blocked.append(hint)
 
     if result is True:
         return Routing(Verdict.ROUTED, matchers=tuple(matchers))
     if result is None:
         return Routing(Verdict.UNKNOWN, reasons=tuple(dict.fromkeys(reasons)))
-    return Routing(Verdict.NOT_ROUTED)
+    return Routing(Verdict.NOT_ROUTED, blocked=tuple(blocked))
 
 
 def _get(path: str, *, pvesh_path: Path, runner: ProcessRunner, timeout: float) -> str:
@@ -256,6 +329,39 @@ def _routes(
     reaches, target_reasons = _reaches(matcher, enabled_targets)
     result = _all(_all(None if disabled is None else True, matches), reaches)
     return result, ([] if result is not None else reasons + match_reasons + target_reasons)
+
+
+def _blocked(
+    matcher: Mapping[str, object],
+    metadata: Metadata,
+    enabled_targets: Mapping[str, Truth],
+) -> Blocked | None:
+    """Return why a matcher that routes nowhere would route, or `None`.
+
+    Only a matcher whose rules match is named: enabling it or its targets is
+    then all it takes. The notification system itself skips a disabled
+    matcher without evaluating it.
+    """
+    matches, _ = _matches(matcher, metadata)
+    if matches is not True:
+        return None
+
+    name = _name(matcher)
+    if _flag(matcher.get("disable")) is True:
+        return Blocked(name, "it is disabled")
+
+    targets = matcher.get("target", [])
+    if not _is_strings(targets):
+        return None
+    if not targets:
+        return Blocked(name, "it has no target")
+    problems = [
+        f"{target} is disabled" if target in enabled_targets else f"{target} does not exist"
+        for target in targets
+    ]
+    if len(problems) == 1:
+        return Blocked(name, f"its target {problems[0]}")
+    return Blocked(name, "of its targets, " + ", ".join(problems))
 
 
 def _matches(matcher: Mapping[str, object], metadata: Metadata) -> tuple[Truth, list[str]]:

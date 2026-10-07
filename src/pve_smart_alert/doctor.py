@@ -21,6 +21,7 @@ from pve_smart_alert.paths import (
     BRIDGE_PATH,
     CONFIG_PATH,
     PVESH_PATH,
+    ROOT_FORWARD_PATH,
     SENDMAIL_PATH,
     SUBJECT_TEMPLATE,
     TEMPLATE_DIR,
@@ -28,9 +29,17 @@ from pve_smart_alert.paths import (
 )
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 from pve_smart_alert.routing import (
+    FORWARDED_MAIL_SEVERITY,
+    FORWARDED_MAIL_TYPE,
+    FORWARDER,
+    Blocked,
+    NotificationConfig,
+    Routing,
     RoutingError,
     Verdict,
     evaluate,
+    forwarded_mail_metadata,
+    mail_is_forwarded,
     read_notification_config,
     tool_metadata,
 )
@@ -46,11 +55,20 @@ PENDING: Final = (
     " are checked once their milestones are built"
 )
 
-# How a severity that no matcher routes gets a route (ADR 0020). The README
+# How severities that no matcher routes get a route (ADR 0020). The README
 # has the complete command.
 ROUTING_ADVICE: Final = (
-    f"add them to a matcher with the rule regex:type=^{NOTIFICATION_TYPE}$,"
-    " under Datacenter > Notifications, see the README"
+    "add {severities} to a matcher with the rule regex:type=^"
+    + NOTIFICATION_TYPE
+    + "$, under Datacenter > Notifications, see the README"
+)
+
+# How mail to root gets a route (ADR 0022). Forwarded mail always has the
+# severity `unknown`, so a severity rule must name it or be left out.
+FALLBACK_ADVICE: Final = (
+    f"route the type {FORWARDED_MAIL_TYPE} with the severity {FORWARDED_MAIL_SEVERITY},"
+    f" for example with a matcher with the rule exact:type={FORWARDED_MAIL_TYPE},"
+    " under Datacenter > Notifications"
 )
 
 
@@ -84,23 +102,23 @@ def run_doctor(
     template_dir: Path = TEMPLATE_DIR,
     override_dir: Path = TEMPLATE_OVERRIDE_DIR,
     pvesh_path: Path = PVESH_PATH,
+    forward_path: Path = ROOT_FORWARD_PATH,
     node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
     """Run every check and return its results in the order they are reported."""
     config_result, settings = check_config(config_path)
+    node = node_name() if node is None else node
+    # Read once for both routes: every call of pvesh takes seconds.
+    routes = read_routes(pvesh_path, runner=runner)
 
     return [
         config_result,
         check_bridge(bridge_path, runner=runner),
         check_templates(template_dir, override_dir=override_dir),
         check_mail(sendmail_path, settings=settings),
-        check_routing(
-            pvesh_path,
-            settings=settings,
-            node=node_name() if node is None else node,
-            runner=runner,
-        ),
+        check_routing(routes, settings=settings, node=node, forward_path=forward_path),
+        check_fallback(routes, settings=settings, node=node, forward_path=forward_path),
         CheckResult("pending", Status.SKIP, PENDING),
     ]
 
@@ -227,48 +245,60 @@ def check_mail(path: Path, *, settings: NotifySettings | None) -> CheckResult:
     )
 
 
+def read_routes(
+    pvesh_path: Path, *, runner: ProcessRunner = run_with_timeout
+) -> NotificationConfig | RoutingError:
+    """Return the matchers and targets, or why they cannot be read."""
+    try:
+        return read_notification_config(pvesh_path=pvesh_path, runner=runner)
+    except RoutingError as error:
+        return error
+
+
 def check_routing(
-    pvesh_path: Path,
+    routes: NotificationConfig | RoutingError,
     *,
     settings: NotifySettings | None,
     node: str,
-    runner: ProcessRunner = run_with_timeout,
+    forward_path: Path = ROOT_FORWARD_PATH,
 ) -> CheckResult:
     """Check that the matchers route every severity of the tool (ADR 0020).
 
     A notification that no matcher matches is dropped without an error, so a
     severity without a route is a warning. What this check cannot decide is
     reported as such and never as routed; the notification system remains the
-    authority on what is delivered.
+    authority on what is delivered. With `transport = mail` every
+    notification goes as mail to root, so that route is checked instead
+    (ADR 0022).
     """
     transport = TransportName.AUTO if settings is None else settings.transport
     if transport is TransportName.MAIL:
-        return CheckResult(
+        return _mail_route(
             "routing",
-            Status.SKIP,
-            f"transport = {transport.value}: the notifications arrive as system-mail,"
-            f" and this check follows the type {NOTIFICATION_TYPE}",
+            routes,
+            node=node,
+            forward_path=forward_path,
+            prefix=f"transport = {transport.value}: ",
         )
+    if isinstance(routes, RoutingError):
+        return CheckResult("routing", Status.SKIP, f"the matchers cannot be read: {routes}")
 
-    try:
-        config = read_notification_config(pvesh_path=pvesh_path, runner=runner)
-    except RoutingError as error:
-        return CheckResult("routing", Status.SKIP, f"the matchers cannot be read: {error}")
-
-    routings = [evaluate(config, tool_metadata(severity, node=node)) for severity in PveSeverity]
+    routings = [evaluate(routes, tool_metadata(severity, node=node)) for severity in PveSeverity]
     named = list(zip(PveSeverity, routings, strict=True))
     not_routed = [
-        severity.value for severity, routing in named if routing.verdict is Verdict.NOT_ROUTED
+        (severity.value, routing)
+        for severity, routing in named
+        if routing.verdict is Verdict.NOT_ROUTED
     ]
     undecided = [
         severity.value for severity, routing in named if routing.verdict is Verdict.UNKNOWN
     ]
 
     if not_routed:
-        detail = "not routed: " + ", ".join(not_routed)
+        detail = "not routed: " + ", ".join(severity for severity, _ in not_routed)
         if undecided:
             detail += "; cannot be decided for: " + ", ".join(undecided)
-        return CheckResult("routing", Status.WARN, detail, advice=ROUTING_ADVICE)
+        return CheckResult("routing", Status.WARN, detail, advice=_routing_advice(not_routed))
 
     if undecided:
         reasons = dict.fromkeys(reason for routing in routings for reason in routing.reasons)
@@ -281,6 +311,107 @@ def check_routing(
 
     matchers = dict.fromkeys(name for routing in routings for name in routing.matchers)
     return CheckResult("routing", Status.OK, "every severity is routed, by " + ", ".join(matchers))
+
+
+def check_fallback(
+    routes: NotificationConfig | RoutingError,
+    *,
+    settings: NotifySettings | None,
+    node: str,
+    forward_path: Path = ROOT_FORWARD_PATH,
+) -> CheckResult:
+    """Check that the fallback, mail to root, reaches a target (ADR 0022).
+
+    Only `transport = auto` has a fallback. When the notify bridge breaks, the
+    tool sends mail to root, and that mail is dropped as well if no matcher
+    routes it: the tool would fall silent exactly when its fallback is needed.
+    """
+    transport = TransportName.AUTO if settings is None else settings.transport
+    if transport is TransportName.PVE_NOTIFY:
+        return CheckResult(
+            "fallback", Status.SKIP, f"transport = {transport.value} has no fallback"
+        )
+    if transport is TransportName.MAIL:
+        return CheckResult(
+            "fallback",
+            Status.SKIP,
+            f"transport = {transport.value} has no fallback, mail to root is its route",
+        )
+    return _mail_route("fallback", routes, node=node, forward_path=forward_path)
+
+
+def _mail_route(
+    name: str,
+    routes: NotificationConfig | RoutingError,
+    *,
+    node: str,
+    forward_path: Path,
+    prefix: str = "",
+) -> CheckResult:
+    """Return one line about the route of mail to root (ADR 0022)."""
+    forwarded = mail_is_forwarded(forward_path)
+    if forwarded is False:
+        return CheckResult(
+            name,
+            Status.WARN,
+            f"{prefix}mail to root does not reach the notification system:"
+            f" {forward_path} has no line for {FORWARDER}",
+            advice=f"reinstalling the package {FORWARDER} writes the line into it",
+        )
+    if forwarded is None:
+        return CheckResult(
+            name,
+            Status.SKIP,
+            f"{prefix}cannot tell whether mail to root reaches the notification system:"
+            f" {forward_path} cannot be read",
+        )
+    if isinstance(routes, RoutingError):
+        return CheckResult(name, Status.SKIP, f"{prefix}the matchers cannot be read: {routes}")
+
+    routing = evaluate(routes, forwarded_mail_metadata(node=node))
+    if routing.verdict is Verdict.ROUTED:
+        return CheckResult(
+            name,
+            Status.OK,
+            f"{prefix}mail to root is routed as {FORWARDED_MAIL_TYPE}, by "
+            + ", ".join(routing.matchers),
+        )
+    if routing.verdict is Verdict.NOT_ROUTED:
+        hints = [blocked.describe() for blocked in routing.blocked]
+        return CheckResult(
+            name,
+            Status.WARN,
+            f"{prefix}mail to root is not routed: no matcher routes the type"
+            f" {FORWARDED_MAIL_TYPE} to an enabled target",
+            advice="; ".join(hints) if hints else FALLBACK_ADVICE,
+        )
+    return CheckResult(
+        name,
+        Status.SKIP,
+        f"{prefix}cannot be decided for mail to root",
+        advice="; ".join(routing.reasons),
+    )
+
+
+def _routing_advice(not_routed: list[tuple[str, Routing]]) -> str:
+    """Return how the severities that reach no target get a route.
+
+    A matcher whose rules match but that is disabled, or whose targets are
+    all disabled, is named with the severities it would route: enabling it
+    is the fix, not a new matcher.
+    """
+    blocked: dict[Blocked, list[str]] = {}
+    uncovered: list[str] = []
+    for severity, routing in not_routed:
+        for hint in routing.blocked:
+            blocked.setdefault(hint, []).append(severity)
+        if not routing.blocked:
+            uncovered.append(severity)
+
+    parts = [hint.describe(", ".join(severities)) for hint, severities in blocked.items()]
+    if uncovered:
+        parts.append(ROUTING_ADVICE.format(severities=", ".join(uncovered)))
+    return "; ".join(parts)
 
 
 def _template_path(name: Path, template_dir: Path, override_dir: Path) -> Path | None:

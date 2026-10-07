@@ -53,7 +53,7 @@ Properties that follow from this shape:
 | Renderer | Produces subject, plain-text body and structured data | [0008](docs/adr/0008-notification-integration.md) |
 | Transports | Hand a notification to Proxmox VE: through the Perl bridge or as mail to root | [0008](docs/adr/0008-notification-integration.md) |
 | Notify bridge | Perl script that calls `PVE::Notify` | [0008](docs/adr/0008-notification-integration.md) |
-| Routing check | Reads the matchers and targets through `pvesh` and evaluates them for the notifications of the tool | [0020](docs/adr/0020-routing-check.md) |
+| Routing check | Reads the matchers and targets through `pvesh` and evaluates them for the notifications of the tool and for its fallback, mail to root | [0020](docs/adr/0020-routing-check.md), [0022](docs/adr/0022-fallback-routing-check.md) |
 | systemd units | Timer, service and failure reporter | [0006](docs/adr/0006-scheduling.md) |
 | Fixture tooling | Records and anonymizes smartctl output; fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md) |
 
@@ -314,16 +314,23 @@ Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root proc
 - The evaluation follows `proxmox-notify` ([Research 01](docs/research/01-notification-integration.md)): the mode combines the rules of each kind and then the kinds, a matcher without rules matches everything, `invert-match` inverts the result of the others, and a disabled matcher and a disabled or missing target take no part.
 - The matchers see the fields `type` and `hostname` of every notification of the tool. A rule on `event`, `device`, `serial` or `model` depends on the notification. A rule on any other field does not match, because the tool does not send it.
 - Undecided, and never counted as routed: a rule that depends on the notification, a `match-calendar` rule, an unknown key or mode, a value that is not understood, and a regular expression that Python cannot compile or compiles only with a warning. The results are combined in three-valued logic, so that a decided result never rests on an undecided part.
+- The fallback, mail to root, is evaluated as the notification the mail forwarder makes of it: the type `system-mail`, the field `hostname`, the severity `unknown` ([ADR 0022](docs/adr/0022-fallback-routing-check.md)). It reaches the forwarder only if `/root/.forward` has a line that pipes mail to `proxmox-mail-forward`; the file is read, never changed, and aliases of the mail system are not read.
+- A matcher whose rules match but that is disabled, or whose targets are all disabled or missing, is named in the advice with what it would route.
 
-`pve-smart-alert doctor` reports the line `routing`:
+`pve-smart-alert doctor` reports two lines. The matchers and targets are read once for both.
 
-| Status | When |
-| --- | --- |
-| `ok` | Every severity reaches an enabled target. The line names the matchers |
-| `warn` | A severity reaches no target. The line names it and says how to add a matcher; severities that cannot be decided are named as well |
-| `skip` | The matchers cannot be read (no `pvesh`, an error, a timeout), the routing cannot be decided (the reasons follow), or `transport = mail` |
+| Line | Status | When |
+| --- | --- | --- |
+| `routing` | `ok` | Every severity reaches an enabled target. The line names the matchers |
+| `routing` | `warn` | A severity reaches no target. The line names it; the advice names a matcher that would route it if it or its target were enabled, or says how to add one. Severities that cannot be decided are named as well |
+| `routing` | `skip` | The matchers cannot be read (no `pvesh`, an error, a timeout), or the routing cannot be decided (the reasons follow) |
+| `fallback` | `ok` | Mail to root reaches an enabled target. The line names the matchers |
+| `fallback` | `warn` | No matcher routes `system-mail` to an enabled target, or `/root/.forward` does not pipe mail to the forwarder |
+| `fallback` | `skip` | The matchers or `/root/.forward` cannot be read, the routing cannot be decided, or the transport has no fallback (`pve-notify`, `mail`) |
 
-`pve-smart-alert test-notification` evaluates the delivered test notification with its exact fields and prints the matchers that route it, or says that none does. A test that went as mail is not followed.
+With `transport = mail` every notification goes as mail to root, so the line `routing` reports that route, prefixed with `transport = mail:`.
+
+`pve-smart-alert test-notification` evaluates the delivered test notification with its exact fields and prints the matchers that route it, or says that none does and names a matcher that matches but routes nowhere. A test that went as mail is evaluated as `system-mail`.
 
 Checked on Proxmox VE 9.2 (2026-10-07, node `pve7`, acceptance step 5 of M2): with the matcher of the tool routing all four severities, `doctor` reports `routing` as `ok`, by `pve-smart-alert`, and `test-notification --severity info` is delivered and names `pve-smart-alert`. With the matcher limited to `warning,error`, `doctor` reports `warn` and names `info` and `notice`. With the matcher disabled, `doctor` names all four severities, `test-notification` says that no matcher routes the test, and the library logs `skipping disabled matcher 'pve-smart-alert'` instead of nothing.
 
@@ -404,6 +411,7 @@ pve-smart-alert 1.0.0 on pve1
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
 | No matcher matches | Nothing is sent, and the call succeeds with an empty log. Not an error of the run. `pve-smart-alert doctor` reports the severity as not routed, and `pve-smart-alert test-notification` says that no matcher routes the test ([ADR 0020](docs/adr/0020-routing-check.md)) |
+| No matcher routes mail to root | The fallback is dropped as well. `pve-smart-alert doctor` reports the line `fallback` as `warn` ([ADR 0022](docs/adr/0022-fallback-routing-check.md)) |
 | Mail command fails as well | The notification is not delivered. State is not advanced. The run exits non-zero and the failure unit tries a minimal mail |
 | Unhandled error in the program | The service fails. `pve-smart-alert-failure.service` sends a short mail to root, at most once per day |
 | System clock jumps | Timestamps in the future are treated as "now" |

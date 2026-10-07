@@ -7,7 +7,6 @@ instead of the host (ADR 0016).
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -16,17 +15,21 @@ import pytest
 from pve_smart_alert import cli
 from pve_smart_alert.config import NotifySettings, TransportName
 from pve_smart_alert.doctor import (
+    FALLBACK_ADVICE,
     TEMPLATES,
     CheckResult,
     Status,
     check_bridge,
     check_config,
+    check_fallback,
     check_mail,
     check_routing,
     check_templates,
+    read_routes,
     run_doctor,
 )
 from pve_smart_alert.process import ProcessResult
+from pve_smart_alert.routing import NotificationConfig, RoutingError
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 
 
@@ -269,31 +272,41 @@ def test_without_a_configuration_the_default_route_counts(tmp_path: Path) -> Non
 
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "pvesh"
+NODE = "pve7"
+TOOL_MATCHER = {
+    "match-field": ["regex:type=^pve-smart-alert$"],
+    "match-severity": ["info,notice,warning,error"],
+    "mode": "all",
+    "name": "pve-smart-alert",
+    "target": ["smtp-relay"],
+}
+
+
+def recorded(name: str) -> NotificationConfig:
+    """Return one configuration of `tests/fixtures/pvesh`."""
+    directory = FIXTURES / name
+    return NotificationConfig.from_json(
+        (directory / "matchers.json").read_text(encoding="utf-8"),
+        (directory / "targets.json").read_text(encoding="utf-8"),
+    )
+
+
+def constructed(
+    *matchers: Mapping[str, object], disabled_targets: Sequence[str] = ()
+) -> NotificationConfig:
+    """Return these matchers with the target `smtp-relay`, enabled unless named."""
+    target: dict[str, object] = {"name": "smtp-relay", "origin": "user-created", "type": "smtp"}
+    if "smtp-relay" in disabled_targets:
+        target["disable"] = 1
+    return NotificationConfig(matchers=tuple(matchers), targets=(target,))
 
 
 class PveshRunner:
-    """Answers the two calls of pvesh with the matchers and targets given."""
+    """Answers the two calls of pvesh from one configuration of the fixtures."""
 
-    def __init__(self, answers: Mapping[str, str]) -> None:
-        self.answers = answers
+    def __init__(self, name: str) -> None:
+        self.directory = FIXTURES / name
         self.calls: list[tuple[list[str], str | None, float]] = []
-
-    @classmethod
-    def recorded(cls, name: str) -> PveshRunner:
-        """Answer with one configuration of `tests/fixtures/pvesh`."""
-        directory = FIXTURES / name
-        return cls(
-            {
-                part: (directory / f"{part}.json").read_text(encoding="utf-8")
-                for part in ("matchers", "targets")
-            }
-        )
-
-    @classmethod
-    def constructed(cls, *matchers: dict[str, object]) -> PveshRunner:
-        """Answer with these matchers and one enabled target `relay`."""
-        targets = [{"name": "relay", "origin": "user-created", "type": "smtp"}]
-        return cls({"matchers": json.dumps(matchers), "targets": json.dumps(targets)})
 
     def __call__(
         self,
@@ -304,7 +317,8 @@ class PveshRunner:
     ) -> ProcessResult:
         self.calls.append(([str(argument) for argument in command], input_text, timeout))
         part = str(command[2]).rsplit("/", 1)[-1]
-        return ProcessResult(returncode=0, stdout=self.answers[part], stderr="", timed_out=False)
+        stdout = (self.directory / f"{part}.json").read_text(encoding="utf-8")
+        return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
 
 
 @pytest.fixture
@@ -316,58 +330,129 @@ def pvesh(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.fixture
+def forward(tmp_path: Path) -> Path:
+    """A `/root/.forward` as the package proxmox-mail-forward writes it."""
+    path = tmp_path / "forward"
+    path.write_text("|/usr/libexec/proxmox-mail-forward\n", encoding="utf-8")
+    return path
+
+
 def routing_of(
-    pvesh: Path, runner: PveshRunner | StaticRunner, *, node: str = "pve7"
+    routes: NotificationConfig | RoutingError,
+    forward: Path,
+    *,
+    transport: TransportName = TransportName.AUTO,
+    node: str = NODE,
 ) -> CheckResult:
-    """Return the routing line for the default transport."""
-    return check_routing(pvesh, settings=None, node=node, runner=runner)
+    return check_routing(
+        routes, settings=NotifySettings(transport), node=node, forward_path=forward
+    )
 
 
-def test_every_severity_with_a_route_is_fine(pvesh: Path) -> None:
-    result = routing_of(pvesh, PveshRunner.recorded("test-cluster-c"))
+def fallback_of(
+    routes: NotificationConfig | RoutingError,
+    forward: Path,
+    *,
+    transport: TransportName = TransportName.AUTO,
+) -> CheckResult:
+    return check_fallback(
+        routes, settings=NotifySettings(transport), node=NODE, forward_path=forward
+    )
+
+
+def test_the_matchers_are_read_once_through_pvesh(pvesh: Path) -> None:
+    runner = PveshRunner("test-cluster-c")
+
+    assert read_routes(pvesh, runner=runner) == recorded("test-cluster-c")
+    assert [call[0][2] for call in runner.calls] == [
+        "/cluster/notifications/matchers",
+        "/cluster/notifications/targets",
+    ]
+
+
+def test_matchers_that_cannot_be_read_are_returned_as_the_reason(tmp_path: Path) -> None:
+    runner = PveshRunner("test-cluster-c")
+
+    routes = read_routes(tmp_path / "pvesh", runner=runner)
+
+    assert isinstance(routes, RoutingError)
+    assert str(routes) == f"pvesh is missing at {tmp_path / 'pvesh'}"
+    assert runner.calls == []
+
+
+def test_every_severity_with_a_route_is_fine(forward: Path) -> None:
+    result = routing_of(recorded("test-cluster-c"), forward)
 
     assert result == CheckResult(
         "routing", Status.OK, "every severity is routed, by pve-smart-alert"
     )
 
 
-def test_the_unchanged_default_matcher_routes_everything(pvesh: Path) -> None:
-    result = routing_of(pvesh, PveshRunner.recorded("builtin-default"))
+def test_the_unchanged_default_matcher_routes_everything(forward: Path) -> None:
+    result = routing_of(recorded("builtin-default"), forward)
 
     assert result == CheckResult(
         "routing", Status.OK, "every severity is routed, by default-matcher"
     )
 
 
-def test_a_severity_without_a_route_is_a_warning(pvesh: Path) -> None:
+def test_a_severity_without_a_route_is_a_warning(forward: Path) -> None:
     # The matcher left by M1 routes only warning and error (Research 06).
-    result = routing_of(pvesh, PveshRunner.recorded("test-cluster-a"))
+    result = routing_of(recorded("test-cluster-a"), forward)
 
     assert result.status is Status.WARN
     assert result.detail == "not routed: info, notice"
-    # The advice says how to add a matcher (ADR 0020).
-    assert result.advice is not None
-    assert "regex:type=^pve-smart-alert$" in result.advice
+    # Nothing matches info and notice, so the advice says how to add a
+    # matcher (ADR 0020).
+    assert result.advice == (
+        "add info, notice to a matcher with the rule regex:type=^pve-smart-alert$,"
+        " under Datacenter > Notifications, see the README"
+    )
 
 
-def test_a_disabled_matcher_of_the_tool_leaves_no_route(pvesh: Path) -> None:
-    result = routing_of(pvesh, PveshRunner.recorded("test-cluster-b"))
+def test_a_disabled_matcher_that_would_route_is_named(forward: Path) -> None:
+    # Configuration B: the matcher of the tool is disabled (Research 06).
+    result = routing_of(recorded("test-cluster-b"), forward)
 
     assert result.status is Status.WARN
     assert result.detail == "not routed: info, notice, warning, error"
+    assert result.advice == (
+        "matcher pve-smart-alert matches warning, error, but it is disabled;"
+        " add info, notice to a matcher with the rule regex:type=^pve-smart-alert$,"
+        " under Datacenter > Notifications, see the README"
+    )
 
 
-def test_a_routing_that_cannot_be_decided_is_not_reported_as_routed(pvesh: Path) -> None:
-    runner = PveshRunner.constructed(
+def test_enabling_the_matcher_is_the_whole_advice(forward: Path) -> None:
+    result = routing_of(constructed({**TOOL_MATCHER, "disable": 1}), forward)
+
+    assert result.advice == (
+        "matcher pve-smart-alert matches info, notice, warning, error, but it is disabled"
+    )
+
+
+def test_a_matcher_whose_target_is_disabled_is_named(forward: Path) -> None:
+    result = routing_of(constructed(TOOL_MATCHER, disabled_targets=["smtp-relay"]), forward)
+
+    assert result.status is Status.WARN
+    assert result.advice == (
+        "matcher pve-smart-alert matches info, notice, warning, error,"
+        " but its target smtp-relay is disabled"
+    )
+
+
+def test_a_routing_that_cannot_be_decided_is_not_reported_as_routed(forward: Path) -> None:
+    routes = constructed(
         {
             "match-calendar": ["mon..fri 8-17"],
             "mode": "all",
             "name": "office-hours",
-            "target": ["relay"],
+            "target": ["smtp-relay"],
         }
     )
 
-    result = routing_of(pvesh, runner)
+    result = routing_of(routes, forward)
 
     # Never `ok`, and not a failure either (ADR 0020).
     assert result.status is Status.SKIP
@@ -377,70 +462,168 @@ def test_a_routing_that_cannot_be_decided_is_not_reported_as_routed(pvesh: Path)
     )
 
 
-def test_a_severity_without_a_route_outweighs_an_undecided_one(pvesh: Path) -> None:
-    runner = PveshRunner.constructed(
+def test_a_severity_without_a_route_outweighs_an_undecided_one(forward: Path) -> None:
+    routes = constructed(
         {
             "match-calendar": ["mon..fri 8-17"],
             "match-severity": ["warning,error"],
             "mode": "all",
             "name": "office-hours",
-            "target": ["relay"],
+            "target": ["smtp-relay"],
         }
     )
 
-    result = routing_of(pvesh, runner)
+    result = routing_of(routes, forward)
 
     assert result.status is Status.WARN
     assert result.detail == "not routed: info, notice; cannot be decided for: warning, error"
 
 
-def test_the_routing_is_checked_for_this_node(pvesh: Path) -> None:
-    runner = PveshRunner.constructed(
+def test_the_routing_is_checked_for_this_node(forward: Path) -> None:
+    routes = constructed(
         {
             "match-field": ["exact:hostname=pve7"],
             "mode": "all",
             "name": "pve7-only",
-            "target": ["relay"],
+            "target": ["smtp-relay"],
         }
     )
 
-    assert routing_of(pvesh, runner, node="pve7").status is Status.OK
-    assert routing_of(pvesh, runner, node="pve5").status is Status.WARN
+    assert routing_of(routes, forward, node="pve7").status is Status.OK
+    assert routing_of(routes, forward, node="pve5").status is Status.WARN
 
 
-def test_without_pvesh_the_routing_is_skipped(tmp_path: Path) -> None:
-    runner = StaticRunner(good_bridge())
-
-    result = routing_of(tmp_path / "pvesh", runner)
+def test_matchers_that_cannot_be_read_skip_the_routing(forward: Path) -> None:
+    # Not an error of the host, only a check that cannot be done (ADR 0020).
+    result = routing_of(RoutingError("pvesh is missing at /usr/bin/pvesh"), forward)
 
     assert result == CheckResult(
+        "routing", Status.SKIP, "the matchers cannot be read: pvesh is missing at /usr/bin/pvesh"
+    )
+
+
+def test_the_mail_transport_is_checked_as_mail_to_root(forward: Path) -> None:
+    # With transport = mail every notification goes as mail (ADR 0022).
+    routed = routing_of(recorded("test-cluster-a"), forward, transport=TransportName.MAIL)
+    dropped = routing_of(recorded("test-cluster-b"), forward, transport=TransportName.MAIL)
+
+    assert routed == CheckResult(
         "routing",
-        Status.SKIP,
-        f"the matchers cannot be read: pvesh is missing at {tmp_path / 'pvesh'}",
+        Status.OK,
+        "transport = mail: mail to root is routed as system-mail, by default-matcher",
     )
-    assert runner.calls == []
+    assert dropped.status is Status.WARN
+    assert dropped.detail.startswith("transport = mail: mail to root is not routed")
 
 
-def test_an_api_that_cannot_be_asked_is_skipped(pvesh: Path) -> None:
-    # Not an error of the host, only a check that cannot be done (ADR 0020).
-    runner = StaticRunner(ProcessResult(255, "", "an error of pvesh\n", False))
-
-    result = routing_of(pvesh, runner)
-
-    assert result.status is Status.SKIP
-    assert result.detail.endswith("ended with exit status 255: an error of pvesh")
+# The fallback
 
 
-def test_the_mail_transport_is_not_followed(pvesh: Path) -> None:
-    runner = PveshRunner.recorded("test-cluster-b")
+@pytest.mark.parametrize("name", ["test-cluster-a", "test-cluster-c", "builtin-default"])
+def test_mail_to_root_with_a_route_is_fine(forward: Path, name: str) -> None:
+    result = fallback_of(recorded(name), forward)
 
-    result = check_routing(
-        pvesh, settings=NotifySettings(TransportName.MAIL), node="pve7", runner=runner
+    assert result == CheckResult(
+        "fallback", Status.OK, "mail to root is routed as system-mail, by default-matcher"
     )
 
+
+def test_mail_to_root_without_a_route_is_a_warning(forward: Path) -> None:
+    # In configuration B the default matcher routes only vzdump, so the
+    # fallback of the tool would be dropped as well (Research 06).
+    result = fallback_of(recorded("test-cluster-b"), forward)
+
+    assert result.status is Status.WARN
+    assert result.detail == (
+        "mail to root is not routed: no matcher routes the type system-mail to an enabled target"
+    )
+    assert result.advice == FALLBACK_ADVICE
+    assert "exact:type=system-mail" in FALLBACK_ADVICE
+    assert "severity unknown" in FALLBACK_ADVICE
+
+
+def test_a_disabled_default_matcher_is_named(forward: Path) -> None:
+    routes = constructed(
+        {"disable": 1, "mode": "all", "name": "default-matcher", "target": ["smtp-relay"]}
+    )
+
+    result = fallback_of(routes, forward)
+
+    assert result.status is Status.WARN
+    assert result.advice == "matcher default-matcher matches, but it is disabled"
+
+
+def test_mail_that_does_not_reach_the_notification_system_is_a_warning(tmp_path: Path) -> None:
+    missing = tmp_path / "forward"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.write_text("admin@example.com\n", encoding="utf-8")
+
+    for path in (missing, elsewhere):
+        result = fallback_of(recorded("builtin-default"), path)
+
+        assert result.status is Status.WARN
+        assert result.detail == (
+            "mail to root does not reach the notification system:"
+            f" {path} has no line for proxmox-mail-forward"
+        )
+        assert (
+            result.advice == "reinstalling the package proxmox-mail-forward writes the line into it"
+        )
+
+
+def test_a_forward_file_that_cannot_be_read_is_skipped(tmp_path: Path) -> None:
+    # A directory stands for a file this process may not read.
+    result = fallback_of(recorded("builtin-default"), tmp_path)
+
     assert result.status is Status.SKIP
-    assert "system-mail" in result.detail
-    assert runner.calls == []
+    assert result.detail.endswith(f"{tmp_path} cannot be read")
+
+
+def test_a_quoted_line_of_the_forward_file_counts(tmp_path: Path) -> None:
+    path = tmp_path / "forward"
+    path.write_text('# mail for root\n"|/usr/libexec/proxmox-mail-forward"\n', encoding="utf-8")
+
+    assert fallback_of(recorded("builtin-default"), path).status is Status.OK
+
+
+def test_a_fallback_that_cannot_be_decided_is_skipped(forward: Path) -> None:
+    routes = constructed(
+        {
+            "match-calendar": ["mon..fri 8-17"],
+            "mode": "all",
+            "name": "office-hours",
+            "target": ["smtp-relay"],
+        }
+    )
+
+    result = fallback_of(routes, forward)
+
+    assert result.status is Status.SKIP
+    assert result.detail == "cannot be decided for mail to root"
+    assert result.advice is not None
+    assert "time rule" in result.advice
+
+
+def test_matchers_that_cannot_be_read_skip_the_fallback(forward: Path) -> None:
+    result = fallback_of(RoutingError("pvesh is missing at /usr/bin/pvesh"), forward)
+
+    assert result.status is Status.SKIP
+    assert result.detail == "the matchers cannot be read: pvesh is missing at /usr/bin/pvesh"
+
+
+@pytest.mark.parametrize(
+    ("transport", "detail"),
+    [
+        (TransportName.PVE_NOTIFY, "transport = pve-notify has no fallback"),
+        (TransportName.MAIL, "transport = mail has no fallback, mail to root is its route"),
+    ],
+)
+def test_only_the_automatic_transport_has_a_fallback(
+    forward: Path, transport: TransportName, detail: str
+) -> None:
+    result = fallback_of(recorded("test-cluster-b"), forward, transport=transport)
+
+    assert result == CheckResult("fallback", Status.SKIP, detail)
 
 
 # The whole run
@@ -457,6 +640,7 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         template_dir=vendor_dir,
         override_dir=tmp_path / "override",
         pvesh_path=tmp_path / "pvesh",
+        forward_path=tmp_path / "forward",
         node="pve1",
         runner=StaticRunner(good_bridge()),
     )
@@ -467,6 +651,7 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "templates",
         "mail",
         "routing",
+        "fallback",
         "pending",
     ]
     assert all(result.status is not Status.FAIL for result in results)
@@ -480,6 +665,7 @@ def test_what_is_not_checked_yet_is_named(tmp_path: Path, bridge: Path, vendor_d
         template_dir=vendor_dir,
         override_dir=tmp_path / "override",
         pvesh_path=tmp_path / "pvesh",
+        forward_path=tmp_path / "forward",
         node="pve1",
         runner=StaticRunner(good_bridge()),
     )

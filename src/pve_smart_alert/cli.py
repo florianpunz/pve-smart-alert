@@ -21,11 +21,16 @@ from pve_smart_alert.model import (
     PveSeverity,
     node_name,
 )
+from pve_smart_alert.paths import ROOT_FORWARD_PATH
 from pve_smart_alert.render import render_test_notification
 from pve_smart_alert.routing import (
+    FORWARDED_MAIL_TYPE,
+    FORWARDER,
     RoutingError,
     Verdict,
     evaluate,
+    forwarded_mail_metadata,
+    mail_is_forwarded,
     metadata_of,
     read_notification_config,
 )
@@ -153,24 +158,42 @@ def _report(
 
 
 def _matchers(notification: Notification, outcome: TransportOutcome) -> str:
-    """Return which matchers route the delivered test notification (ADR 0020).
+    """Return which matchers route the delivered test notification.
 
     The notification system accepts a notification that no matcher matches
     and drops it without an error, so the answer of the transport alone
-    cannot tell whether it went anywhere.
+    cannot tell whether it went anywhere (ADR 0020). A test that went as mail
+    to root is followed as the notification the mail forwarder makes of it
+    (ADR 0022).
     """
-    if outcome.transport is not TransportName.PVE_NOTIFY:
-        return "not checked, the message went as mail to root"
+    if outcome.transport is TransportName.PVE_NOTIFY:
+        metadata = metadata_of(notification)
+        what = "this notification"
+        suffix = ""
+    else:
+        forwarded = mail_is_forwarded()
+        if forwarded is False:
+            return (
+                "none, mail to root does not reach the notification system:"
+                f" {ROOT_FORWARD_PATH} has no line for {FORWARDER}"
+            )
+        if forwarded is None:
+            return f"cannot be decided: {ROOT_FORWARD_PATH} cannot be read"
+        metadata = forwarded_mail_metadata(node=notification.node)
+        what = "mail to root"
+        suffix = f", as {FORWARDED_MAIL_TYPE}"
+
     try:
         config = read_notification_config()
     except RoutingError as error:
         return f"cannot be read: {error}"
 
-    routing = evaluate(config, metadata_of(notification))
+    routing = evaluate(config, metadata)
     if routing.verdict is Verdict.ROUTED:
-        return ", ".join(routing.matchers)
+        return ", ".join(routing.matchers) + suffix
     if routing.verdict is Verdict.NOT_ROUTED:
-        return "none, no matcher routes this notification to an enabled target"
+        hints = [blocked.describe() for blocked in routing.blocked]
+        return "; ".join([f"none, no matcher routes {what} to an enabled target", *hints])
     return "cannot be decided: " + "; ".join(routing.reasons)
 
 

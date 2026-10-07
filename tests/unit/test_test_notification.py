@@ -57,11 +57,13 @@ def install(
     config: Config | None = None,
     config_error: ConfigError | None = None,
     matchers: NotificationConfig | None = None,
+    forwarded: bool | None = True,
 ) -> list[NotifySettings]:
     """Let the command see this transport and this configuration.
 
     `matchers` is what the routing check reads; without it, the matchers
-    cannot be read, as on a host without `pvesh`. Returns the settings the
+    cannot be read, as on a host without `pvesh`. `forwarded` is whether
+    mail to root reaches the notification system. Returns the settings the
     command built its transport from.
     """
     seen: list[NotifySettings] = []
@@ -84,6 +86,7 @@ def install(
     monkeypatch.setattr(cli, "build_transport", build)
     monkeypatch.setattr(cli, "load_config", load)
     monkeypatch.setattr(cli, "read_notification_config", read_matchers)
+    monkeypatch.setattr(cli, "mail_is_forwarded", lambda: forwarded)
     return seen
 
 
@@ -350,15 +353,59 @@ def test_matchers_that_cannot_be_read_are_reported(
     )
 
 
-def test_a_test_sent_as_mail_is_not_followed(
+def test_a_test_sent_as_mail_is_followed_as_system_mail(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # The mail forwarder makes a notification of the type system-mail of it
+    # (ADR 0022).
     transport = FakeTransport(transport=TransportName.MAIL)
     install(monkeypatch, transport, matchers=recorded("test-cluster-c"))
 
     cli.main(["test-notification"])
 
-    assert "Matchers:  not checked, the message went as mail to root\n" in (capsys.readouterr().out)
+    assert "Matchers:  default-matcher, as system-mail\n" in capsys.readouterr().out
+
+
+def test_a_test_sent_as_mail_that_no_matcher_routes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # In configuration B the default matcher routes only vzdump (Research 06).
+    transport = FakeTransport(transport=TransportName.MAIL)
+    install(monkeypatch, transport, matchers=recorded("test-cluster-b"))
+
+    cli.main(["test-notification"])
+
+    assert "Matchers:  none, no matcher routes mail to root to an enabled target\n" in (
+        capsys.readouterr().out
+    )
+
+
+def test_mail_that_does_not_reach_the_notification_system_is_named(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = FakeTransport(transport=TransportName.MAIL)
+    install(monkeypatch, transport, matchers=recorded("test-cluster-c"), forwarded=False)
+
+    cli.main(["test-notification"])
+
+    assert (
+        "Matchers:  none, mail to root does not reach the notification system:"
+        " /root/.forward has no line for proxmox-mail-forward\n"
+    ) in capsys.readouterr().out
+
+
+def test_a_matcher_that_matches_but_is_disabled_is_named(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Configuration B: the matcher of the tool is disabled (Research 06).
+    install(monkeypatch, FakeTransport(), matchers=recorded("test-cluster-b"))
+
+    cli.main(["test-notification", "--severity", "warning"])
+
+    assert (
+        "Matchers:  none, no matcher routes this notification to an enabled target;"
+        " matcher pve-smart-alert matches, but it is disabled\n"
+    ) in capsys.readouterr().out
 
 
 def test_a_test_that_was_not_delivered_has_no_matchers(

@@ -23,12 +23,15 @@ from pve_smart_alert.routing import (
     TARGETS,
     TIMEOUT_SECONDS,
     VARYING_FIELDS,
+    Blocked,
     Metadata,
     NotificationConfig,
     Routing,
     RoutingError,
     Verdict,
     evaluate,
+    forwarded_mail_metadata,
+    mail_is_forwarded,
     metadata_of,
     read_notification_config,
     tool_metadata,
@@ -379,6 +382,89 @@ def test_a_single_notification_is_seen_completely() -> None:
     # Its event is known, so a rule on it is decided.
     configuration = config(matcher(match_field=["exact:event=test"]))
     assert evaluate(configuration, metadata).verdict is Verdict.ROUTED
+
+
+# Matchers that match but route nowhere
+
+
+def test_a_disabled_matcher_whose_rules_match_is_named() -> None:
+    result = routing(config(matcher("tool", disable=1)))
+
+    assert result == Routing(Verdict.NOT_ROUTED, blocked=(Blocked("tool", "it is disabled"),))
+    assert (
+        result.blocked[0].describe("warning") == "matcher tool matches warning, but it is disabled"
+    )
+    assert result.blocked[0].describe() == "matcher tool matches, but it is disabled"
+
+
+def test_a_disabled_matcher_whose_rules_do_not_match_is_not_named() -> None:
+    configuration = config(matcher("tool", disable=1, match_severity=["error"]))
+
+    assert routing(configuration, PveSeverity.INFO).blocked == ()
+    assert routing(configuration, PveSeverity.ERROR).blocked == (Blocked("tool", "it is disabled"),)
+
+
+@pytest.mark.parametrize(
+    ("targets", "reason"),
+    [
+        (["relay"], "its target relay is disabled"),
+        (["absent"], "its target absent does not exist"),
+        ([], "it has no target"),
+        (["relay", "absent"], "of its targets, relay is disabled, absent does not exist"),
+    ],
+)
+def test_a_matcher_without_an_enabled_target_is_named(targets: list[str], reason: str) -> None:
+    disabled_relay = [{"disable": 1, "name": "relay", "type": "smtp"}]
+
+    result = routing(config(matcher("tool", target=targets), targets=disabled_relay))
+
+    assert result.blocked == (Blocked("tool", reason),)
+
+
+def test_nothing_is_named_when_the_notification_is_routed() -> None:
+    configuration = config(matcher("off", disable=1), matcher("on"))
+
+    assert routing(configuration) == Routing(Verdict.ROUTED, matchers=("on",))
+
+
+# The fallback route: mail to root (ADR 0022)
+
+
+def test_mail_to_root_is_seen_as_system_mail() -> None:
+    # The metadata the mail forwarder sets for every mail (Research 01).
+    assert forwarded_mail_metadata(node=NODE) == Metadata(
+        severity="unknown", fields={"type": "system-mail", "hostname": NODE}
+    )
+
+
+@pytest.mark.parametrize(
+    ("content", "forwarded"),
+    [
+        # What the package proxmox-mail-forward writes (Research 01).
+        ("|/usr/libexec/proxmox-mail-forward\n", True),
+        ('"|/usr/libexec/proxmox-mail-forward"\n', True),
+        ("admin@example.com\n|/usr/libexec/proxmox-mail-forward\n", True),
+        ("admin@example.com\n", False),
+        ("# |/usr/libexec/proxmox-mail-forward\n", False),
+        ("", False),
+    ],
+)
+def test_mail_reaches_the_forwarder_through_the_forward_file(
+    tmp_path: Path, content: str, forwarded: bool
+) -> None:
+    path = tmp_path / "forward"
+    path.write_text(content, encoding="utf-8")
+
+    assert mail_is_forwarded(path) is forwarded
+
+
+def test_without_a_forward_file_mail_stays_in_the_mailbox(tmp_path: Path) -> None:
+    assert mail_is_forwarded(tmp_path / "forward") is False
+
+
+def test_a_forward_file_that_cannot_be_read_is_undecided(tmp_path: Path) -> None:
+    # A directory stands for a file this process may not read.
+    assert mail_is_forwarded(tmp_path) is None
 
 
 # Reading through pvesh

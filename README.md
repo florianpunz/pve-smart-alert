@@ -11,7 +11,7 @@ SMART drive alerts for Proxmox VE: `pve-smart-alert` checks the SMART data of ev
 | Command | Does |
 | --- | --- |
 | `pve-smart-alert test-notification [--severity SEVERITY] [--transport TRANSPORT]` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520). |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates, the mail command and the routing of the notifications (FR-603). |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: the configuration, the notify bridge, the templates, the mail command, the routing of the notifications and of the fallback mail to root (FR-603). |
 
 The severity is `info`, `notice`, `warning` or `error` and defaults to `info`. The transport is `auto`, `pve-notify` or `mail`; without the option the configuration decides, and `auto` means the notify bridge with mail to root as the fallback.
 
@@ -29,7 +29,7 @@ pvesh create /cluster/notifications/matchers \
 
 Replace `<TARGET>` with the name of a target, as shown by `pvesh get /cluster/notifications/targets`. Route all four severities: the tool also sends `info` messages, for recoveries and for the first summary, and `notice` findings. A matcher that leaves out a severity drops those messages.
 
-`pve-smart-alert doctor` checks this: it reads the matchers and targets with `pvesh` and reports the routing as `warn` when a severity of the tool reaches no enabled target, and names that severity. `pve-smart-alert test-notification --severity warning` names the matchers that route the test, or says that none does. Both evaluate the matchers the way the notification system does, but they are a hint, not a delivery receipt: a rule they cannot decide, such as a time rule, is reported as such, and only the target shows that a message arrived. Run `doctor` again after you change the matchers or upgrade Proxmox VE.
+`pve-smart-alert doctor` checks this: it reads the matchers and targets with `pvesh` and reports the routing as `warn` when a severity of the tool reaches no enabled target, and names that severity, and a matcher that would route it if it or its target were enabled. The line `fallback` does the same for the mail to root that replaces a notification when the notify bridge fails: Proxmox VE routes it as the type `system-mail` with the severity `unknown`, so a default matcher limited to other types drops it too. `pve-smart-alert test-notification --severity warning` names the matchers that route the test, or says that none does. Both evaluate the matchers the way the notification system does, but they are a hint, not a delivery receipt: a rule they cannot decide, such as a time rule, is reported as such, and only the target shows that a message arrived. Run `doctor` again after you change the matchers or upgrade Proxmox VE.
 
 ## What it will do
 

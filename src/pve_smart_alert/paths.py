@@ -33,3 +33,8 @@ CONFIG_PATH: Final = Path("/etc/pve-smart-alert/config.toml")
 # The command line client of the Proxmox VE API, part of `pve-manager`. The
 # routing check reads the matchers and targets through it (ADR 0020).
 PVESH_PATH: Final = Path("/usr/bin/pvesh")
+
+# Where the mail system looks for the forwarding of mail to root. The package
+# `proxmox-mail-forward` pipes it to its program from here; the tool only
+# reads the file (ADR 0012, ADR 0022).
+ROOT_FORWARD_PATH: Final = Path("/root/.forward")
