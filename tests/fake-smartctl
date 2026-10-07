@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# A fake smartctl for tests and acceptance runs. It replays the recording
+# named in FAKE_SMARTCTL_RECORDING; the logic is in fake_smartctl.py next to
+# this file (ADR 0016).
+
+exec python3 "$(dirname "$0")/fake_smartctl.py" "$@"

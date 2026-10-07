@@ -95,7 +95,9 @@ LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 SOURCE_SUFFIXES: Final = frozenset({".pl", ".pm", ".py", ".sh", ".toml", ".yaml", ".yml"})
 # Scripts without a suffix: the ones whose installed path keeps the name, and
 # the two maintainer scripts of the Debian package.
-SOURCE_NAMES: Final = frozenset({"Makefile", "notify-bridge", "postrm", "pve-smart-alert", "rules"})
+SOURCE_NAMES: Final = frozenset(
+    {"Makefile", "fake-smartctl", "notify-bridge", "postrm", "pve-smart-alert", "rules"}
+)
 
 # The Handlebars templates (`.hbs`) are left out on purpose even though NFR-20
 # asks for an identifier in every source file: their content is nothing but the

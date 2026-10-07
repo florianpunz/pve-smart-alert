@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pve-smart-alert doctor` reports the routing of the notifications: it reads the matchers and targets through `pvesh` and warns when a severity of the tool reaches no target, because the notification system drops such a notification without an error ([ADR 0020](docs/adr/0020-routing-check.md)).
 - `pve-smart-alert test-notification` names the matchers that route the test notification, or says that none does.
 - The configuration accepts `[smartctl]` with `path`, `timeout` and `detail`, and manual devices in `[[discovery.device]]` (FR-104); the reference configuration documents them.
+- The collector runs smartctl for one drive with a timeout, leaves a drive in standby asleep, and tells usable data from an unreadable drive by the exit status and the JSON ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)).
+- `tests/fake-smartctl` replays recordings for the tests, including drives that sleep, hang or cannot be opened ([ADR 0016](docs/adr/0016-test-strategy.md)).
 - `scripts/make_fixtures.py` turns an archive of the collection script into anonymized fixtures ([ADR 0023](docs/adr/0023-anonymization-of-recordings.md)).
 - `pve-smart-alert doctor` reports the route of the fallback in a line `fallback`: whether a matcher routes mail to root, which arrives as `system-mail`, and whether `/root/.forward` hands it to the notification system ([ADR 0022](docs/adr/0022-fallback-routing-check.md)).
 

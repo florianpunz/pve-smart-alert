@@ -156,7 +156,15 @@ Exit status of smartctl, a bit mask (**Verified**):
 | 6 | Error log contains records | Informational; only an increase counts |
 | 7 | Self-test log contains errors | Finding |
 
-Power mode: `-n standby` makes smartctl exit before any check if an ATA drive is in standby or sleep, by default with exit status 2. 7.5 adds `power_mode.*` to the JSON. How 7.4 reports this case in JSON is **Assumed** and must be captured as a fixture.
+Power mode: `-n standby` makes smartctl exit before any check if an ATA drive is in standby or sleep, by default with exit status 2. 7.5 adds `power_mode.*` to the JSON.
+
+Checked on 2026-10-07 in the source of smartmontools, `master` and the tag `RELEASE_7_4` (**Verified**):
+
+- `-n standby` returns the exit status `FAILPOWER`, which is bit 1, the same value as `FAILDEV` (`smartctl.h`), unless a different status is given as `-n standby,N`. The option applies to ATA and SCSI and is ignored for NVMe (`smartctl.cpp`).
+- In 7.4 and 7.5 a skipped drive gets the message `Device is in STANDBY mode, exit(2)`, or `SLEEP` instead of `STANDBY`, written with `jinf`, which adds it to `smartctl.messages[]` with `string` and the severity `information`. 7.5 writes `power_mode` with `ata_value` and `name` in addition (`ataprint.cpp`). The tool therefore recognizes standby by bit 1 together with that message, in both versions.
+- `--scan-open` writes for every device `name`, `info_name`, `type` and `protocol`, and for a device whose open fails also `open_error` with the error message; 7.4 and 7.5 alike (`scan_devices` in `smartctl.cpp`).
+- `--version` writes no JSON of its own. The version is in the object `smartctl` of every JSON output, the device scan among them.
+- In 7.4 the device statistics are written as `ata_device_statistics` with `pages`, the NVMe health log with the same keys as in 7.5 and the NVMe self-test log as `nvme_self_test_log`; `endurance_used` and `spare_available` do not exist yet.
 
 ## Version notes
 
@@ -170,6 +178,8 @@ Power mode: `-n standby` makes smartctl exit before any check if an ATA drive is
 Proxmox VE 9.1 reports `smartmontools: 7.4-pve1` (**Reported**, forum). The latest upstream release is 7.5 (2025).
 
 ## Sources
+
+- smartmontools source, `smartctl.cpp`, `smartctl.h`, `ataprint.cpp`, `nvmeprint.cpp`, `master` and `RELEASE_7_4`: <https://github.com/smartmontools/smartmontools/tree/master/smartmontools>
 
 - Backblaze, "What SMART Stats Tell Us About Hard Drives" (2016-10-06): <https://www.backblaze.com/blog/what-smart-stats-indicate-hard-drive-failures/>
 - Backblaze, "Hard Drive SMART Stats" (2014-11-12), with the definition of a failed drive: <https://www.backblaze.com/blog/hard-drive-smart-stats/>
