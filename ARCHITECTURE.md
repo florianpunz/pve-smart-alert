@@ -1,9 +1,9 @@
 # Architecture
 
-This document describes the planned design of PVE SMART Alert.
-It states what is built and how the parts fit together. The reasons are in the decision records under [docs/adr/](docs/adr/README.md), which are linked where they apply. If this document and an accepted record disagree, the record wins.
+This document describes the current design of PVE SMART Alert: the parts of version 1 and how they fit together.
+The reasons are in the decision records under [docs/adr/](docs/adr/README.md), which are linked where they apply. If this document and an accepted record disagree, the record wins.
 
-Status: planned. Names of files, keys and functions are the intended ones and may still change until the milestone that implements them.
+The design covers the parts that are built and those still to come; which is which, milestone by milestone, is in [ROADMAP.md](ROADMAP.md). For a built part this document describes the code. For a part still to come, names of files, keys and functions are the intended ones and may change until it is built.
 
 ## 1. Overview
 
@@ -82,7 +82,7 @@ The first run is the same sequence with empty state. The planner recognizes it a
 
 ## 4. Data model
 
-Both models are in `model.py`. The drive model exists since milestone M2; the parsers fill it and the checks read it.
+The models are in `model.py`. The parsers fill the drive snapshot, and the checks read it.
 
 **Drive identity**: model, serial number, WWN if known, normalized: trimmed, inner whitespace collapsed, the WWN as lowercase hexadecimal digits. Key in the state file. An identity is stable only with a serial number or a WWN. See [ADR 0005](docs/adr/0005-drive-discovery-and-identity.md).
 
@@ -101,7 +101,7 @@ Both models are in `model.py`. The drive model exists since milestone M2; the pa
 | Context | Power-on hours, power cycles |
 | Collection | smartctl version, exit status, messages, duration |
 
-The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The source is stored next to the value as `wear.source`.
+The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The snapshot keeps the source next to the value, in `wear_source`.
 
 **Finding**: check ID, kind (condition or event), severity, current value, threshold that was crossed, short text.
 
@@ -220,7 +220,7 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-Milestone M1 reads `[notify] transport`. Milestone M2 adds `[smartctl]` with `path`, `timeout` (from `"1s"` to `"15m"`) and `detail`, and the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type. Every other key in the example above, `exclude` among them, is rejected as unknown until the milestone that implements it, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`, and the last-good configuration of FR-406 arrives with M3.
+The loader accepts these keys: `transport` in `[notify]`; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; and the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type. Every other key in the example above, `exclude` among them, is rejected as unknown until the milestone that implements it. Until the last-good configuration of FR-406 is built, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`.
 
 ## 9. State
 
@@ -305,8 +305,9 @@ The Python side starts `/usr/libexec/pve-smart-alert/notify-bridge` and writes o
 
 The bridge loads `PVE::Notify`, checks that the expected function exists, adds the common template data if available, and calls `PVE::Notify::notify($severity, $template, $data, $fields)`.
 It answers on standard output with `{"ok": true}` or `{"ok": false, "error": "..."}` and exits with 0 or non-zero accordingly. What the notification library logs to standard error is passed through and captured by the Python side.
+With the single argument `--check`, the bridge only loads the module and looks for the function, reads no request and sends nothing; `pve-smart-alert doctor` runs it this way.
 
-Checked on Proxmox VE 9.2 (2026-10-04): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `notified via target \`NAME\`` or `could not notify via target \`NAME\`: REASON`. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
+Checked on Proxmox VE 9.2 (2026-10-04, [Research 01](docs/research/01-notification-integration.md#route-b-pvenotify)): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `` notified via target `NAME` `` or `` could not notify via target `NAME`: REASON ``. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
 
 ### Routing check
 
@@ -431,6 +432,7 @@ Principle: a problem with one drive is a finding about that drive; a problem wit
 | `/usr/share/pve-manager/templates/default/pve-smart-alert-*.hbs` | package | Notification templates |
 | `/usr/lib/systemd/system/pve-smart-alert.{service,timer}`, `pve-smart-alert-failure.service` | package | Units |
 | `/usr/share/doc/pve-smart-alert/` | package | Reference configuration, changelog, license |
+| `/usr/share/man/man8/pve-smart-alert.8.gz` | package | Manual page |
 | `/etc/pve-smart-alert/config.toml` | package, editable | Configuration |
 | `/var/lib/pve-smart-alert/state.json` | run time | State |
 | `/var/lib/pve-smart-alert/last-good-config.json` | run time | Last valid configuration |

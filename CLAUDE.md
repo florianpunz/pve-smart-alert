@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (walking skeleton with notifications) are written; M1 passed its acceptance run on the test cluster on 2026-10-04. M2 in `ROADMAP.md` is in progress: its preparation (recordings from the test cluster, ADR 0021 on the wear source) was finished on 2026-10-05, and its routing check (ADR 0020) was built on 2026-10-06, passed acceptance step 5 on 2026-10-07, and was extended to the fallback route (ADR 0022) on the same day. The drive model, the configuration keys of M2, the anonymizer (ADR 0023) and the anonymized recordings of the test cluster followed on 2026-10-07. The parsers, the collector, discovery and the commands `scan` and `dump-fixture` are next.
+Current milestone: **M2**, discovery and collection for SATA and NVMe drives; `ROADMAP.md` says what of it is done. Next step: the parsers, the collector, discovery and the commands `scan` and `dump-fixture`.
 
 ### Where things are
 
@@ -42,12 +42,13 @@ Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (
 | --- | --- |
 | `PROJECT.md` | You need the purpose, the audience or the scope of version 1 |
 | `REQUIREMENTS.md` | You implement or test something; every requirement has a stable ID |
-| `ARCHITECTURE.md` | You touch the design; it describes the current state |
+| `ARCHITECTURE.md` | You touch the design; it describes the current design, the built parts and those still to come |
 | `docs/adr/README.md` | You want to know why something is the way it is |
 | `docs/research/` | You need the evidence and the sources behind a decision |
 | `docs/check-catalog.md` | You work on checks or thresholds |
-| `ROADMAP.md` | You plan the next step |
+| `ROADMAP.md` | You need the state of a milestone or plan the next step |
 | `OPEN-QUESTIONS.md` | Something is unclear; it may already be listed there |
+| `CONTRIBUTING.md` | You set up the development tools, commit, or add a fixture |
 
 ### Working agreements
 

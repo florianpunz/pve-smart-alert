@@ -19,7 +19,7 @@ Requirements: Python 3.11 or later, GNU Make and git. Nothing else has to be ins
 
 ```sh
 make dev-install   # creates .venv and installs the linter, the type checker, pytest and the build tool
-make check         # everything CI runs: lint, format check, type check, repository checks, tests
+make check         # what CI checks on every Python version: lint, format check, type check, repository checks, tests
 make test          # tests only
 make build         # the Debian package and the Python distribution
 make deb           # the Debian package in dist/ (needs build-essential, dpkg-dev and debhelper)
@@ -43,8 +43,8 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - The Python package is installed as source under `/usr/share/pve-smart-alert` and imported from there by the launcher. Nothing is byte-compiled: `/usr` belongs to dpkg, and a `.pyc` file written at run time would belong to no package.
 - The maintainer scripts do nothing but the standard debhelper snippets, and `purge` removes the configuration and the state directory of the tool. Nothing else.
 - The version of the package is the version of the program. `make hygiene` compares `src/pve_smart_alert/__init__.py` with the newest entry of `debian/changelog`, so a release changes both in one commit.
-- Building the package needs `dpkg-dev` and `debhelper`: `make deb`, or `make build` for the package and the Python distribution together. It runs in CI and on a Debian or Proxmox VE host, not on every development machine.
-- CI builds the package on every push and inspects it: the file list, the dependencies, that the shipped configuration is a conffile, that the source tree ends up where the launcher looks for it, and that no byte code is inside. It plants a `__pycache__` directory in the source tree before the build, so that the exclusion is exercised instead of assumed.
+- Building the package needs `build-essential`, `dpkg-dev` and `debhelper`: `make deb`, or `make build` for the package and the Python distribution together. It runs in CI and on a Debian or Proxmox VE host, not on every development machine.
+- CI builds the package on every push and inspects it: the file list, the dependencies, that the shipped configuration is a conffile, that the source tree ends up where the launcher looks for it, and that no byte code is inside. It plants a `__pycache__` directory in the source tree before the build, so that the exclusion is exercised instead of assumed. Last, it runs lintian, and an error from lintian fails the job.
 
 ## Fixtures and test data
 
@@ -52,12 +52,12 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - Recorded fixtures are written by `scripts/make_fixtures.py` from an archive of `scripts/collect-node-data.sh`, never by hand. It replaces serial numbers, WWNs and EUI-64s with placeholders and writes nothing if a real value is left ([ADR 0023](docs/adr/0023-anonymization-of-recordings.md)). Keep the archives themselves out of the repository.
 - Every fixture gets an entry in `tests/fixtures/SOURCES.md` with its origin and its license.
 - Recordings contributed by users are welcome. Attach them to an issue; they are anonymized on the way in.
-- Data taken from another project is marked in the file that contains it, and the notice of that project is kept in `THIRD-PARTY-NOTICES.md`.
+- Data taken from another project is marked in the file that contains it, and the notice of that project is kept in `THIRD-PARTY-NOTICES.md`, which the first such data creates.
 
 ## Commits and branches
 
 - Default branch: `main`. Feature branches: `feature/<topic>`. Fixes: `fix/<topic>`.
-- Commit messages are in the imperative, with an optional scope prefix, for example `parsers: handle a missing attribute table` or `docs: describe the configuration keys`.
+- A commit message starts with the type of the change, a colon and a summary in the imperative, in lowercase and without a scope: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `build:`, `ci:` or `chore:`, for example `feat: add the drive model` or `docs: describe the configuration keys`. Where the summary is not enough, a body says what changed and why.
 - Keep a change focused. A parser change and its fixture belong in one commit; an unrelated cleanup does not.
 
 ## Documentation

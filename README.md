@@ -4,11 +4,21 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** No drive is read yet. Progress by milestone:
+> **Status: early development.** No drive is read yet.
 >
-> - **M0 and M1 (done):** development tooling, the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
-> - **M2 (in progress):** the routing check is built; drive discovery and collection arrive with the rest of M2
-> - **M7 (planned):** version 1.0, the version meant for regular use
+> <details>
+> <summary>In progress: M2, drive discovery and collection</summary>
+>
+> - **M0 (done):** development tooling
+> - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
+> - **M2 (in progress):** discovery and collection for SATA and NVMe drives; the routing check is built, the rest of M2 follows
+> - **M3 (planned):** evaluation and configuration
+> - **M4 (planned):** state and notification policy
+> - **M5 (planned):** packaging, timer and installation
+> - **M6 (planned):** SAS and hardware RAID on recorded data
+> - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
+>
+> </details>
 
 ## Planned features
 
@@ -19,19 +29,31 @@
 - **Simple operation:** installs with one command and runs without care afterwards
 - **Read-only:** only reads from drives and changes nothing on the host except its own files
 
+## Installation
+
+There is no release yet. `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper. Copy it to each node and install it there as root:
+
+```sh
+apt install ./pve-smart-alert_*_all.deb
+```
+
+- On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
+- The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
+- Only `transport` in `[notify]` has an effect so far: `auto` (default) sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only. The keys of `[smartctl]` and `[[discovery.device]]` are validated, but nothing uses them while no drive is read.
+
 ## Commands
 
-`make build` produces the Debian package, which installs the tool with two commands:
+The installed tool has two commands:
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, notify bridge, templates, mail command, and the routing of notifications and of the fallback mail to root (FR-603) |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, notify bridge, templates, mail command, and the routing of notifications and of the fallback mail to root (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
 
 Options of `test-notification`:
 
 - `--severity SEVERITY`: `info` (default), `notice`, `warning` or `error`
-- `--transport TRANSPORT`: `auto`, `pve-notify` or `mail`; without the option the configuration decides. `auto` means the notify bridge, with mail to root as the fallback.
+- `--transport TRANSPORT`: `auto`, `pve-notify` or `mail`, as for `transport` in the configuration; without the option the configuration decides.
 
 ## Notification routing
 
@@ -68,7 +90,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [docs/check-catalog.md](docs/check-catalog.md): planned checks and default thresholds
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
-- [ROADMAP.md](ROADMAP.md): milestones, each with a testable result
+- [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
 - [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): what is not settled yet
 - [CLAUDE.md](CLAUDE.md): binding rules for contributors and AI agents
 
