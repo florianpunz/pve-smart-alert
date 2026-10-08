@@ -32,6 +32,8 @@ As stated by the maintainer on 2026-10-03:
 - A Proxmox VE 9.2 high-availability cluster (9.2.21 at the time of planning), which is the current release line.
 - SATA SSDs and NVMe drives, some of them used for LVM-thin.
 - No hardware RAID controller.
+
+Additionally, since 2026-10-08, a standalone Proxmox VE 9.2.3 host `pve1` that is not part of the cluster and may be changed freely: one Intenso SATA SSD, one USB device (virtual drive of a KVM-over-IP device), no NVMe drive ([Research 07](docs/research/07-standalone-host-pve1.md)). It is used for tests that change the notification matchers or break the bridge. It does not replace the cluster for the acceptance steps.
 - No disks or controllers passed through to guests, no drives attached through USB, no hard disks that spin down.
 
 Recorded on 2026-10-05 ([Research 06](docs/research/06-test-cluster-recordings.md)): the nodes `pve5`, `pve6` and `pve7` with Proxmox VE 9.2.21 and smartmontools 7.5; three SATA SSDs from Samsung and Fanxiang and three NVMe drives from Samsung and Western Digital, all with LVM-thin, no ZFS. The USB device on `pve5` is the virtual drive of a KVM-over-IP device for mounting ISO images; it is not a monitored drive and plays no part in the acceptance steps.
@@ -116,10 +118,10 @@ How to run it: install the new package on each node, run [`scripts/collect-node-
 
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 
-State: built, waiting for steps 1 to 4 on the test cluster.
+State: built, waiting for steps 1 to 4 on the test cluster `pve5`, `pve6` and `pve7`; they ran on `pve1` only.
 
-- Done: the preparation on 2026-10-05, that is the recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script and the decision on the wear source; the routing check, which passed step 5 on 2026-10-07 on `pve7` ([ARCHITECTURE.md](ARCHITECTURE.md) section 10); the line `fallback`, built after that run and not yet run on the cluster; all other deliverables: the snapshot model, the configuration keys, the anonymizer and the fixtures of the three nodes, the collector, the parsers, discovery with the selectors of [ADR 0024](docs/adr/0024-drive-selectors.md), the wear value, the line `smartctl` in `doctor`, and the commands `scan` and `dump-fixture`. The package is version 0.2.0.
-- Next: steps 1 to 4 on every node.
+- Done: the preparation on 2026-10-05, that is the recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script and the decision on the wear source; the routing check, which passed step 5 on 2026-10-07 on `pve7` ([ARCHITECTURE.md](ARCHITECTURE.md) section 10); the line `fallback`, built after that run and not yet run on the cluster; steps 1, 3 and 4 and the three cases of step 5 on the standalone host `pve1` on 2026-10-08, with the `fallback` line in its ok and warn cases and with the bridge made unusable, and step 2 by its second clause ([Research 07](docs/research/07-standalone-host-pve1.md)); all other deliverables: the snapshot model, the configuration keys, the anonymizer and the fixtures of the three nodes, the collector, the parsers, discovery with the selectors of [ADR 0024](docs/adr/0024-drive-selectors.md), the wear value, the line `smartctl` in `doctor`, and the commands `scan` and `dump-fixture`. The package is version 0.2.0.
+- Next: steps 1 to 4 on every node of the test cluster. `pve1` has no NVMe drive and is not a node of the cluster, so its results do not close the milestone.
 
 ## M3: Evaluation and configuration (M)
 

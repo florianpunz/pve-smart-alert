@@ -119,6 +119,8 @@ Sources, in this order ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md
 
 The package `discovery/` implements this since milestone M2. A device found is read once per run, in the order of the scan and then of the manual entries, and every device is reported with its source and what became of it: monitored, in standby, unreadable, or skipped with a reason.
 
+A block device that the scan does not list, such as a USB device with a bridge that smartctl does not know, is not a candidate and does not appear in `scan` as skipped ([Research 07](docs/research/07-standalone-host-pve1.md), Q-S7).
+
 Enrichment reads `lsblk --json` with the columns `NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL` once per run, the links below `/dev/disk/by-id` and `/dev/disk/by-path`, and for an NVMe controller its transport in sysfs. It adds transport, removable flag, links and membership; an NVMe controller is described by its namespaces. The volume group comes from the device-mapper names of the LVM devices below a drive, as [Research 06](docs/research/06-test-cluster-recordings.md) verified against `pvs`, which is not called because it reads from the disks. A ZFS pool comes from the label of a `zfs_member` file system, an md array from the name of a `raid` device (Q-S6). Errors here are reported and do not affect the run (FR-110).
 
 Filter rules, each with a reason code shown by `pve-smart-alert scan`:

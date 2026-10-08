@@ -11,6 +11,7 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 | [04 Hardware RAID](04-hardware-raid.md) | How are drives behind RAID controllers found, and which controllers are realistic? |
 | [05 Prior art](05-prior-art.md) | Which existing projects solve something similar, and what follows for PVE SMART Alert? |
 | [06 Recordings from the test cluster](06-test-cluster-recordings.md) | What do the drives, the wear values and the matcher configuration of the test cluster look like? Recorded 2026-10-05 |
+| [07 Acceptance run on the standalone host pve1](07-standalone-host-pve1.md) | What did the M2 steps show on a host outside the cluster: routing, the line `fallback`, the wear value, and the USB device that the scan omits? Run 2026-10-08 |
 
 ## Scope of validity
 
