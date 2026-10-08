@@ -62,6 +62,7 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 
 ## Documentation
 
+- Keeping the documents current is part of every change: [Documentation upkeep](CLAUDE.md#documentation-upkeep) in CLAUDE.md says which document holds what.
 - A decision that constrains the architecture, the user-visible behavior, the supported platforms or the license gets a record in `docs/adr/`. Accepted records are not rewritten; a changed decision gets a new record that supersedes the old one ([ADR 0001](docs/adr/0001-record-architecture-decisions.md)).
 - A statement about Proxmox VE or smartmontools is verified in documentation or source code and cited, or it is marked as an assumption in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md).
 - `docs/check-catalog.md` and the definitions in `src/pve_smart_alert/checks/` must not diverge.
