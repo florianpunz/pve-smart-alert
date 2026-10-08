@@ -64,3 +64,17 @@ These follow from the decision records. They are not hard rules, but deviating f
 9. **Claims are checked.** Statements about Proxmox VE or smartmontools behavior are verified in documentation or source code and cited, or they are marked as assumptions and listed in `OPEN-QUESTIONS.md`.
 10. **Open questions are kept current.** An answered question is removed from `OPEN-QUESTIONS.md` and its answer is written where it belongs.
 11. **The product name never contains "Proxmox".** The project is written PVE SMART Alert, its identifier is `pve-smart-alert`. The platform is named descriptively, as in "for Proxmox VE" (ADR 0018).
+
+## Documentation upkeep
+
+Other agents pick this project up with no memory of earlier sessions, so the markdown files are their only source of truth.
+Keep them current as part of every change, not as a separate task afterwards.
+
+- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
+- Records are different. Accepted ADRs and research notes describe a point in time and are not brought up to date. A changed decision gets a new ADR that supersedes the old one (ADR 0001); new evidence gets a new research note or a dated addition to an existing one.
+- Status has one home. `ROADMAP.md` says per milestone what is done, what is in progress and what is next. `CLAUDE.md` carries at most two sentences (current milestone, next step) and no dated history. README carries the short status for users. Every other document links to `ROADMAP.md` instead of stating a status of its own.
+- Record what another agent needs to continue without asking: decisions and their reasons (ADR), changed behavior or interfaces (ARCHITECTURE, CHANGELOG), new setup or config steps (README, CONTRIBUTING), known issues and open work (OPEN-QUESTIONS, ROADMAP).
+- `CHANGELOG.md` lists what the tool does for a user. A decision that is not built yet belongs in its ADR, not in the changelog.
+- Keep the README in line with what the tool actually does and how it is installed, configured and used right now.
+- Document only what matters. Test: would another agent or a user make a wrong decision or lose time without this? If not, leave it out. No step-by-step logs of routine edits and no restating what the code already makes obvious. State each fact in one place and link to it. Two exceptions are on purpose: `AGENTS.md` repeats the hard rules, and `CONTRIBUTING.md` summarizes the rules for human contributors.
+- In living documents, fix or remove outdated statements instead of appending new ones next to them.
