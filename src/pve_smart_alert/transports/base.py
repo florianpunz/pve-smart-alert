@@ -29,7 +29,7 @@ class TransportOutcome:
     handover may the state that belongs to a notification be stored (FR-517).
     `error` says why it was not delivered. `log_lines` is what the program
     wrote to its standard error, which is what the notification system logged
-    about the targets (Q-N2).
+    about the targets (ARCHITECTURE.md section 10).
     """
 
     delivered: bool

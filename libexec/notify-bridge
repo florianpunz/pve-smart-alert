@@ -72,7 +72,8 @@ answer(ok => 0, error => 'fields must be an object') unless ref($fields) eq 'HAS
 my $common = eval { PVE::Notify::common_template_data() };
 $data = { %$common, %$data } if ref($common) eq 'HASH';
 
-# The optional configuration argument stays out (OPEN-QUESTIONS Q-N7).
+# The optional configuration argument stays out: the module then reads the
+# configuration of the cluster itself (ARCHITECTURE.md section 10).
 my $sent = eval { PVE::Notify::notify($severity, $template, $data, $fields); 1 };
 answer(ok => 0, error => "the notification system refused the notification: $@") unless $sent;
 

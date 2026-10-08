@@ -164,7 +164,7 @@ jobs:
             exit 1
           fi
 
-      # Warnings are reported, errors fail the job. Man pages arrive with
-      # milestone M5 and are the main reason for warnings today.
+      # Warnings are reported, errors fail the job. The manual page arrives
+      # with milestone M7; until then lintian warns that it is missing.
       - name: Run lintian
         run: lintian --fail-on error dist/*.deb

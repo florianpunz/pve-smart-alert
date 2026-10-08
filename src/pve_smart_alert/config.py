@@ -4,15 +4,15 @@
 The file is `/etc/pve-smart-alert/config.toml`, its format and its failure
 behavior are described in ADR 0011 and ARCHITECTURE.md section 8.
 
-This module reads the keys that are implemented: `[notify] transport` since
-milestone M1, `[smartctl]` with `path`, `timeout` and `detail`, and the
-manual devices of `[[discovery.device]]` since milestone M2. The validation
-is strict: an unknown section, an unknown key, a wrong type and a value out
-of range are errors that name the place (FR-405). The remaining keys arrive
-with the milestone that uses them; the last-good configuration and the
-run-time fallback of FR-406 belong to milestone M3 and are deliberately not
-imitated here: an invalid file is an error for the interactive commands and
-is reported by `pve-smart-alert doctor`.
+This module reads the keys that are implemented: `[notify] transport`,
+`[smartctl]` with `path`, `timeout` and `detail`, and the manual devices of
+`[[discovery.device]]`. The validation is strict: an unknown section, an
+unknown key, a wrong type and a value out of range are errors that name the
+place (FR-405), and every other key of ADR 0011 counts as unknown until it is
+implemented. The last-good configuration and the run-time fallback of FR-406
+are not built yet and are deliberately not imitated here: an invalid file is
+an error for the interactive commands and is reported by
+`pve-smart-alert doctor`.
 """
 
 from __future__ import annotations

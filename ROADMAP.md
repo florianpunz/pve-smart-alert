@@ -175,7 +175,7 @@ Goal: one command, then no care.
 
 Deliverables:
 
-- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)).
+- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
 - Release pipeline: build on tag, lintian, package test in a clean container, checksums, release assets under stable names, `install.sh`.
 - Decision on which systemd sandboxing options are safe.
 
