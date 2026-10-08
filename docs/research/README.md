@@ -14,10 +14,10 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 
 ## Scope of validity
 
-- Research date: 2026-10-03.
+- Research date: 2026-10-03 for the notes 01 to 05; additions made later carry their own date. Note 06 was recorded on the test cluster on 2026-10-05.
 - Proxmox VE documentation: version 9.2.13 (built 2026-09-24).
 - Proxmox source code: `master` branch of the repositories on `git.proxmox.com` on the research date.
-- smartmontools: manual pages of version 7.4 as packaged in Debian 13 (trixie), release notes of 7.3 to 7.5.
+- smartmontools: manual pages of version 7.4 as packaged in Debian 13 (trixie), release notes of 7.3 to 7.5. Proxmox VE 9.2 ships 7.5 ([Research 06](06-test-cluster-recordings.md)); the notes 02 to 04 state 7.4, which was observed on Proxmox VE 9.1.
 - Proxmox VE 9.2 was released on 2026-05-21. Proxmox VE 8 reached its end of life in 2026-08 according to the Proxmox VE FAQ, so Proxmox VE 9.x is the only supported major version at the time of writing.
 
 Statements about older versions are marked as such.
@@ -30,4 +30,4 @@ Every claim in the notes carries one of these labels where it matters:
 - **Reported**: stated by a third party (forum post, issue tracker); plausible, not checked on a real system.
 - **Assumed**: based on general knowledge; not checked. Every assumption that matters for the design is tracked in [`OPEN-QUESTIONS.md`](../../OPEN-QUESTIONS.md).
 
-Nothing in these notes was tested on a running Proxmox VE host. The first roadmap milestones exist to replace "Reported" and "Assumed" with test results.
+The notes 01 to 05 were researched in documentation and source code; a claim in them was tested on a running host only where a dated addition says so. Note 06 is made of recordings from the test cluster. The acceptance runs of the milestones test claims on that cluster; what a run settles is recorded in a dated addition to the note that made the claim, as in note 01 for the notification route.

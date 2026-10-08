@@ -2,7 +2,7 @@
 
 SMART drive alerts for Proxmox VE.
 
-Status: early development. The repository bootstrap (milestone M0) is done; the milestones in [ROADMAP.md](ROADMAP.md) are being worked through. This document describes what the project is for and what version 1 contains.
+This document describes what the project is for and what version 1 contains. How far the work is: [ROADMAP.md](ROADMAP.md).
 
 ## Purpose
 
@@ -97,7 +97,7 @@ Out:
 | [CLAUDE.md](CLAUDE.md) | Binding rules for everyone working in the repository |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Numbered functional and non-functional requirements |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, run sequence, configuration, state, notification, error handling |
-| [ROADMAP.md](ROADMAP.md) | Milestones with testable results |
+| [ROADMAP.md](ROADMAP.md) | Milestones with testable results, and the state of each |
 | [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) | What could not be settled |
 | [docs/adr/](docs/adr/README.md) | One record per decision |
 | [docs/research/](docs/research/README.md) | Evidence behind the decisions, with sources |
@@ -106,7 +106,7 @@ Out:
 ## Name, home and affiliation
 
 - Name: `pve-smart-alert` for the repository, the package and the command. In running text: PVE SMART Alert ([ADR 0018](docs/adr/0018-project-name.md)). The working name during planning was PVE-SDA.
-- Home: <https://github.com/florianpunz/pve-smart-alert> ([ADR 0019](docs/adr/0019-repository-hosting.md)). The repository is created in milestone M0.
+- Home: <https://github.com/florianpunz/pve-smart-alert> ([ADR 0019](docs/adr/0019-repository-hosting.md)).
 - Maintainer and copyright holder: Florian Punz.
 - License: AGPL-3.0-or-later ([ADR 0015](docs/adr/0015-license.md)), confirmed by the maintainer.
 - The project is independent. It is not affiliated with or endorsed by Proxmox Server Solutions GmbH. Proxmox is a registered trademark of that company. The name of the platform is used only to say what the tool is for.

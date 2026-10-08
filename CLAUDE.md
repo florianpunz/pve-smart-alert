@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (walking skeleton with notifications) are written; M1 passed its acceptance run on the test cluster on 2026-10-04. M2 in `ROADMAP.md` is in progress: its preparation (recordings from the test cluster, ADR 0021 on the wear source) was finished on 2026-10-05, and its routing check (ADR 0020) was built on 2026-10-06, passed acceptance step 5 on 2026-10-07, and was extended to the fallback route (ADR 0022) on the same day, which passed its acceptance run on 2026-10-07 as well. The drive model, the configuration keys of M2, the anonymizer (ADR 0023), the anonymized recordings of the test cluster, the collector, the parsers, discovery with the selectors of ADR 0024, the wear value and the commands `scan` and `dump-fixture` followed on 2026-10-07; the package is version 0.2.0. Steps 1 to 4 of the acceptance of M2 on the cluster are next, then M3.
+Current milestone: **M2**, discovery and collection for SATA and NVMe drives; `ROADMAP.md` says what of it is done. Next step: steps 1 to 4 of its acceptance on the test cluster, then M3.
 
 ### Where things are
 
@@ -42,12 +42,13 @@ Current phase: **implementation**. Milestones M0 (repository bootstrap) and M1 (
 | --- | --- |
 | `PROJECT.md` | You need the purpose, the audience or the scope of version 1 |
 | `REQUIREMENTS.md` | You implement or test something; every requirement has a stable ID |
-| `ARCHITECTURE.md` | You touch the design; it describes the current state |
+| `ARCHITECTURE.md` | You touch the design; it describes the current design, the built parts and those still to come |
 | `docs/adr/README.md` | You want to know why something is the way it is |
 | `docs/research/` | You need the evidence and the sources behind a decision |
 | `docs/check-catalog.md` | You work on checks or thresholds |
-| `ROADMAP.md` | You plan the next step |
+| `ROADMAP.md` | You need the state of a milestone or plan the next step |
 | `OPEN-QUESTIONS.md` | Something is unclear; it may already be listed there |
+| `CONTRIBUTING.md` | You set up the development tools, commit, or add a fixture |
 
 ### Working agreements
 
@@ -64,3 +65,17 @@ These follow from the decision records. They are not hard rules, but deviating f
 9. **Claims are checked.** Statements about Proxmox VE or smartmontools behavior are verified in documentation or source code and cited, or they are marked as assumptions and listed in `OPEN-QUESTIONS.md`.
 10. **Open questions are kept current.** An answered question is removed from `OPEN-QUESTIONS.md` and its answer is written where it belongs.
 11. **The product name never contains "Proxmox".** The project is written PVE SMART Alert, its identifier is `pve-smart-alert`. The platform is named descriptively, as in "for Proxmox VE" (ADR 0018).
+
+## Documentation upkeep
+
+Other agents pick this project up with no memory of earlier sessions, so the markdown files are their only source of truth.
+Keep them current as part of every change, not as a separate task afterwards.
+
+- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
+- Records are different. Accepted ADRs and research notes describe a point in time and are not brought up to date. A changed decision gets a new ADR that supersedes the old one (ADR 0001); new evidence gets a new research note or a dated addition to an existing one.
+- Status has one home. `ROADMAP.md` says per milestone what is done, what is in progress and what is next. `CLAUDE.md` carries at most two sentences (current milestone, next step) and no dated history. README carries the short status for users. Every other document links to `ROADMAP.md` instead of stating a status of its own.
+- Record what another agent needs to continue without asking: decisions and their reasons (ADR), changed behavior or interfaces (ARCHITECTURE, CHANGELOG), new setup or config steps (README, CONTRIBUTING), known issues and open work (OPEN-QUESTIONS, ROADMAP).
+- `CHANGELOG.md` lists what the tool does for a user. A decision that is not built yet belongs in its ADR, not in the changelog.
+- Keep the README in line with what the tool actually does and how it is installed, configured and used right now.
+- Document only what matters. Test: would another agent or a user make a wrong decision or lose time without this? If not, leave it out. No step-by-step logs of routine edits and no restating what the code already makes obvious. State each fact in one place and link to it. Two exceptions are on purpose: `AGENTS.md` repeats the hard rules, and `CONTRIBUTING.md` summarizes the rules for human contributors.
+- In living documents, fix or remove outdated statements instead of appending new ones next to them.

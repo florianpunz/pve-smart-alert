@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Version 1 is not released yet. Until then only the current state of the `main` branch is supported.
+Until version 1 is released ([ROADMAP.md](ROADMAP.md)), only the current state of the `main` branch is supported.
 Once version 1 exists, the supported versions are listed here; Proxmox VE 9.x is the supported platform ([ADR 0002](docs/adr/0002-supported-platforms-and-version-baseline.md)).
 
 ## Reporting a vulnerability

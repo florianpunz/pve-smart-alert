@@ -24,9 +24,9 @@ from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS, TransportOu
 
 # The notification library writes what it did with each matched target to the
 # standard error of the bridge process. These lines are the only feedback
-# about delivery, so the fallback depends on them (ADR 0008). Their exact
-# wording is an assumption until the first run on a real host answers Q-N2; if
-# it turns out to differ, only these three patterns change.
+# about delivery, so the fallback depends on them (ADR 0008). Their wording
+# was checked on Proxmox VE 9.2 (ARCHITECTURE.md section 10); if a later
+# version changes it, only these three patterns change.
 TARGET_SUCCESS: Final = re.compile(r"notified via target", re.IGNORECASE)
 TARGET_FAILURE: Final = re.compile(r"could not notify via target", re.IGNORECASE)
 RENDER_FAILURE: Final = re.compile(r"failed to render notification template", re.IGNORECASE)

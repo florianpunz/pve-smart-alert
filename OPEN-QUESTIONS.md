@@ -4,17 +4,13 @@ Everything that could not be settled during planning.
 Each entry says why it matters, what is assumed until it is answered, and when it gets answered.
 Answered entries are removed from this file; the answer goes into the document it affects, and into a new decision record if it changes a decision.
 
-Last updated: 2026-10-07.
-
 ## For the maintainer
 
 None at the moment.
 
-The questions Q-M1 to Q-M8 were answered on 2026-10-03. The answers are recorded in [ADR 0018](docs/adr/0018-project-name.md) (name), [ADR 0019](docs/adr/0019-repository-hosting.md) (repository), the confirmations in the [index of decision records](docs/adr/README.md) (license, template files, smartd), [PROJECT.md](PROJECT.md) (copyright holder) and the test environment section of [ROADMAP.md](ROADMAP.md).
-
 ## Notification route
 
-Most of these were answered in milestone M1 on a real host (2026-10-04); what is left needs a degraded cluster, a slow target, or the Proxmox developers. Q-N8, whether the tool can tell that no matcher matched, is answered by the routing check of [ADR 0020](docs/adr/0020-routing-check.md), described in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4 and Q-N5 need a slow target and a degraded cluster and are answered in milestone M5; Q-N6 needs the Proxmox developers.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |

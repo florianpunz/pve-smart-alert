@@ -3,6 +3,17 @@
 Milestones towards version 1.0 of PVE SMART Alert and the planned steps after it.
 Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREMENTS.md](REQUIREMENTS.md).
 
+## State
+
+| Milestone | State |
+| --- | --- |
+| M0: Repository bootstrap | Done, except that the repository is still private |
+| M1: Walking skeleton with notifications | Done |
+| M2: Discovery and collection for SATA and NVMe | In progress |
+| M3 to M7 | Planned |
+
+The section of a milestone says what of it is done and what comes next.
+
 ## How the milestones are ordered
 
 1. **Riskiest assumption first.** The notification route with severity uses an internal interface of Proxmox VE. It is verified on a real host in M1, before anything is built on top of it.
@@ -49,6 +60,8 @@ Result you can test:
 
 Inputs, all settled: the name `pve-smart-alert` ([ADR 0018](docs/adr/0018-project-name.md)), the repository location ([ADR 0019](docs/adr/0019-repository-hosting.md)), the copyright holder Florian Punz, and the license AGPL-3.0-or-later ([ADR 0015](docs/adr/0015-license.md)).
 
+State: done on 2026-10-04, except that the repository is still private. The reporting channel of [SECURITY.md](SECURITY.md), a private security advisory on GitHub, works only once the repository is public: GitHub offers private vulnerability reporting for public repositories only, and it has to be enabled in the settings of the repository.
+
 ## M1: Walking skeleton with notifications (M)
 
 Goal: prove the notification route on a real host, with a real package.
@@ -69,9 +82,11 @@ Result you can test, on one cluster node:
 5. `pve-smart-alert doctor` reports both situations correctly.
 6. `apt purge pve-smart-alert` leaves no file behind.
 
-Open questions this milestone answers: Q-N1 to Q-N5 and Q-N7.
+Open questions this milestone answered: Q-N1 to Q-N3, Q-N7, and the part of Q-N5 about the web interface. Q-N4 and the rest of Q-N5 are left to M5.
 
 Decision point: if the primary route cannot be made to work or to fail visibly, [ADR 0008](docs/adr/0008-notification-integration.md) is revised before M2 starts.
+
+State: done. The acceptance run passed on the test cluster on 2026-10-04, on Proxmox VE 9.2, and ADR 0008 stands. The run showed one failure that ADR 0008 had not foreseen: a notification that no matcher matches is dropped without an error. [ADR 0020](docs/adr/0020-routing-check.md) answers it with the routing check of M2.
 
 ## M2: Discovery and collection for SATA and NVMe (M)
 
@@ -81,11 +96,13 @@ Deliverables:
 
 - Discovery from the smartctl scan, enrichment, filtering, de-duplication, identity ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)).
 - Collector with timeout and standby handling; parsers for ATA and NVMe; snapshot model ([ADR 0004](docs/adr/0004-smartctl-json-as-data-source.md)).
+- The configuration keys of `[smartctl]` (`path`, `timeout`, `detail`) and manual devices in `[[discovery.device]]` ([ADR 0011](docs/adr/0011-configuration.md)).
 - Commands `pve-smart-alert scan` and `pve-smart-alert dump-fixture`.
-- The fake smartctl and the first fixtures, made from the recordings of [Research 06](docs/research/06-test-cluster-recordings.md) and anonymized.
+- The fake smartctl and the first fixtures, made from the recordings of [Research 06](docs/research/06-test-cluster-recordings.md) and anonymized as [ADR 0023](docs/adr/0023-anonymization-of-recordings.md) describes.
 - A line `smartctl` in `pve-smart-alert doctor`: present, version.
 - The wear value from the sources of [ADR 0021](docs/adr/0021-wear-value-source.md), shown with its source.
 - The routing check of [ADR 0020](docs/adr/0020-routing-check.md): a line `routing` in `pve-smart-alert doctor`, and the matching matchers in the output of `pve-smart-alert test-notification`. Fixtures recorded with `pvesh` from at least two matcher configurations, anonymized.
+- The check of the fallback route of [ADR 0022](docs/adr/0022-fallback-routing-check.md): a line `fallback` in `pve-smart-alert doctor` for mail to root.
 
 Result you can test, on every cluster node:
 
@@ -97,11 +114,12 @@ Result you can test, on every cluster node:
 
 How to run it: install the new package on each node, run [`scripts/collect-node-data.sh`](scripts/collect-node-data.sh), which also records the output of `scan` and `doctor`, and check the steps against the archive. Steps 3, 4 and 5 and the test notification need the commands given there in addition. Since 2026-10-05 the matcher of the tool on the test cluster routes all four severities; for the `warn` case of step 5 it is set back to `warning,error` for the test.
 
-Preparation done on 2026-10-05: recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script, and the decision on the wear source ([ADR 0021](docs/adr/0021-wear-value-source.md)).
-
-Step 5 passed on 2026-10-07 on `pve7`, with the routing check built on 2026-10-06 ([ARCHITECTURE.md](ARCHITECTURE.md) section 10). All deliverables were built by 2026-10-07; the package is version 0.2.0, and steps 1 to 4 wait for their run on the cluster.
-
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
+
+State: built, waiting for steps 1 to 4 on the test cluster.
+
+- Done: the preparation on 2026-10-05, that is the recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script and the decision on the wear source; the routing check, which passed step 5 on 2026-10-07 on `pve7` ([ARCHITECTURE.md](ARCHITECTURE.md) section 10); the line `fallback`, built after that run and not yet run on the cluster; all other deliverables: the snapshot model, the configuration keys, the anonymizer and the fixtures of the three nodes, the collector, the parsers, discovery with the selectors of [ADR 0024](docs/adr/0024-drive-selectors.md), the wear value, the line `smartctl` in `doctor`, and the commands `scan` and `dump-fixture`. The package is version 0.2.0.
+- Next: steps 1 to 4 on every node.
 
 ## M3: Evaluation and configuration (M)
 
@@ -157,7 +175,7 @@ Goal: one command, then no care.
 
 Deliverables:
 
-- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)).
+- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
 - Release pipeline: build on tag, lintian, package test in a clean container, checksums, release assets under stable names, `install.sh`.
 - Decision on which systemd sandboxing options are safe.
 
@@ -174,7 +192,7 @@ Result you can test:
 
 From here on the tool runs permanently on the maintainer's cluster. Version tag: 0.5.0.
 
-Open questions this milestone answers: Q-P1 to Q-P3.
+Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 
 ## M6: SAS and hardware RAID on recorded data (L)
 
