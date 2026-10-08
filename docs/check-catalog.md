@@ -3,7 +3,7 @@
 This is the living list of checks and their default thresholds.
 The model and the reasoning are in [ADR 0010](adr/0010-health-evaluation-and-default-thresholds.md); the notification behavior of conditions and events is in [ADR 0009](adr/0009-notification-policy.md).
 
-Status: **planned, provisional**. Nothing is implemented yet. The numbers are reviewed in milestone M3 of the [roadmap](../ROADMAP.md).
+The numbers are **provisional**. They are reviewed in milestone M3 of the [roadmap](../ROADMAP.md), which also says how far the checks are built.
 
 ## How to read the tables
 
@@ -56,6 +56,7 @@ Notes:
 - Raw values of attributes 1 (read error rate) and 7 (seek error rate) are never evaluated. They are packed on some vendors' drives.
 - `ata.command_timeouts`: the raw value is packed on some drives. The decoding rule is an open question.
 - The thresholds were derived from hard disk data. They apply to SATA SSDs for lack of better data.
+- The recordings of the test cluster show values a check must not misread: a worst value of 0 with a threshold of 0 on attribute 187, a packed raw value of the temperature attribute 194, and the placeholder temperature limits -127 and 127 ([Research 06](research/06-test-cluster-recordings.md#quirks-seen)).
 
 ## NVMe
 

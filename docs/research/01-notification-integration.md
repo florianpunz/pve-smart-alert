@@ -95,6 +95,14 @@ Error behavior:
 - Errors while rendering or delivering to a target are **not returned**. `Bus::send` logs `could not notify via target ...` and continues. A successful delivery is logged as `notified via target ...`.
 - The logger of the Perl bindings writes to standard error and to the journal (`proxmox-perl-rs`, `common/src/logger.rs`). Whether these lines can be captured reliably from a helper process is **Assumed** and must be tested (see OPEN-QUESTIONS).
 
+Addition of 2026-10-08: the acceptance run of milestone M1 on 2026-10-04, on the test cluster with Proxmox VE 9.2 ([ROADMAP.md](../../ROADMAP.md)), tested this route with the notify bridge of PVE SMART Alert. It settles the use by a third-party tool, which was only **Reported** above, and the capture of the log lines, which was **Assumed**. **Verified** in that run:
+
+- A separate root process can call `PVE::Notify::notify($severity, $template, $data, $fields)` with these four arguments, without the configuration argument and without further initialization, and the notification is delivered.
+- The library writes one line per target to standard error and to the journal, `` notified via target `NAME` `` or `` could not notify via target `NAME`: REASON ``, and the calling process receives these lines on its standard error.
+- A missing template makes the call return success and log `failed to render notification template, all template candidates are erroneous or missing`.
+- When no matcher matches, the call returns success and logs nothing, exactly as a delivery that logs nothing. [ADR 0020](../adr/0020-routing-check.md) answers this with a check of the routing.
+- Seen in the acceptance run of that routing check on 2026-10-07: for a disabled matcher the library logs `skipping disabled matcher 'NAME'` instead of nothing.
+
 History, as evidence for the stability risk:
 
 | Date | Change | Effect on callers |
