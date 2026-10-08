@@ -13,6 +13,7 @@ They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py
 | `direct/test-cluster-pve5` | [Research 06](../../docs/research/06-test-cluster-recordings.md): the test cluster of the maintainer, node `pve5`, recorded on 2026-10-05 by the collection script. Fanxiang S301 256GB | Anonymized | AGPL-3.0-or-later |
 | `direct/test-cluster-pve6` | Same, node `pve6`. Samsung SSD 750 EVO 500GB, WDC PC SN720 | Anonymized | AGPL-3.0-or-later |
 | `direct/test-cluster-pve7` | Same, node `pve7`. Samsung SSD 850 EVO 250GB, two Samsung MZVLW256HEHP (PM961) | Anonymized | AGPL-3.0-or-later |
+| `direct/standalone-pve1` | [Research 07](../../docs/research/07-standalone-host-pve1.md): the standalone test host `pve1` of the maintainer, not part of the test cluster, recorded on 2026-10-08 by the collection script. Intenso SSD; a USB device that the scan does not list | Anonymized | AGPL-3.0-or-later |
 
 ## Notification configuration: `pvesh/`
 

@@ -25,8 +25,8 @@ from pve_smart_alert.parsers.wear import (
 RECORDINGS: Final = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl" / "direct"
 
 
-def recorded(node: str, device: str) -> dict[str, object]:
-    path = RECORDINGS / f"test-cluster-{node}" / f"{device}.json"
+def recorded(node: str, device: str, prefix: str = "test-cluster") -> dict[str, object]:
+    path = RECORDINGS / f"{prefix}-{node}" / f"{device}.json"
     loaded: dict[str, object] = json.loads(path.read_text(encoding="utf-8"))
     return loaded
 
@@ -54,6 +54,14 @@ def attributes(*named: tuple[int, str, int]) -> dict[str, object]:
 )
 def test_the_recorded_sata_drives(node: str, device: str, expected: Wear) -> None:
     assert ata_wear(recorded(node, device)) == expected
+
+
+def test_the_intenso_ssd_of_the_standalone_host() -> None:
+    # The API of pve1 returns 100, so the web interface shows 100 - 100 = 0 %,
+    # while the endurance indicator of the drive says 3 %.
+    drive = recorded("pve1", "sda", prefix="standalone")
+
+    assert ata_wear(drive) == Wear(3, WearSource.ENDURANCE_USED, 0)
 
 
 @pytest.mark.parametrize(

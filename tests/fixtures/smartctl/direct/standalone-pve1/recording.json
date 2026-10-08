@@ -1,0 +1,32 @@
+{
+  "origin": "Standalone test host of the maintainer (not part of the test cluster), node pve1, recorded on 2026-10-08 by the collection script. Intenso SSD and a USB device",
+  "license": "AGPL-3.0-or-later",
+  "node": "pve1",
+  "collected": "20261008T181919Z",
+  "collected_with": "scripts/collect-node-data.sh",
+  "anonymized_with": "scripts/make_fixtures.py (ADR 0023)",
+  "smartmontools": "7.5",
+  "controller": "none, directly attached",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl --scan-open --json=c",
+      "exit_status": 0
+    },
+    {
+      "file": "sda.json",
+      "device": "/dev/sda",
+      "type": "sat",
+      "protocol": "ATA",
+      "class": "ssd",
+      "model": "Intenso SSD",
+      "command": "smartctl -x --json=c -d sat /dev/sda",
+      "exit_status": 0
+    },
+    {
+      "file": "lsblk.json",
+      "command": "lsblk -J -O",
+      "exit_status": 0
+    }
+  ]
+}

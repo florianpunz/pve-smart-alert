@@ -38,9 +38,16 @@ class Host:
         monkeypatch.setenv("FAKE_SMARTCTL_LOG", str(self.log))
 
     @classmethod
-    def of_node(cls, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, node: str) -> Host:
-        """A host made of the anonymized recording of one node of the test cluster."""
-        return cls(tmp_path, monkeypatch, RECORDINGS / f"test-cluster-{node}")
+    def of_node(
+        cls,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        node: str,
+        *,
+        prefix: str = "test-cluster",
+    ) -> Host:
+        """A host made of the anonymized recording of one node; by default of the test cluster."""
+        return cls(tmp_path, monkeypatch, RECORDINGS / f"{prefix}-{node}")
 
     def __call__(
         self, command: Sequence[str | Path], *, input_text: str | None = None, timeout: float

@@ -71,6 +71,17 @@ def test_a_wear_value_that_differs_from_the_web_interface_names_both(
     assert "  Wear:      44 % (endurance_used), the web interface shows 0 %\n" in text
 
 
+def test_the_intenso_ssd_names_its_source_without_the_web_interface_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The standalone host pve1: 3 % against 0 % in the web interface, less than 10 points apart.
+    text = report(Host.of_node(tmp_path, monkeypatch, "pve1", prefix="standalone").discover())
+
+    assert "  Wear:      3 % (endurance_used)\n" in text
+    assert "the web interface shows" not in text
+    assert "/dev/sdb" not in text
+
+
 def test_a_small_difference_names_only_the_value_of_the_tool(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
