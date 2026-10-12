@@ -10,11 +10,10 @@ None at the moment.
 
 ## Notification route
 
-The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4 and Q-N5 need a slow target and a degraded cluster and are answered in milestone M5; Q-N6 needs the Proxmox developers. Q-N9, whether `/etc/pve/corosync.conf` names the cluster, was answered on the test cluster on 2026-10-12; the answer is in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4, how long a slow target blocks the call, was answered on `pve1` on 2026-10-13, with the answer in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N5 needs a degraded cluster and is answered in milestone M5; Q-N6 needs the Proxmox developers. Q-N9, whether `/etc/pve/corosync.conf` names the cluster, was answered on the test cluster on 2026-10-12; the answer is in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-N4 | How long can the call block when an SMTP or webhook target is slow or unreachable? | Sets the timeout of the bridge | 120 seconds is enough |
 | Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used. Without quorum, `/etc/pve/corosync.conf` stays readable, so notifications keep the cluster name |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
 
@@ -41,12 +40,10 @@ Answered or narrowed in milestone M3, some only with feedback from users.
 
 ## Packaging and operation
 
-Answered in milestone M5.
+Answered in milestone M5. Q-P1 is answered by [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md), Q-P2 in [ARCHITECTURE.md](ARCHITECTURE.md) section 13, both on `pve1` on 2026-10-13.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-P1 | Which systemd sandboxing options can be used without breaking mail submission through the local mail system or the notification targets? | Hardening is desirable, but options that block privilege changes are known to break mail submission on some setups | Only priority and run-time limits are set until tested |
-| Q-P2 | Does the timer start a run immediately when the package is installed on a host that has been up for a while, and what happens on a package upgrade? | The first-run summary should arrive shortly after installation, and an upgrade should not cause surprises | Yes; an upgrade triggers one ordinary run |
 | Q-P3 | Can the package be installed and tested in a clean container with the Proxmox VE package repository in CI? | Needed for the automated package test ([ADR 0016](docs/adr/0016-test-strategy.md)) | Yes, with the public no-subscription repository |
 
 ## Hardware RAID

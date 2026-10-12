@@ -27,3 +27,21 @@ TimeoutStartSec=15min
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
+# Sandboxing that was tested on a real host with both transports and a check
+# (ADR 0025). The drives under /dev and the mail queue stay reachable.
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+NoNewPrivileges=yes

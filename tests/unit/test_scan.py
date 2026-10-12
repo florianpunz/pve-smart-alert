@@ -172,6 +172,7 @@ def test_the_command_prints_the_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     install(monkeypatch, Host.of_node(tmp_path, monkeypatch, "pve6"))
+    monkeypatch.setattr("sys.stderr.isatty", lambda: True)
 
     assert cli.main(["scan"]) == cli.EXIT_OK
 
@@ -180,6 +181,18 @@ def test_the_command_prints_the_report(
     assert "  Used by:   LVM volume group vg_data\n" in captured.out
     # Progress goes to standard error, so that the report stays clean.
     assert "reading /dev/sda [sat] ...\n" in captured.err
+
+
+def test_without_a_terminal_there_is_no_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A run of the timer logs one summary line, not one line per drive (FR-606).
+    install(monkeypatch, Host.of_node(tmp_path, monkeypatch, "pve6"))
+    monkeypatch.setattr("sys.stderr.isatty", lambda: False)
+
+    cli.main(["scan"])
+
+    assert "reading" not in capsys.readouterr().err
 
 
 def test_a_failed_scan_ends_with_one(

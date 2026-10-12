@@ -932,8 +932,9 @@ class SystemRunner:
 
 ACTIVE_TIMER = (
     "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n"
-    "TimersMonotonic={ OnBootUSec=3min ; next_elapse=0 } ;"
-    " { OnUnitActiveUSec=30min ; next_elapse=1h }\n"
+    # As systemd 257 of Proxmox VE 9.2 writes it: one line per entry.
+    "TimersMonotonic={ OnUnitActiveUSec=30min ; next_elapse=5d 1h 29min 13.893039s }\n"
+    "TimersMonotonic={ OnBootUSec=3min ; next_elapse=3min }\n"
 )
 
 

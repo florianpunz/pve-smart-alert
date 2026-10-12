@@ -218,7 +218,9 @@ State: in progress on the branch `feature/m5-packaging`.
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package; only the timer is enabled.
 - Done: the lines `timer`, `pve` and `smartd` of `doctor`, which complete FR-603 except the unsupported controllers of M6.
 - Done: `scripts/install.sh`; the package test of ADR 0016 in a clean container in CI (`scripts/package-test.sh`); the release workflow `.github/workflows/release.yml`.
-- Next: the package test passing in CI (Q-P3), the tests on `pve1` (timer, upgrade, reboot, failure mail, purge, Q-P2, Q-N4), and the sandboxing decision (Q-P1).
+- Done on `pve1` with test builds of 0.5.0 (2026-10-13): the installation starts the timer and the first check at once, which sent the first-run summary; an upgrade keeps the state and sends no summary (Q-P2); a run made to fail on purpose with a drop-in sent one failure mail, which reached `proxmox-mail-forward`, and a second failure on the same day sent none; a run skipped because of the lock exited 3 and counted as success; `systemd-analyze verify` accepts the units; an unreachable SMTP target blocks the bridge for about 5 seconds and a webhook target for about 10 (Q-N4). The sandboxing options of [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) were tested with both transports and a check, and the sandboxed service sent a notification through each transport (Q-P1).
+- The tests on `pve1` found two faults, both fixed with tests: `doctor` did not name the interval of the timer, because systemd writes the monotonic settings as one line per entry; and the run logged one progress line per drive to the journal besides its summary line (FR-606).
+- Next: the run after a reboot and the purge on `pve1`, the package test passing in CI (Q-P3), then the acceptance on the test cluster.
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 

@@ -353,6 +353,8 @@ The bridge loads `PVE::Notify`, checks that the expected function exists, adds t
 It answers on standard output with `{"ok": true}` or `{"ok": false, "error": "..."}` and exits with 0 or non-zero accordingly. What the notification library logs to standard error is passed through and captured by the Python side.
 With the single argument `--check`, the bridge only loads the module and looks for the function, reads no request and sends nothing; `pve-smart-alert doctor` runs it this way.
 
+Checked on `pve1` (Proxmox VE 9.2.3, 2026-10-13, answers Q-N4): the notification library works through the matched targets one after the other, and the call returns after the last. An SMTP target at an address that does not answer gave up after about 5 seconds with `Connection error: timed out`, a webhook target after about 10 seconds with `timeout: global`; with both and a working target the call took 16 seconds and the notification counted as handed over, because one target succeeded. The timeout of 120 seconds of the transport therefore covers about a dozen targets that do not answer.
+
 Checked on Proxmox VE 9.2 (2026-10-04, [Research 01](docs/research/01-notification-integration.md#route-b-pvenotify)): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `` notified via target `NAME` `` or `` could not notify via target `NAME`: REASON ``. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
 
 ### Routing check
@@ -543,7 +545,9 @@ TimeoutStartSec=2min
 - Exit status 3, a run skipped because another run holds the lock, counts as success and does not start the failure reporter.
 - `report-failure` is a POSIX shell script that uses none of the code of the tool. It sends the last 30 lines of the journal of the check service as mail to root through `/usr/sbin/sendmail`, with the subject `[pve-smart-alert] ERROR <host>: the drive health check failed`. The stamp file `/run/pve-smart-alert/failure-reported` holds the day (UTC) of the last mail, so at most one mail is sent per day; it is written only after the mail command took the message, and a reboot clears it.
 
-Sandboxing options of systemd are applied only where they are known not to interfere with mail submission or with the notification targets, which run inside the bridge process. Which options are safe is an open question to be settled in the packaging milestone (Q-P1).
+The check service is sandboxed with the options of [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md), which were tested on a real host with both transports and a check; it keeps the drives under `/dev` and the mail queue reachable. The failure service is not sandboxed.
+
+Checked on `pve1` (Proxmox VE 9.2.3, systemd 257, 2026-10-13, answers Q-P2): installing the package enables and starts the timer, which elapses at once on a host that has been up for longer than `OnBootSec`; the first check started six seconds after the installation and sent the first-run summary, and the next run followed 30 minutes later. An upgrade restarts the timer without starting a run; the state is kept, and no first-run summary is sent. A run started by hand counts as the last activation of the service, so the next timer run follows 30 minutes after it.
 
 ## 14. Security
 

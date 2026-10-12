@@ -435,11 +435,13 @@ def _unit_properties(systemctl: Path, unit: str, *, runner: ProcessRunner) -> di
         return None
     if not result.ok:
         return None
-    properties = {}
+    # systemd writes a property with several entries, such as the monotonic
+    # settings of a timer, as one line per entry; they are joined.
+    properties: dict[str, str] = {}
     for line in result.stdout.splitlines():
         key, separator, value = line.partition("=")
         if separator:
-            properties[key] = value
+            properties[key] = f"{properties[key]} ; {value}" if key in properties else value
     return properties
 
 

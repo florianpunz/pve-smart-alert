@@ -164,3 +164,24 @@ def test_a_mail_that_was_not_taken_is_tried_again(reporter: dict[str, str], tmp_
 
     assert failed.returncode == 1
     assert not (tmp_path / "run" / "failure-reported").exists()
+
+
+def test_the_service_is_sandboxed_as_adr_0025_decided() -> None:
+    service = unit("pve-smart-alert.service")["Service"]
+
+    for option in (
+        "PrivateTmp",
+        "ProtectKernelTunables",
+        "ProtectKernelModules",
+        "ProtectControlGroups",
+        "NoNewPrivileges",
+    ):
+        assert service[option] == "yes"
+    assert service["ProtectSystem"] == "full"
+    # smartctl needs the drives, and the mail queue must stay writable.
+    assert "PrivateDevices" not in service
+    assert "DevicePolicy" not in service
+    assert service["ProtectSystem"] != "strict"
+    # The last-resort path stays plain.
+    failure = unit("pve-smart-alert-failure.service")["Service"]
+    assert not any(key.startswith(("Protect", "Private", "Restrict")) for key in failure)
