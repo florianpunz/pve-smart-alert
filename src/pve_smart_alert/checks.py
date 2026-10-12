@@ -195,7 +195,10 @@ CATALOG: Final[Mapping[str, Check]] = {
             ATA_CLASSES,
             CheckKind.CONDITION,
             "an ATA attribute at or below its vendor threshold, except temperature attributes",
-            severity=Severity.WARNING,
+            # Without a fixed severity: the evaluator decides by the kind of
+            # the attribute, an old-age attribute is a warning and a pre-fail
+            # attribute a critical finding (docs/check-catalog.md).
+            severity=None,
         ),
         Check(
             "ata.reallocated_sectors",
@@ -574,11 +577,21 @@ def _attribute_failing(snapshot: Snapshot, item: EffectiveCheck) -> Finding | No
             Severity.CRITICAL,
             f"pre-fail attributes at or below their vendor threshold: {names}",
         )
-    return _flag(item, f"old-age attributes at or below their vendor threshold: {names}")
+    return _finding(
+        item, Severity.WARNING, f"old-age attributes at or below their vendor threshold: {names}"
+    )
 
 
 def _temperature_attribute(attribute: FailingAttribute) -> bool:
-    """Whether an attribute is a temperature attribute, which is excluded here."""
+    """Whether an attribute is a temperature attribute, which is excluded here.
+
+    The rule is heuristic, in this order of strength: the two standard
+    attributes 190 and 194 are the temperature on every drive seen so far,
+    and the name is checked as well so that an attribute of a vendor that
+    reports the temperature on an id of its own is still excluded. The
+    exclusion exists because temperature attributes are the well-known
+    source of false findings (docs/check-catalog.md, Research 03).
+    """
     return "temp" in attribute.name.lower() or attribute.id in (190, 194)
 
 
