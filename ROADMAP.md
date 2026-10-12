@@ -11,7 +11,8 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M1: Walking skeleton with notifications | Done |
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
-| M4 to M7 | Planned |
+| M4: State and notification policy | In progress |
+| M5 to M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -175,6 +176,11 @@ Result you can test, on one node, with the fake smartctl replaying a scenario st
 10. Deleting the state file leads to one summary on the next run, not to individual alerts.
 
 After this milestone the real smartctl is configured again and `pve-smart-alert check` can be run by hand against the real drives.
+
+State: in progress on the branch `feature/m4-state`.
+
+- Done: the state store of `state.py` with atomic replacement, the setting aside of a corrupt file or one of a newer schema, the migration mechanism and the clamping of future timestamps ([ARCHITECTURE.md](ARCHITECTURE.md) section 9).
+- Next: the scenario test frame with an injected clock, then the notification planner.
 
 ## M5: Packaging, timer and installation (M)
 
