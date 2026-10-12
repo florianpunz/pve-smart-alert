@@ -433,6 +433,14 @@ def test_the_margin_of_the_spare_check_can_be_overridden() -> None:
     assert "nvme.spare" not in settings_for(config, snapshot)
 
 
+def test_the_margin_of_the_spare_check_can_be_set_to_zero() -> None:
+    # A configured 0 must not fall back to the default of 15 (FR-402).
+    snapshot = nvme({"nvme.available_spare": 20, "nvme.available_spare_threshold": 10})
+    config = Config(checks={"nvme.spare": CheckOverride(warning=0)})
+
+    assert "nvme.spare" not in settings_for(config, snapshot)
+
+
 def test_the_defaults_are_the_catalog() -> None:
     settings = default_checks(DriveClass.HDD)
 

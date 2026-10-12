@@ -602,7 +602,11 @@ def _spare(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
             value=spare,
             threshold=limit,
         )
-    margin = (item.thresholds.warning if item.thresholds is not None else None) or 15
+    # The margin is the warning threshold of the check; a configured 0 is a
+    # configured 0, not the default (FR-402).
+    margin = item.thresholds.warning if item.thresholds is not None else None
+    if margin is None:
+        margin = 15
     if spare <= limit + margin:
         return _finding(
             item,
