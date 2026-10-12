@@ -180,7 +180,8 @@ After this milestone the real smartctl is configured again and `pve-smart-alert 
 State: in progress on the branch `feature/m4-state`.
 
 - Done: the state store of `state.py` with atomic replacement, the setting aside of a corrupt file or one of a newer schema, the migration mechanism and the clamping of future timestamps ([ARCHITECTURE.md](ARCHITECTURE.md) section 9).
-- Next: the scenario test frame with an injected clock, then the notification planner.
+- Done: the scenario test frame: the scenarios of `tests/scenarios.py`, whose steps the fake smartctl replays and which can be written out for a real host, and a clock, a state directory and a recording transport in `tests/unit/frame.py`.
+- Next: the configuration keys of the notification policy, then the notification planner.
 
 ## M5: Packaging, timer and installation (M)
 

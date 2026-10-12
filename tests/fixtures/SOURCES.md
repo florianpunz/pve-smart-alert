@@ -16,6 +16,15 @@ They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py
 | `direct/standalone-pve1` | [Research 07](../../docs/research/07-standalone-host-pve1.md): the standalone test host `pve1` of the maintainer, not part of the test cluster, recorded on 2026-10-08 by the collection script. Intenso SSD; a USB device that the scan does not list | Anonymized | AGPL-3.0-or-later |
 | `direct/failing-hdd` | Derived by hand from the recording of `test-cluster-pve7`: a hard disk that fails several checks at once, for the tests of the evaluation of milestone M3 and its acceptance step 2. Identity and values replaced, derived on 2026-10-12 | Anonymized and modified | AGPL-3.0-or-later |
 
+## Scenarios: `../scenarios.py`
+
+The scenario tests of the notification policy replay a host whose drives change from run to run ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recording.
+
+| Scenario | Base | Changes |
+| --- | --- | --- |
+| `pending-sectors` | `direct/standalone-pve1` | The raw value of attribute 197 set to 3 and to 20, an attribute 197 entry with made-up flags added where the drive has none, and the drive removed from the scan and the recording |
+| `five-hot` | `direct/standalone-pve1` | Four copies of the drive as `/dev/sdb` to `/dev/sde` with the serial numbers `ANON-SN-0002` to `ANON-SN-0005` and without WWN, and the temperature of all five set to 65 °C |
+
 ## Notification configuration: `pvesh/`
 
 The answers of `pvesh get /cluster/notifications/matchers --output-format json` and `pvesh get /cluster/notifications/targets --output-format json`, one directory per configuration, as `matchers.json` and `targets.json`.
