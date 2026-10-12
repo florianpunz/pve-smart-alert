@@ -113,6 +113,20 @@ class Check:
     # Whether a threshold is met above its value and not at it: up to 100
     # command timeouts are what clean drives show (ADR 0010).
     strictly_above: bool = False
+    # In how many runs in a row a condition has to be seen before it is
+    # notified (ADR 0009). Temperature needs two (FR-308).
+    confirm_runs: int = 1
+
+    @property
+    def settable(self) -> frozenset[str]:
+        """The keys the configuration may set for this check (ADR 0011).
+
+        A condition takes its confirmation count as well; an event has none,
+        because an increase is reported when it is seen (ADR 0009).
+        """
+        if self.kind is CheckKind.CONDITION:
+            return self.slots | {"confirm_runs"}
+        return self.slots
 
 
 @dataclass(frozen=True)
@@ -128,11 +142,12 @@ class EffectiveCheck:
     check: Check
     enabled: bool
     thresholds: Thresholds | None = None
+    confirm_runs: int = 1
 
 
 # The temperature limits per class. A finding needs confirmation in two
-# consecutive runs before the first notification, which the notification
-# planner of milestone M4 adds (FR-308).
+# consecutive runs before the first notification (FR-308), which the
+# notification planner counts.
 TEMPERATURE_LIMITS: Final[Mapping[DriveClass, Thresholds]] = {
     DriveClass.HDD: Thresholds(warning=50, critical=60),
     DriveClass.SSD: Thresholds(warning=60, critical=70),
@@ -171,6 +186,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="temperature.current",
             unit="°C",
+            confirm_runs=2,
         ),
         Check(
             "wear",
@@ -396,6 +412,7 @@ def default_checks(drive_class: DriveClass) -> dict[str, EffectiveCheck]:
             check=check,
             enabled=check.enabled,
             thresholds=(check.per_class or {}).get(drive_class, check.thresholds),
+            confirm_runs=check.confirm_runs,
         )
         for check in CATALOG.values()
     }

@@ -17,6 +17,42 @@
 #   mail        mail to root only
 transport = "auto"
 
+# The notification policy (ADR 0009). A condition is notified once, again when
+# its severity rises, when its value worsens and the cool-down has passed, and
+# as a reminder after the interval of its severity; an event, an increase of
+# a cumulative counter, is notified when the counter rises above its baseline.
+#
+# When more drives than this have a notification due in one run, one summary
+# is sent instead of one notification per drive (FR-515).
+max_drive_notifications = 3
+# One notification with severity info when a condition has cleared (FR-513).
+recovery = true
+# One summary on the first run, which lists the drives and what they already
+# have, instead of a notification per finding (FR-516).
+first_run_summary = true
+# A value that worsens at the same severity is notified at most once per this
+# time and drive (FR-512). A rise in severity is never held back.
+worsening_cooldown = "6h"
+# A counter that rises is notified at most once per this time, drive and
+# check.
+event_cooldown = "24h"
+# In how many runs in a row a condition has to be absent before it counts as
+# cleared.
+clear_runs = 2
+# In how many runs in a row a known drive has to be absent before it is
+# reported as missing (FR-309), and has to answer without usable data before
+# it is reported as unreadable (FR-310).
+missing_runs = 2
+unreadable_runs = 2
+
+[notify.reminder]
+# How long an unchanged condition waits before it is notified again, per
+# severity (FR-510). "never" switches the reminder off; the shortest interval
+# is "1h".
+critical = "3d"
+warning = "7d"
+notice = "never"
+
 [smartctl]
 # The smartctl program (ADR 0004). Tests and acceptance runs can point it at
 # a fake smartctl that replays recordings (ADR 0016).
@@ -61,6 +97,10 @@ exclude = []
 # overridden here for the whole host, and per drive in [[drive]]. A severity
 # that a check does not use by default can be set just the same; wear, for
 # example, never becomes critical by default (FR-307).
+#
+# A check of the kind condition also takes confirm_runs: in how many runs in
+# a row it has to be seen before it is notified. It is 1 for every condition
+# except the temperature, which needs 2 (FR-308).
 
 [checks."health.failed"]
 enabled = true
@@ -74,6 +114,7 @@ enabled = true
 enabled = true
 warning = { hdd = 50, ssd = 60, nvme = 70 }
 critical = { hdd = 60, ssd = 70, nvme = 80 }
+confirm_runs = 2
 
 [checks."wear"]
 enabled = true

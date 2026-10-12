@@ -4,7 +4,8 @@
 The file is `/etc/pve-smart-alert/config.toml`, its format and its failure
 behavior are described in ADR 0011 and ARCHITECTURE.md section 8.
 
-This module reads the keys that are implemented: `[notify] transport`,
+This module reads the keys that are implemented: `[notify]` with the
+transport and the settings of the notification policy (FR-404),
 `[smartctl]` with `path`, `timeout` and `detail`, the manual devices of
 `[[discovery.device]]`, the exclude rules of `[discovery]`, the global
 overrides of `[checks."<check-id>"]` and the per-drive overrides of
@@ -29,7 +30,8 @@ import json
 import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -71,7 +73,20 @@ _DETAIL_VALUES: Final = tuple(item.value for item in Detail)
 # the keys of `checks` are the identifiers of the catalog and `drive` is a
 # list of tables.
 _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
-    "notify": frozenset({"transport"}),
+    "notify": frozenset(
+        {
+            "transport",
+            "max_drive_notifications",
+            "recovery",
+            "first_run_summary",
+            "worsening_cooldown",
+            "event_cooldown",
+            "clear_runs",
+            "missing_runs",
+            "unreadable_runs",
+            "reminder",
+        }
+    ),
     "smartctl": frozenset({"path", "timeout", "detail"}),
     "discovery": frozenset({"device", "exclude"}),
 }
@@ -79,6 +94,23 @@ _DYNAMIC_SECTIONS: Final = ("checks", "drive")
 
 # The keys of a table that overrides one check (ADR 0011).
 _CHECK_KEYS: Final = ("enabled", "notice", "warning", "critical")
+
+# The keys of `[notify.reminder]`: one interval per severity (ADR 0009).
+_REMINDER_KEYS: Final = ("critical", "warning", "notice")
+
+# A reminder sooner than an hour would be a repetition, not a reminder, and
+# one later than a year is better written as "never". A cool-down may be
+# zero, which reports every worsening and every increase at once.
+_REMINDER_RANGE: Final = (timedelta(hours=1), timedelta(days=365))
+_COOLDOWN_RANGE: Final = (timedelta(0), timedelta(days=365))
+
+# The counts of runs (ADR 0009): at least one, and a count beyond a hundred
+# runs, two days at the default interval, would hide what it counts.
+_RUNS_RANGE: Final = (1, 100)
+_MAX_DRIVE_NOTIFICATIONS_RANGE: Final = (1, 1000)
+
+# The word that switches an interval off (ADR 0011).
+NEVER: Final = "never"
 
 # The names of the drive classes, as the configuration writes them.
 _CLASS_NAMES: Final = tuple(item.value for item in DriveClass)
@@ -126,10 +158,36 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class ReminderSettings:
+    """The `[notify.reminder]` section: the reminder interval per severity (ADR 0009).
+
+    `None` means that a condition of that severity is never reminded.
+    """
+
+    critical: timedelta | None = timedelta(days=3)
+    warning: timedelta | None = timedelta(days=7)
+    notice: timedelta | None = None
+
+    def interval(self, severity: str) -> timedelta | None:
+        """Return the interval of a severity of a finding, `None` for never."""
+        value: timedelta | None = getattr(self, severity, None)
+        return value
+
+
+@dataclass(frozen=True)
 class NotifySettings:
-    """The `[notify]` section."""
+    """The `[notify]` section: the transport and the notification policy (ADR 0009, FR-404)."""
 
     transport: TransportName = TransportName.AUTO
+    max_drive_notifications: int = 3
+    recovery: bool = True
+    first_run_summary: bool = True
+    worsening_cooldown: timedelta = timedelta(hours=6)
+    event_cooldown: timedelta = timedelta(hours=24)
+    clear_runs: int = 2
+    missing_runs: int = 2
+    unreadable_runs: int = 2
+    reminder: ReminderSettings = ReminderSettings()
 
 
 @dataclass(frozen=True)
@@ -218,6 +276,7 @@ class CheckOverride:
     notice: int | Mapping[str, int] | None = None
     warning: int | Mapping[str, int] | None = None
     critical: int | Mapping[str, int] | None = None
+    confirm_runs: int | None = None
 
 
 @dataclass(frozen=True)
@@ -324,7 +383,7 @@ def load_last_good(path: Path | None = LAST_GOOD_CONFIG_PATH) -> Config | None:
 def _to_json(config: Config) -> dict[str, object]:
     """Return the effective configuration as one JSON document (ADR 0011)."""
     return {
-        "notify": {"transport": config.notify.transport.value},
+        "notify": _notify_to_json(config.notify),
         "smartctl": {
             "path": str(config.smartctl.path),
             "timeout_seconds": config.smartctl.timeout_seconds,
@@ -344,6 +403,7 @@ def _to_json(config: Config) -> dict[str, object]:
                 "notice": override.notice,
                 "warning": override.warning,
                 "critical": override.critical,
+                "confirm_runs": override.confirm_runs,
             }
             for name, override in config.checks.items()
         },
@@ -360,6 +420,7 @@ def _to_json(config: Config) -> dict[str, object]:
                         "notice": override.notice,
                         "warning": override.warning,
                         "critical": override.critical,
+                        "confirm_runs": override.confirm_runs,
                     }
                     for name, override in entry.checks.items()
                 },
@@ -369,15 +430,84 @@ def _to_json(config: Config) -> dict[str, object]:
     }
 
 
+def _notify_to_json(settings: NotifySettings) -> dict[str, object]:
+    """Return `[notify]` as the last-good document keeps it, durations in seconds."""
+    reminder = settings.reminder
+    return {
+        "transport": settings.transport.value,
+        "max_drive_notifications": settings.max_drive_notifications,
+        "recovery": settings.recovery,
+        "first_run_summary": settings.first_run_summary,
+        "worsening_cooldown_seconds": settings.worsening_cooldown.total_seconds(),
+        "event_cooldown_seconds": settings.event_cooldown.total_seconds(),
+        "clear_runs": settings.clear_runs,
+        "missing_runs": settings.missing_runs,
+        "unreadable_runs": settings.unreadable_runs,
+        "reminder_seconds": {
+            name: None if value is None else value.total_seconds()
+            for name, value in (
+                ("critical", reminder.critical),
+                ("warning", reminder.warning),
+                ("notice", reminder.notice),
+            )
+        },
+    }
+
+
+def _notify_from_json(notify: Mapping[str, object]) -> NotifySettings:
+    """Return `[notify]` of a last-good document; a value it lacks keeps its default."""
+    default = NotifySettings()
+    reminders = _table_of(notify.get("reminder_seconds"))
+
+    def interval(name: str) -> timedelta | None:
+        if name not in reminders:
+            return default.reminder.interval(name)
+        value = reminders[name]
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return timedelta(seconds=value)
+        return None
+
+    def count(name: str) -> int:
+        value = notify.get(name)
+        fallback: int = getattr(default, name)
+        return value if isinstance(value, int) and not isinstance(value, bool) else fallback
+
+    def switch(name: str) -> bool:
+        value = notify.get(name)
+        fallback: bool = getattr(default, name)
+        return value if isinstance(value, bool) else fallback
+
+    return NotifySettings(
+        transport=TransportName(_json_text(notify, "transport") or TransportName.AUTO.value),
+        max_drive_notifications=count("max_drive_notifications"),
+        recovery=switch("recovery"),
+        first_run_summary=switch("first_run_summary"),
+        worsening_cooldown=timedelta(
+            seconds=_number(
+                notify, "worsening_cooldown_seconds", default.worsening_cooldown.total_seconds()
+            )
+        ),
+        event_cooldown=timedelta(
+            seconds=_number(
+                notify, "event_cooldown_seconds", default.event_cooldown.total_seconds()
+            )
+        ),
+        clear_runs=count("clear_runs"),
+        missing_runs=count("missing_runs"),
+        unreadable_runs=count("unreadable_runs"),
+        reminder=ReminderSettings(
+            critical=interval("critical"), warning=interval("warning"), notice=interval("notice")
+        ),
+    )
+
+
 def _from_json(data: Mapping[str, object], *, source: Path) -> Config:
     """Return the configuration of a last-good document."""
     notify = _table_of(data.get("notify"))
     smartctl = _table_of(data.get("smartctl"))
     discovery = _table_of(data.get("discovery"))
     return Config(
-        notify=NotifySettings(
-            transport=TransportName(_json_text(notify, "transport") or TransportName.AUTO.value)
-        ),
+        notify=_notify_from_json(notify),
         smartctl=SmartctlSettings(
             path=Path(_json_text(smartctl, "path") or str(SMARTCTL_PATH)),
             timeout_seconds=_number(
@@ -434,11 +564,15 @@ def _overrides_of(table: Mapping[str, object]) -> dict[str, CheckOverride]:
 def _override_of(table: Mapping[str, object]) -> CheckOverride:
     """Return one check override of a last-good document."""
     enabled = table.get("enabled")
+    confirm_runs = table.get("confirm_runs")
     return CheckOverride(
         enabled=enabled if isinstance(enabled, bool) else None,
         notice=_json_number(table, "notice"),
         warning=_json_number(table, "warning"),
         critical=_json_number(table, "critical"),
+        confirm_runs=confirm_runs
+        if isinstance(confirm_runs, int) and not isinstance(confirm_runs, bool)
+        else None,
     )
 
 
@@ -498,19 +632,28 @@ def effective_checks(
     drive = drive_override(config, identity)
     result: dict[str, EffectiveCheck] = {}
     for name, item in default_checks(drive_class).items():
-        enabled = item.enabled
-        thresholds = item.thresholds
         global_override = config.checks.get(name)
         drive_check = drive.checks.get(name) if drive is not None else None
         for override in (global_override, drive_check):
-            if override is None:
-                continue
-            if override.enabled is not None:
-                enabled = override.enabled
-            if thresholds is not None:
-                thresholds = _merged(drive_class, thresholds, override)
-        result[name] = EffectiveCheck(check=item.check, enabled=enabled, thresholds=thresholds)
+            if override is not None:
+                item = _applied(item, override, drive_class)
+        result[name] = item
     return result
+
+
+def _applied(
+    item: EffectiveCheck, override: CheckOverride, drive_class: DriveClass | None
+) -> EffectiveCheck:
+    """Return the settings of a check with one override applied to them."""
+    thresholds = item.thresholds
+    if thresholds is not None and drive_class is not None:
+        thresholds = _merged(drive_class, thresholds, override)
+    return replace(
+        item,
+        enabled=item.enabled if override.enabled is None else override.enabled,
+        thresholds=thresholds,
+        confirm_runs=item.confirm_runs if override.confirm_runs is None else override.confirm_runs,
+    )
 
 
 def effective_check(config: Config, check: Check, drive_class: DriveClass | None) -> EffectiveCheck:
@@ -523,16 +666,12 @@ def effective_check(config: Config, check: Check, drive_class: DriveClass | None
     item = (
         default_checks(drive_class)[check.id]
         if drive_class is not None
-        else EffectiveCheck(check, check.enabled, check.thresholds)
+        else EffectiveCheck(check, check.enabled, check.thresholds, check.confirm_runs)
     )
     override = config.checks.get(check.id)
     if override is None:
         return item
-    enabled = item.enabled if override.enabled is None else override.enabled
-    thresholds = item.thresholds
-    if thresholds is not None and drive_class is not None:
-        thresholds = _merged(drive_class, thresholds, override)
-    return EffectiveCheck(check, enabled, thresholds)
+    return _applied(item, override, drive_class)
 
 
 def _merged(drive_class: DriveClass, current: Thresholds, override: CheckOverride) -> Thresholds:
@@ -655,8 +794,8 @@ def _check_override(
 ) -> CheckOverride:
     """Return one table that overrides one check, validated and normalized."""
     for key in table:
-        if key not in check.slots:
-            allowed = ", ".join(f'"{slot}"' for slot in sorted(check.slots))
+        if key not in check.settable:
+            allowed = ", ".join(f'"{slot}"' for slot in sorted(check.settable))
             raise ConfigError(
                 f'unknown key "{key}" in [{where}], this check accepts {allowed}',
                 key=f"{where}.{key}",
@@ -667,6 +806,7 @@ def _check_override(
         notice=_threshold(table, "notice", check, where, text),
         warning=_threshold(table, "warning", check, where, text),
         critical=_threshold(table, "critical", check, where, text),
+        confirm_runs=_runs(table, "confirm_runs", f"{where}.confirm_runs", text),
     )
     normalized = _normalized(override, check)
     return normalized if normalized is not None else CheckOverride()
@@ -679,7 +819,10 @@ def _normalized(override: CheckOverride, check: Check) -> CheckOverride | None:
     loading it must change nothing (ADR 0011).
     """
     values: dict[str, object] = {
-        "enabled": override.enabled if override.enabled != check.enabled else None
+        "enabled": override.enabled if override.enabled != check.enabled else None,
+        "confirm_runs": override.confirm_runs
+        if override.confirm_runs != check.confirm_runs
+        else None,
     }
     for severity in ("notice", "warning", "critical"):
         value = getattr(override, severity)
@@ -816,12 +959,136 @@ def _table_of(value: object) -> Mapping[str, object]:
 
 
 def _notify(section: Mapping[str, object], text: str) -> NotifySettings:
+    """Return `[notify]`: the transport and the settings of the policy (FR-404)."""
+    settings = NotifySettings()
     raw_transport = _string(section, "transport", "notify.transport", text)
-    if raw_transport is None:
-        return NotifySettings()
-    return NotifySettings(
-        transport=TransportName(_choice(raw_transport, _TRANSPORT_VALUES, "notify.transport", text))
+    if raw_transport is not None:
+        settings = replace(
+            settings,
+            transport=TransportName(
+                _choice(raw_transport, _TRANSPORT_VALUES, "notify.transport", text)
+            ),
+        )
+    values: dict[str, object] = {}
+    limit = _whole(
+        section,
+        "max_drive_notifications",
+        "notify.max_drive_notifications",
+        text,
+        _MAX_DRIVE_NOTIFICATIONS_RANGE,
     )
+    if limit is not None:
+        values["max_drive_notifications"] = limit
+    for key in ("recovery", "first_run_summary"):
+        switch = _boolean(section, key, f"notify.{key}", text)
+        if switch is not None:
+            values[key] = switch
+    for key in ("worsening_cooldown", "event_cooldown"):
+        cooldown = _interval(section, key, f"notify.{key}", text, _COOLDOWN_RANGE, never=False)
+        if cooldown is not None:
+            values[key] = cooldown
+    for key in ("clear_runs", "missing_runs", "unreadable_runs"):
+        runs = _runs(section, key, f"notify.{key}", text)
+        if runs is not None:
+            values[key] = runs
+    reminder = section.get("reminder")
+    if reminder is not None:
+        values["reminder"] = _reminder(reminder, text)
+    return replace(settings, **values)  # type: ignore[arg-type]
+
+
+def _reminder(table: object, text: str) -> ReminderSettings:
+    """Return `[notify.reminder]`, one interval or "never" per severity (ADR 0009)."""
+    if not isinstance(table, dict):
+        raise ConfigError(
+            '"notify.reminder" must be a table, such as [notify.reminder]',
+            key="notify.reminder",
+            line=_find_line(text, "reminder"),
+        )
+    for key in table:
+        if key not in _REMINDER_KEYS:
+            raise ConfigError(
+                f'unknown key "{key}" in section [notify.reminder]',
+                key=f"notify.reminder.{key}",
+                line=_find_line(text, key),
+            )
+    settings = ReminderSettings()
+    values: dict[str, timedelta | None] = {}
+    for key in _REMINDER_KEYS:
+        if key not in table:
+            continue
+        values[key] = _interval(
+            table, key, f"notify.reminder.{key}", text, _REMINDER_RANGE, never=True
+        )
+    return replace(settings, **values)
+
+
+def _interval(
+    section: Mapping[str, object],
+    key: str,
+    dotted: str,
+    text: str,
+    bounds: tuple[timedelta, timedelta],
+    *,
+    never: bool,
+) -> timedelta | None:
+    """Return a duration of the policy, or `None` when it is absent or "never".
+
+    "never" is accepted only where `never` says so; the caller tells an absent
+    key from "never" by looking at the section.
+    """
+    raw = _string(section, key, dotted, text)
+    if raw is None:
+        return None
+    if raw == NEVER:
+        if never:
+            return None
+        raise ConfigError(
+            f'"{dotted}" cannot be "never"; "0s" switches it off',
+            key=dotted,
+            line=_find_line(text, key),
+        )
+    value = timedelta(seconds=_duration(raw, dotted, text))
+    low, high = bounds
+    if not low <= value <= high:
+        word = ' or "never"' if never else ""
+        raise ConfigError(
+            f'"{dotted}" must be between {_written(low)} and {_written(high)}{word}, found "{raw}"',
+            key=dotted,
+            line=_find_line(text, key),
+        )
+    return value
+
+
+def _written(value: timedelta) -> str:
+    """Return a duration as the configuration writes it, such as "6h"."""
+    seconds = int(value.total_seconds())
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds >= size and seconds % size == 0:
+            return f'"{seconds // size}{unit}"'
+    return f'"{seconds}s"'
+
+
+def _runs(section: Mapping[str, object], key: str, dotted: str, text: str) -> int | None:
+    """Return a count of runs (ADR 0009), or `None` when it is absent."""
+    return _whole(section, key, dotted, text, _RUNS_RANGE)
+
+
+def _whole(
+    section: Mapping[str, object], key: str, dotted: str, text: str, bounds: tuple[int, int]
+) -> int | None:
+    """Return a whole number within bounds, or `None` when it is absent."""
+    value = section.get(key)
+    if value is None:
+        return None
+    low, high = bounds
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise ConfigError(
+            f'"{dotted}" must be a whole number from {low} to {high}, found {value!r}',
+            key=dotted,
+            line=_find_line(text, key),
+        )
+    return value
 
 
 def _smartctl(section: Mapping[str, object], text: str) -> SmartctlSettings:

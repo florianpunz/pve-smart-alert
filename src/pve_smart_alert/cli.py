@@ -11,6 +11,7 @@ import argparse
 import sys
 import tomllib
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -227,7 +228,7 @@ def _test_notification(arguments: argparse.Namespace) -> int:
 
     settings = config.notify
     if arguments.transport is not None:
-        settings = NotifySettings(transport=TransportName(arguments.transport))
+        settings = replace(settings, transport=TransportName(arguments.transport))
 
     notification = render_test_notification(
         SEVERITY_FOR_PVE[PveSeverity(arguments.severity)], node=node_name()

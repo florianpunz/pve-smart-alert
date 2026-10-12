@@ -36,6 +36,10 @@ def documented_checks(path: Path) -> dict[str, set[str]]:
 def documented_keys_of(check: Check) -> set[str]:
     """Return the keys of a check table that have a default to document."""
     keys = {"enabled"}
+    # The confirmation count is documented where it differs from 1; the
+    # comment above the checks says that every condition takes it.
+    if check.confirm_runs != 1:
+        keys.add("confirm_runs")
     defaults = list(check.per_class.values()) if check.per_class is not None else [check.thresholds]
     for thresholds in defaults:
         if thresholds is None:
@@ -64,6 +68,8 @@ def test_the_reference_documents_every_key_of_the_program() -> None:
     assert {name: keys for name, keys in sections.items() if name != "checks"} == {
         section: set(keys) for section, keys in _SCHEMA.items()
     }
+    document = tomllib.loads(REFERENCE.read_text(encoding="utf-8"))
+    assert set(document["notify"]["reminder"]) == {"critical", "warning", "notice"}
     # Every check of the catalog has its section, with exactly the keys that
     # have a default; the keys a check accepts are a superset of them, and a
     # severity without a default has no value to document (ADR 0011).
@@ -71,7 +77,7 @@ def test_the_reference_documents_every_key_of_the_program() -> None:
     documented = documented_checks(REFERENCE)
     assert documented == {check.id: documented_keys_of(check) for check in CATALOG.values()}
     for check in CATALOG.values():
-        assert documented[check.id] <= check.slots
+        assert documented[check.id] <= check.settable
     # The per-drive overrides are documented as a commented example, because
     # a real entry would select a drive.
     assert "[[drive]]" in REFERENCE.read_text(encoding="utf-8")

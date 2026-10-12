@@ -13,6 +13,7 @@ only for a concrete drive. What a run uses for one drive is named by
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import timedelta
 from typing import Final
 
 from pve_smart_alert.checks import CATALOG, Check
@@ -58,10 +59,30 @@ def render(
 def _settings(config: Config, document: Mapping[str, object]) -> list[str]:
     """Return the lines of `[notify]`, `[smartctl]` and `[discovery]`."""
     lines = ["", "[notify]"]
+    notify = config.notify
     section = _table_of(document.get("notify"))
-    lines.append(
-        _line("transport", f'"{config.notify.transport.value}"', _origin(section, "transport"))
-    )
+    lines.append(_line("transport", f'"{notify.transport.value}"', _origin(section, "transport")))
+    for key, value in (
+        ("max_drive_notifications", str(notify.max_drive_notifications)),
+        ("recovery", _boolean(notify.recovery)),
+        ("first_run_summary", _boolean(notify.first_run_summary)),
+        ("worsening_cooldown", f'"{_interval(notify.worsening_cooldown)}"'),
+        ("event_cooldown", f'"{_interval(notify.event_cooldown)}"'),
+        ("clear_runs", str(notify.clear_runs)),
+        ("missing_runs", str(notify.missing_runs)),
+        ("unreadable_runs", str(notify.unreadable_runs)),
+    ):
+        lines.append(_line(key, value, _origin(section, key)))
+    reminder = _table_of(section.get("reminder"))
+    lines.extend(("", "[notify.reminder]"))
+    for severity in ("critical", "warning", "notice"):
+        lines.append(
+            _line(
+                severity,
+                f'"{_interval(notify.reminder.interval(severity))}"',
+                _origin(reminder, severity),
+            )
+        )
 
     smartctl = config.smartctl
     section = _table_of(document.get("smartctl"))
@@ -88,12 +109,16 @@ def _checks(config: Config, document: Mapping[str, object]) -> list[str]:
     lines = ["", "[checks]"]
     for check in CATALOG.values():
         raw_check = _table_of(file_checks.get(check.id))
-        enabled = effective_check(config, check, None).enabled
-        parts = [_value("enabled", str(enabled).lower(), _origin(raw_check, "enabled"))]
+        item = effective_check(config, check, None)
+        parts = [_value("enabled", str(item.enabled).lower(), _origin(raw_check, "enabled"))]
         if check.per_class is not None:
             parts.extend(_per_class(config, check, raw_check))
         else:
             parts.extend(_single(config, check, raw_check))
+        if "confirm_runs" in check.settable:
+            parts.append(
+                _value("confirm_runs", str(item.confirm_runs), _origin(raw_check, "confirm_runs"))
+            )
         lines.append(f'  "{check.id}"  ' + ", ".join(parts))
     return lines
 
@@ -154,13 +179,16 @@ def _drives(config: Config) -> list[str]:
                 value = getattr(override, severity)
                 if value is not None:
                     parts.append(f"{severity} = {_number_or_table(value)}")
+            if override.confirm_runs is not None:
+                parts.append(f"confirm_runs = {override.confirm_runs}")
             lines.append(f'  checks."{name}"  ' + (", ".join(parts) or "nothing"))
     return lines
 
 
 def _line(key: str, value: str, origin: str) -> str:
     """Return one line of a section. The keys line up."""
-    return f"  {key + ' =':<12}{value:<44} ({origin})"
+    entry = f"{key} = {value}"
+    return f"  {entry:<56} ({origin})"
 
 
 def _value(key: str, value: str, origin: str) -> str:
@@ -172,6 +200,15 @@ def _number_or_table(value: int | Mapping[str, int]) -> str:
         inner = ", ".join(f"{name} = {number}" for name, number in value.items())
         return "{ " + inner + " }"
     return str(value)
+
+
+def _boolean(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _interval(value: timedelta | None) -> str:
+    """Return an interval as the configuration writes it, "never" for none."""
+    return "never" if value is None else _duration(value.total_seconds())
 
 
 def _origin(section: Mapping[str, object], key: str) -> str:

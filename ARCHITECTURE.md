@@ -198,6 +198,9 @@ recovery = true
 first_run_summary = true
 worsening_cooldown = "6h"
 event_cooldown = "24h"
+clear_runs = 2
+missing_runs = 2
+unreadable_runs = 2
 
 [notify.reminder]
 critical = "3d"
@@ -207,6 +210,7 @@ notice = "never"
 # Global override of one check
 [checks."temperature"]
 warning = { hdd = 48, ssd = 60, nvme = 72 }
+confirm_runs = 3
 
 [checks."ata.crc_errors"]
 enabled = false
@@ -225,7 +229,7 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-The loader of `config.py` accepts these keys since milestone M3: `transport` in `[notify]`; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)); the global overrides of `[checks."<check-id>"]`, which accept `enabled` and the thresholds `notice`, `warning` and `critical` that the check has, one number or, for the one check that differs per class, a table of the classes; and the per-drive overrides of `[[drive]]`, each with exactly one selector, an optional `comment`, `exclude`, `detail` and the same check overrides in a table `checks` (FR-403). Every other key in the example above is rejected as unknown until the milestone that implements it.
+The loader of `config.py` accepts these keys since milestone M3: `transport` in `[notify]`, and since milestone M4 the settings of the notification policy in `[notify]` and `[notify.reminder]` (FR-404), with the defaults of [ADR 0009](docs/adr/0009-notification-policy.md): a reminder is a duration from `"1h"` to `"365d"` or `"never"`, a cool-down a duration from `"0s"` to `"365d"`, a count of runs a whole number from 1 to 100, and `max_drive_notifications` one from 1 to 1000; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)); the global overrides of `[checks."<check-id>"]`, which accept `enabled`, the thresholds `notice`, `warning` and `critical` that the check has, one number or, for the one check that differs per class, a table of the classes, and for a check of the kind condition its confirmation count `confirm_runs` (1, and 2 for the temperature, FR-308); and the per-drive overrides of `[[drive]]`, each with exactly one selector, an optional `comment`, `exclude`, `detail` and the same check overrides in a table `checks` (FR-403). Every other key in the example above is rejected as unknown until the milestone that implements it.
 
 After every successful validation the effective configuration is saved as `last-good-config.json` in the state directory (ADR 0011). A file that does not validate at run time leads to the last good one, or to the built-in defaults when there is none, together with a tool-level warning (FR-406); `pve-smart-alert doctor` reports the situation as a warning, and `pve-smart-alert config check` and `config show` answer from the same mechanism. An override that repeats the built-in default is dropped when the file is loaded, so that the reference, which lists every key with its default, changes nothing.
 

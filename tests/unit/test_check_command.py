@@ -244,6 +244,10 @@ def test_config_show_names_the_origin_of_each_value(
     # The classes that keep their default are named with it.
     assert "warning = hdd 48, ssd 60, nvme 70 (file)" in out
     assert "[[drive]]  none" in out
+    # The settings of the notification policy (FR-404).
+    assert "max_drive_notifications = 3" in out
+    assert 'notice = "never"' in out
+    assert "confirm_runs = 2 (default)" in out
 
 
 def test_config_show_defaults_prints_the_built_in_defaults(
