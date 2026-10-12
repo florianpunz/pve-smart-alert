@@ -11,7 +11,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M1: Walking skeleton with notifications | Done |
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
-| M4: State and notification policy | In progress |
+| M4: State and notification policy | Done |
 | M5 to M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
@@ -177,7 +177,7 @@ Result you can test, on one node, with the fake smartctl replaying a scenario st
 
 After this milestone the real smartctl is configured again and `pve-smart-alert check` can be run by hand against the real drives.
 
-State: in progress on the branch `feature/m4-state`.
+State: done. The acceptance passed on the standalone host `pve1` on 2026-10-12, with the package 0.4.0 and the fake smartctl, after all ten steps had passed as scenario tests. The work is on the branch `feature/m4-state`.
 
 - Done: the state store of `state.py` with atomic replacement, the setting aside of a corrupt file or one of a newer schema, the migration mechanism and the clamping of future timestamps ([ARCHITECTURE.md](ARCHITECTURE.md) section 9).
 - Done: the scenario test frame: the scenarios of `tests/scenarios.py`, whose steps the fake smartctl replays and which can be written out for a real host, and a clock, a state directory and a recording transport in `tests/unit/frame.py`.
@@ -186,7 +186,8 @@ State: in progress on the branch `feature/m4-state`.
 - Done: the event checks against the baselines of the state, the checks `drive.missing` and `drive.unreadable` in the catalog, and the detection of the tool conditions in `tool_conditions.py`.
 - Done: the renderer of `render.py` with the layout of ARCHITECTURE.md section 10 for a message about one drive, the summary, the first-run summary and a message about the tool, each compared with a golden file.
 - Done: the commands `pve-smart-alert check`, which runs the sequence of ARCHITECTURE.md section 3 in `run.py` and delivers through the transports, the dry run that prints the planned notifications, and `pve-smart-alert status`; the line `state` of `doctor`; and the ten acceptance steps below as scenario tests with an injected clock (`tests/unit/test_acceptance_m4.py`).
-- Next: the acceptance run on a host with the package and the fake smartctl, then the real smartctl again.
+- Acceptance on `pve1` (Proxmox VE 9.2.3, smartmontools 7.5, default matcher to `mail-to-root`), with the steps written by `python3 tests/scenarios.py build` on the host and `pve-smart-alert status` after every run: (1) the first run sent one summary that lists the drive, severity info; (2) the second run sent nothing; (3) "3 pending sectors" sent one warning that names `/dev/sda`, the model, the serial number, 3 pending sectors and the thresholds; (4) the same step again sent nothing; (5) "20 pending sectors" sent one critical notification, severity `error`, escalated from warning; (6) "healthy again" sent nothing in its first run and one recovery with severity info in its second; (7) "drive gone" sent nothing in its first run, one notification about the missing drive in its second, and nothing in a third; (8) with five drives too hot, the first hot run sent nothing while the temperature waited for its confirmation, the second sent one summary of the five drives, and a third sent nothing; (9) `status` showed the active condition, the waiting temperatures and the missing drive at each step; (10) after the state file was deleted, the next run sent one first-run summary with the existing finding. Every run exited 0, and the journal shows `notified via target mail-to-root` for each of the eight notifications. Afterwards `check` against the real smartctl sent one first-run summary and, in a second run, nothing, and `doctor` reported the lines `smartctl`, `bridge` and `state` as `ok`. The host was then set back to the package 0.3.0 with its configuration and last good configuration unchanged, checked by checksum, and without a state file. The logs stay outside the repository.
+- Open: the cluster name of a notification is read from `/etc/pve/corosync.conf`, which `pve1` does not have; Q-N9 asks for the check on a cluster node.
 
 ## M5: Packaging, timer and installation (M)
 

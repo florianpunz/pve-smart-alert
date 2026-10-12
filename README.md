@@ -7,13 +7,13 @@
 > **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. It does not run by itself yet: a timer arrives with M5, until then `pve-smart-alert check` is run by hand.
 >
 > <details>
-> <summary>In progress: M4, state and notification policy</summary>
+> <summary>Next: M5, packaging, timer and installation</summary>
 >
 > - **M0 (done):** development tooling
 > - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
 > - **M3 (done):** evaluation and configuration
-> - **M4 (in progress):** state and notification policy
+> - **M4 (done):** state and notification policy
 > - **M5 (planned):** packaging, timer and installation
 > - **M6 (planned):** SAS and hardware RAID on recorded data
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use

@@ -112,7 +112,7 @@ Notes:
 
 - `tool.state_reset` is a one-time event. It is mentioned in the summary that follows the reset and has no recovery message.
 - All others are conditions. They clear, with a recovery message, when the cause is gone.
-- `tool_conditions.py` detects them at the start of a run since milestone M4, except `tool.unsupported_controller`, which arrives with milestone M6. `tool.smartctl_too_old` is read from the version of the device scan, or, when the scan writes no JSON, from the first line of `smartctl --version`. `tool.transport_degraded` holds when the notify bridge, asked to load the notification system without sending, fails; with `transport = mail` there is no bridge to fail.
+- `tool_conditions.py` detects them at the start of a run since milestone M4, except `tool.unsupported_controller`, which arrives with milestone M6. `tool.smartctl_too_old` is read from the version of the device scan, or, when the scan writes no JSON, from the first line of `smartctl --version`, which starts with `smartctl 7.5` on `pve1` (smartmontools 7.5, checked on 2026-10-12). `tool.transport_degraded` holds when the notify bridge, asked to load the notification system without sending, fails; with `transport = mail` there is no bridge to fail.
 
 ## Deliberately not checked
 

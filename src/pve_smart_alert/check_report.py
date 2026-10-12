@@ -4,9 +4,9 @@
 One block per monitored drive that has findings, in the order of discovery:
 the drive with its name, model and serial number, then one line per finding
 with the check, its severity and what the check found. The summary counts the
-devices of the run and the findings by severity. The notifications that a
-real run would build from these findings arrive with milestone M4; nothing is
-sent and no state is changed here.
+devices of the run and the findings by severity. The command-line interface
+prints the notifications a run would send after it; nothing is sent and no
+state is changed.
 """
 
 from __future__ import annotations

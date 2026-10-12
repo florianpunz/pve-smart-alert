@@ -10,12 +10,13 @@ None at the moment.
 
 ## Notification route
 
-The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4 and Q-N5 need a slow target and a degraded cluster and are answered in milestone M5; Q-N6 needs the Proxmox developers.
+The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4 and Q-N5 need a slow target and a degraded cluster and are answered in milestone M5; Q-N6 needs the Proxmox developers; Q-N9 needs a node of the test cluster.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
 | Q-N4 | How long can the call block when an SMTP or webhook target is slow or unreachable? | Sets the timeout of the bridge | 120 seconds is enough |
 | Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used |
+| Q-N9 | Does `/etc/pve/corosync.conf` on a cluster node name the cluster with the key `cluster_name` in its `totem` section, as corosync.conf(5) describes, and is it readable when the cluster has no quorum? | A notification names the cluster from it (FR-507); without it the host is named alone | Yes, and it is readable while pmxcfs runs. To be checked on a node of the test cluster with `grep cluster_name /etc/pve/corosync.conf` |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
 
 ## smartctl output and discovery
