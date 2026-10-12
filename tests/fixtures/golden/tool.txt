@@ -1,0 +1,16 @@
+Subject: [pve-smart-alert] WARNING pve1: pve-smart-alert: notification transport degraded
+
+PVE SMART Alert on pve1 has a problem of its own.
+
+Host:       pve1 (cluster: lab)
+
+Findings:
+  WARNING   tool.transport_degraded  new
+            Notification transport: the notify bridge is missing at
+            /usr/libexec/pve-smart-alert/notify-bridge; notifications are sent
+            as mail to root, without their severity
+
+What to do:
+  Run pve-smart-alert doctor to see why the notify bridge fails.
+
+pve-smart-alert 0.4.0 on pve1

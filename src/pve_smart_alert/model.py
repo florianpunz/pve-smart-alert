@@ -314,6 +314,37 @@ class Snapshot:
     wear_source: WearSource | None = None
 
 
+class CheckKind(StrEnum):
+    """Whether a check watches a state or an increase (docs/check-catalog.md).
+
+    A *condition* is active until it clears, with reminders and recovery. An
+    *event* is an increase of a cumulative counter above the stored baseline;
+    without a baseline there is nothing to report (FR-306).
+    """
+
+    CONDITION = "condition"
+    EVENT = "event"
+
+
+@dataclass(frozen=True)
+class Finding:
+    """What one check found about one drive (ARCHITECTURE.md section 4).
+
+    `value` is the current value of the source and `threshold` the one that
+    was crossed; both are `None` for a plain flag. `text` names the finding
+    with its value and threshold, for the report of a dry run and for a
+    notification. `check` is the stable identifier of the check, which the
+    configuration and the notifications name as well (ADR 0010).
+    """
+
+    check: str
+    kind: CheckKind
+    severity: Severity
+    text: str
+    value: int | None = None
+    threshold: int | None = None
+
+
 def _present(value: str | None) -> str | None:
     """Return a value normalized, or `None` when it is missing or empty."""
     if value is None:

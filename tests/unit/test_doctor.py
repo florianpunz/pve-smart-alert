@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from pve_smart_alert import cli
-from pve_smart_alert.config import NotifySettings, SmartctlSettings, TransportName
+from pve_smart_alert.config import (
+    NotifySettings,
+    SmartctlSettings,
+    TransportName,
+    load_config,
+    save_last_good,
+)
 from pve_smart_alert.doctor import (
     FALLBACK_ADVICE,
     TEMPLATES,
@@ -26,12 +33,14 @@ from pve_smart_alert.doctor import (
     check_mail,
     check_routing,
     check_smartctl,
+    check_state,
     check_templates,
     read_routes,
     run_doctor,
 )
 from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.routing import NotificationConfig, RoutingError
+from pve_smart_alert.state import LastRun, State, save_state
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 
 
@@ -104,15 +113,35 @@ def test_the_configuration_is_reported_with_its_transport(tmp_path: Path) -> Non
     assert config.notify.transport is TransportName.MAIL
 
 
-def test_an_unusable_configuration_fails(tmp_path: Path) -> None:
+def test_an_unusable_configuration_warns_and_a_run_continues(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
 
-    result, config = check_config(path)
+    result, config = check_config(path, last_good=None)
 
-    assert result.status is Status.FAIL
+    # The run continues with the built-in defaults, so this is a warning and
+    # not a failure (FR-406).
+    assert result.status is Status.WARN
     assert "unknown key" in result.detail
-    assert config is None
+    assert "built-in defaults" in result.detail
+    assert config is not None
+    assert config.notify.transport is TransportName.AUTO
+
+
+def test_an_unusable_configuration_names_the_last_good_one(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+    good = tmp_path / "good.toml"
+    good.write_text('[notify]\ntransport = "mail"\n', encoding="utf-8")
+    last_good = tmp_path / "last-good-config.json"
+    save_last_good(load_config(good), last_good)
+
+    result, config = check_config(path, last_good=last_good)
+
+    assert result.status is Status.WARN
+    assert "last good configuration" in result.detail
+    assert config is not None
+    assert config.notify.transport is TransportName.MAIL
 
 
 # The bridge
@@ -727,6 +756,7 @@ def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) ->
         override_dir=tmp_path / "override",
         pvesh_path=tmp_path / "pvesh",
         forward_path=tmp_path / "forward",
+        state_path=tmp_path / "state.json",
         node="pve1",
         runner=HostRunner(),
     )
@@ -746,6 +776,7 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "mail",
         "routing",
         "fallback",
+        "state",
         "pending",
     ]
     assert all(result.status is not Status.FAIL for result in results)
@@ -816,3 +847,45 @@ def test_a_warning_does_not_end_with_an_error(
     assert cli.main(["doctor"]) == cli.EXIT_OK
 
     assert "bridge:      warn" in capsys.readouterr().out
+
+
+# The state file (FR-603)
+
+
+def test_without_a_state_file_the_next_run_is_a_first_run(tmp_path: Path) -> None:
+    result = check_state(tmp_path / "state.json")
+
+    assert result.status is Status.OK
+    assert "first run" in result.detail
+
+
+def test_the_state_file_names_the_last_run(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    started = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
+    save_state(State(last_run=LastRun(started=started, finished=started, result="ok")), path)
+
+    result = check_state(path)
+
+    assert result.status is Status.OK
+    assert "last run 2026-10-12T08:00:00Z, ok, 0 active conditions" in result.detail
+
+
+def test_a_last_run_that_could_not_deliver_warns(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    started = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
+    run = LastRun(started, started, "notifications not delivered", notifications_failed=1)
+    save_state(State(last_run=run), path)
+
+    assert check_state(path).status is Status.WARN
+
+
+def test_a_corrupt_state_file_warns_and_is_left_alone(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text("{broken", encoding="utf-8")
+
+    result = check_state(path)
+
+    assert result.status is Status.WARN
+    assert result.advice is not None
+    assert "sets the file aside" in result.advice
+    assert path.read_text(encoding="utf-8") == "{broken"

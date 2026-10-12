@@ -10,8 +10,9 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M0: Repository bootstrap | Done, except that the repository is still private |
 | M1: Walking skeleton with notifications | Done |
 | M2: Discovery and collection for SATA and NVMe | Done |
-| M3: Evaluation and configuration | In progress |
-| M4 to M7 | Planned |
+| M3: Evaluation and configuration | Done |
+| M4: State and notification policy | Done |
+| M5 to M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -142,6 +143,13 @@ Result you can test:
 
 Open questions this milestone answers: Q-T1 to Q-T4.
 
+State: done. The acceptance passed on the standalone host `pve1` and on all three nodes of the test cluster on 2026-10-12, with the package 0.3.0 after three fixes from the run on `pve1`.
+
+- Done: the catalog of `checks.py` with the evaluation of one snapshot, the severities and the model of ADR 0010; the configuration sections `[checks."<id>"]` and `[[drive]]` with strict validation, the normalization of overrides that repeat the default, and the last-good fallback of FR-406 as `last-good-config.json` in the state directory; the commands `check --dry-run`, `config check` and `config show` with the origin of each value; the per-drive `exclude` and `detail` of FR-403 in discovery; the decoding of attribute 188 (Q-T1); the derived fixture `failing-hdd` ([tests/fixtures/SOURCES.md](tests/fixtures/SOURCES.md)), which fails several checks at once; and the review of the provisional thresholds against the recordings of all three nodes: the healthy drives stay below every threshold, as a test shows. The events and the missing and unreadable drive checks wait for the state of M4, and Q-T2 to Q-T4 keep their recorded answers until feedback from the fleet arrives.
+- Acceptance on `pve1` (one Intenso SATA SSD, no NVMe drive, smartmontools 7.5, Proxmox VE 9.2.3): `check --dry-run` on the real drive lists no findings for the healthy drive and sends nothing; with the fake smartctl replaying `failing-hdd`, the dry run shows all 11 expected findings with the expected severities, and the event `ata.crc_errors` stays silent without a baseline; `config check` accepts a valid file and the absence of the file, and an invalid file names key and line for an unknown key, a wrong type, an out-of-range threshold, an unknown key in a check and a `[[drive]]` entry with two selectors, each time with exit status 1; `config show` prints every key with its effective value and origin; a global threshold override produces its finding, a per-drive disable removes it for that drive only, a per-drive `exclude` removes the drive from monitoring with the reason "excluded", a per-drive `detail = "basic"` changes what is read, and the first of two matching `[[drive]]` rules wins in every case (FR-403); an invalid file at run time continues with `last-good-config.json` or, without one, with the built-in defaults, with the error on standard error, and `doctor` warns and exits 0 (FR-406). The wear of the SSD is 3 % from `endurance_used`, the web interface shows "Wearout" 100 from the same attribute 177 that the tool keeps as the vendor-attribute value; attribute 188 is not reported by this drive, so it could not be compared with the web interface, and the decoding of its packed value is covered by the `failing-hdd` fixture (600 from "600 (0/600/0)").
+- The run on `pve1` found three failures, each fixed with a regression test: an unknown check identifier named no line; the wear of an ATA drive read with `detail = "basic"` showed the attribute guess of smartmontools as the vendor-neutral source (0 % instead of 3 %, [Research 03](docs/research/03-smart-indicators.md)); and a run without a last good configuration claimed to use one instead of the built-in defaults.
+- Acceptance on the cluster, steps 1 to 4 on `pve5`, `pve6` and `pve7` (run by the maintainer on 2026-10-12, with the package 0.3.0 that contains the fixes, read from the logs of the three nodes): `check --dry-run` on the real drives exits 0 with no findings on every node, 1 drive on `pve5`, 2 on `pve6` and 3 on `pve7`, so the evaluation of NVMe drives is confirmed on real hardware; with the fake smartctl replaying `failing-hdd`, the dry run shows the 11 expected findings (7 critical, 4 warning) and the event `ata.crc_errors` stays silent; a raised threshold of `ata.reallocated_sectors` removed that finding (10 findings); a per-drive override removed the `ata.pending_sectors` finding for the drive selected by `model = "Samsung*"`, so the model pattern works; the typing error "notise" made `config check` name the key, the allowed keys and line 4 with exit status 1, while the dry run continued with the last good configuration — the one of the per-drive step, so the pending-sectors finding was absent there, which is what FR-406 demands — and `doctor` warned with exit status 0; `config show` printed every key with its origin. The drives of the cluster are healthy, so no finding was raised on real hardware; the failing drive is covered by the fixture. The logs and fixture archives of the run stay on the nodes, where the acceptance scripts wrote them: they contain real serial numbers and WWNs and do not belong into the repository.
+
 ## M4: State and notification policy (L)
 
 Goal: the behavior that distinguishes the tool: once, on worsening, on reminder.
@@ -169,13 +177,25 @@ Result you can test, on one node, with the fake smartctl replaying a scenario st
 
 After this milestone the real smartctl is configured again and `pve-smart-alert check` can be run by hand against the real drives.
 
+State: done. The acceptance passed on the standalone host `pve1` on 2026-10-12, with the package 0.4.0 and the fake smartctl, after all ten steps had passed as scenario tests. The work is on the branch `feature/m4-state`.
+
+- Done: the state store of `state.py` with atomic replacement, the setting aside of a corrupt file or one of a newer schema, the migration mechanism and the clamping of future timestamps ([ARCHITECTURE.md](ARCHITECTURE.md) section 9).
+- Done: the scenario test frame: the scenarios of `tests/scenarios.py`, whose steps the fake smartctl replays and which can be written out for a real host, and a clock, a state directory and a recording transport in `tests/unit/frame.py`.
+- Done: the configuration keys of the notification policy in `[notify]` and `[notify.reminder]`, and the confirmation count `confirm_runs` of a condition check, with the defaults of ADR 0009 (FR-404); `config show` lists them.
+- Done: the notification planner of `planner.py` with every rule of ADR 0009 as a pure function of state, observation, configuration and time, each rule with a test that drives it run by run with an injected clock.
+- Done: the event checks against the baselines of the state, the checks `drive.missing` and `drive.unreadable` in the catalog, and the detection of the tool conditions in `tool_conditions.py`.
+- Done: the renderer of `render.py` with the layout of ARCHITECTURE.md section 10 for a message about one drive, the summary, the first-run summary and a message about the tool, each compared with a golden file.
+- Done: the commands `pve-smart-alert check`, which runs the sequence of ARCHITECTURE.md section 3 in `run.py` and delivers through the transports, the dry run that prints the planned notifications, and `pve-smart-alert status`; the line `state` of `doctor`; and the ten acceptance steps below as scenario tests with an injected clock (`tests/unit/test_acceptance_m4.py`).
+- Acceptance on `pve1` (Proxmox VE 9.2.3, smartmontools 7.5, default matcher to `mail-to-root`), with the steps written by `python3 tests/scenarios.py build` on the host and `pve-smart-alert status` after every run: (1) the first run sent one summary that lists the drive, severity info; (2) the second run sent nothing; (3) "3 pending sectors" sent one warning that names `/dev/sda`, the model, the serial number, 3 pending sectors and the thresholds; (4) the same step again sent nothing; (5) "20 pending sectors" sent one critical notification, severity `error`, escalated from warning; (6) "healthy again" sent nothing in its first run and one recovery with severity info in its second; (7) "drive gone" sent nothing in its first run, one notification about the missing drive in its second, and nothing in a third; (8) with five drives too hot, the first hot run sent nothing while the temperature waited for its confirmation, the second sent one summary of the five drives, and a third sent nothing; (9) `status` showed the active condition, the waiting temperatures and the missing drive at each step; (10) after the state file was deleted, the next run sent one first-run summary with the existing finding. Every run exited 0, and the journal shows `notified via target mail-to-root` for each of the eight notifications. Afterwards `check` against the real smartctl sent one first-run summary and, in a second run, nothing, and `doctor` reported the lines `smartctl`, `bridge` and `state` as `ok`. The host was then set back to the package 0.3.0 with its configuration and last good configuration unchanged, checked by checksum, and without a state file. The logs stay outside the repository.
+- The cluster name of a notification is read from `/etc/pve/corosync.conf`, which the standalone `pve1` does not have. On the test cluster the maintainer checked on `pve5` on 2026-10-12 that the file names the cluster with `cluster_name` in its `totem` section (Q-N9, answered).
+
 ## M5: Packaging, timer and installation (M)
 
 Goal: one command, then no care.
 
 Deliverables:
 
-- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
+- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts. The service accepts exit status 3 of `pve-smart-alert check`, a run skipped because another one holds the lock, as success (`SuccessExitStatus=3`) ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
 - Release pipeline: build on tag, lintian, package test in a clean container, checksums, release assets under stable names, `install.sh`.
 - Decision on which systemd sandboxing options are safe.
 

@@ -48,8 +48,10 @@ def attributes(*named: tuple[int, str, int]) -> dict[str, object]:
     [
         # The Fanxiang S301: 44 % by the standard, 0 % in the web interface.
         ("pve5", "sda", Wear(44, WearSource.ENDURANCE_USED, 0)),
-        ("pve6", "sda", Wear(35, WearSource.ENDURANCE_USED, 35)),
-        ("pve7", "sda", Wear(12, WearSource.ENDURANCE_USED, 12)),
+        # The Samsung SSDs have no device statistics (Research 06), so the
+        # value of smartmontools is a guess from a vendor attribute.
+        ("pve6", "sda", Wear(35, WearSource.VENDOR_ATTRIBUTE, 35)),
+        ("pve7", "sda", Wear(12, WearSource.VENDOR_ATTRIBUTE, 12)),
     ],
 )
 def test_the_recorded_sata_drives(node: str, device: str, expected: Wear) -> None:
@@ -93,6 +95,27 @@ def test_the_vendor_attribute_is_the_last_source() -> None:
     del drive["endurance_used"]
 
     assert ata_wear(drive) == Wear(12, WearSource.VENDOR_ATTRIBUTE, 12)
+
+
+def test_without_device_statistics_the_guess_is_a_vendor_attribute() -> None:
+    # The acceptance of M3 on the standalone host: with `detail = "basic"`,
+    # smartctl reads no device statistics and keeps its guess from the
+    # attribute. The guess is used, but named for what it is (Research 03).
+    drive = recorded("pve1", "sda", prefix="standalone")
+    del drive["ata_device_statistics"]
+    drive["endurance_used"] = {"current_percent": 0}
+
+    assert ata_wear(drive) == Wear(0, WearSource.VENDOR_ATTRIBUTE, 0)
+
+
+def test_a_guess_from_an_attribute_the_web_interface_does_not_read() -> None:
+    # smartmontools guesses from "SSD_Life_Left" and "Wear_Leveling"
+    # attributes, the web interface from its own longer list; a drive can
+    # name an attribute of the first kind only.
+    drive = attributes((177, "Wear_Leveling", 90))
+    drive["endurance_used"] = {"current_percent": 10}
+
+    assert ata_wear(drive) == Wear(10, WearSource.VENDOR_ATTRIBUTE, None)
 
 
 def test_an_nvme_drive_falls_back_to_its_health_log() -> None:

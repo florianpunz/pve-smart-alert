@@ -1,0 +1,22 @@
+Subject: [pve-smart-alert] INFO pve1: /dev/sdb Samsung SSD 870 EVO 1TB (ANON-SN-0001): recovered: pending sectors
+
+A drive in pve1 has recovered.
+
+Host:       pve1 (cluster: lab)
+Drive:      /dev/sdb [sat]
+Model:      Samsung SSD 870 EVO 1TB
+Serial:     ANON-SN-0001
+WWN:        5000000000000001
+Firmware:   SVT02B6Q
+Capacity:   1.00 TB, SSD
+Location:   pci-0000:00:17.0-ata-2
+Used by:    ZFS pool "tank"
+Powered on: 14210 hours
+
+Findings:
+  RECOVERED ata.pending_sectors
+            Pending sectors: no longer found in the last runs; it was warning at 3
+
+Nothing needs to be done for these findings anymore.
+
+pve-smart-alert 0.4.0 on pve1

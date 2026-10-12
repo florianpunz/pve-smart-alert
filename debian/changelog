@@ -1,3 +1,21 @@
+pve-smart-alert (0.4.0) unstable; urgency=medium
+
+  * Milestone M4: the state store, the notification planner with the rules
+    of ADR 0009, the event checks against their baselines, the missing and
+    unreadable drive checks, the conditions of the tool itself, the renderer
+    of the notifications, and the commands check and status.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Mon, 12 Oct 2026 21:02:24 +0000
+
+pve-smart-alert (0.3.0) unstable; urgency=medium
+
+  * Milestone M3: the check catalog with the evaluation of every drive, the
+    configuration sections for check thresholds and per-drive overrides with
+    the last-good fallback, and the commands check --dry-run, config check
+    and config show.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Mon, 12 Oct 2026 18:10:35 +0000
+
 pve-smart-alert (0.2.0) unstable; urgency=medium
 
   * Milestone M2: discovery and collection of SATA and NVMe drives, the

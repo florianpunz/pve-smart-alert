@@ -1,0 +1,26 @@
+Subject: [pve-smart-alert] WARNING pve1: /dev/sdb Samsung SSD 870 EVO 1TB (ANON-SN-0001): drive missing
+
+A drive of pve1 is missing.
+
+Host:       pve1 (cluster: lab)
+Drive:      /dev/sdb [sat], last read 2026-10-03T12:34:12Z
+Model:      Samsung SSD 870 EVO 1TB
+Serial:     ANON-SN-0001
+Firmware:   SVT02B6Q
+Capacity:   1.00 TB, SSD
+
+Findings:
+  WARNING   drive.missing  missing
+            Present: the drive was not found in 2 runs in a row; last seen
+            2026-10-03T12:34:12Z as /dev/sdb
+
+What to do:
+  If the drive was removed or replaced on purpose, nothing needs to be done.
+  Otherwise check whether it failed, and look at the kernel log (journalctl
+  -k).
+
+This is the only notification about the missing drive. If it returns, its
+findings are evaluated as usual. To adjust or silence this check for this
+drive, see /etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1

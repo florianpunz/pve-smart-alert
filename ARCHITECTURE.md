@@ -61,10 +61,12 @@ Dependencies point in one direction: command-line interface → run orchestratio
 
 ## 3. Sequence of a run
 
-1. **Lock.** Take the lock in `/run/pve-smart-alert/`. If it is held, exit with a message.
+`run.py` implements the sequence since milestone M4; every path, program, the clock and the transport it uses are fields of its `Environment`, which the scenario tests replace.
+
+1. **Lock.** Take the lock in `/run/pve-smart-alert/`, an advisory lock on the file `lock` that the kernel releases when the process ends. If it is held, exit with a message and exit status 3.
 2. **Configuration.** Load and validate. On error, use the last good configuration and record the tool condition `tool.config_invalid`.
 3. **State.** Load, migrate if needed. If unreadable, set it aside, start empty and record `tool.state_reset`.
-4. **Preflight.** Check that smartctl exists and is version 7.0 or later. If not, record `tool.smartctl_missing` or `tool.smartctl_too_old` and skip to step 9 with no drives.
+4. **Preflight.** Check that smartctl exists and can be executed. If not, record `tool.smartctl_missing` and skip to step 9 with no drives. After the device scan of step 5, a smartctl older than 7.0 records `tool.smartctl_too_old`, a scan without usable output `tool.scan_failed`. With `transport` `auto` or `pve-notify`, run the notify bridge with `--check`; if it fails, record `tool.transport_degraded`.
 5. **Discovery.** Run the scan, the probes and the manual entries; enrich, filter, de-duplicate. Result: a list of drives to query and a list of skipped devices with reasons.
 6. **Collection and parsing.** For each drive, one after the other: run smartctl with the timeout, parse the output into a snapshot. A drive that fails is recorded as unreadable for this run; a drive in standby is recorded as skipped.
 7. **Evaluation.** Run the applicable checks on each snapshot. Result: findings per drive.
@@ -72,7 +74,7 @@ Dependencies point in one direction: command-line interface → run orchestratio
 9. **Planning.** From findings, presence, tool conditions and state, compute the notifications that are due, each with the state changes that depend on its delivery, and the state changes that need no notification.
 10. **Delivery.** Render and send each notification. For each one that was handed over, apply its state changes.
 11. **Save.** Write the state file atomically.
-12. **Summary.** Log one line with the counts. Exit 0 if the run completed, non-zero if it could not.
+12. **Summary.** Log one line with the counts. Exit 0 if the run completed, 1 if a notification was not handed over or the state could not be saved.
 
 Steps 5 to 8 never abort the run because of a single drive. Steps 9 to 11 are the only ones that change anything outside the process.
 
@@ -101,7 +103,7 @@ The models are in `model.py`. The parsers fill the drive snapshot, and the check
 | Context | Power-on hours, power cycles |
 | Collection | smartctl version, exit status, messages, duration |
 
-The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list. The source is stored next to the value as `wear_source` of the snapshot, and the value the web interface shows as the metric `wear.web_interface_percent_used`: for ATA the vendor attribute, searched exactly as `PVE/Diskmanage.pm` does, for NVMe `percentage_used` ([Research 02](docs/research/02-builtin-smart-handling.md)). `parsers/wear.py` implements it.
+The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list, and last the same kind of guess made by smartmontools. For ATA, `endurance_used` counts as the first source only when the device statistics were read; without them smartmontools guesses it from a vendor attribute, and the guess is named as the vendor attribute it is ([Research 03](docs/research/03-smart-indicators.md)). The source is stored next to the value as `wear_source` of the snapshot, and the value the web interface shows as the metric `wear.web_interface_percent_used`: for ATA the vendor attribute, searched exactly as `PVE/Diskmanage.pm` does, for NVMe `percentage_used` ([Research 02](docs/research/02-builtin-smart-handling.md)). `parsers/wear.py` implements it.
 
 **Finding**: check ID, kind (condition or event), severity, current value, threshold that was crossed, short text.
 
@@ -140,11 +142,13 @@ Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from s
 
 ## 6. Evaluation
 
-- The catalog is a list of check definitions: ID, applicable classes and protocols, the metric or flag it reads, kind, default thresholds, worsening rule, confirmation count, message texts. The list is in [docs/check-catalog.md](docs/check-catalog.md).
-- The effective thresholds for a drive are: built-in default, overridden by the global configuration, overridden by the first matching per-drive override.
+- The catalog is a list of check definitions: ID, applicable classes and protocols, the metric or flag it reads, kind, default thresholds, worsening rule, confirmation count, message texts. The list is in [docs/check-catalog.md](docs/check-catalog.md). The package `checks.py` implements it since milestone M3, together with `evaluate`, which turns one snapshot into findings.
+- The effective thresholds for a drive are: built-in default, overridden by the global configuration, overridden by the first matching per-drive override. `config.py` resolves them in `effective_checks`.
 - A check returns no finding if it is disabled, not applicable to the class, or its input is missing.
 - For threshold checks the highest severity whose threshold is met is reported.
-- Event checks compare the current counter with the baseline in state and return the difference.
+- Event checks compare the current counter with the baseline in state and return a finding only when it is above it; without a baseline they return nothing, and the planner records the current value as the baseline (FR-306). `counters` returns the current values of the enabled event checks for that.
+- `drive.missing` and `drive.unreadable` are checks of the catalog, so that they can be configured, but no snapshot answers them: the planner raises them from consecutive runs.
+- `pve-smart-alert check --dry-run` runs the whole sequence up to the planning with the state read but not changed: it prints the findings per drive and the subject of every notification a run would send now, and it sends nothing. A state file that cannot be used is reported, not set aside.
 
 ## 7. Notification planning
 
@@ -167,6 +171,17 @@ The rules are those of [ADR 0009](docs/adr/0009-notification-policy.md). In shor
 Grouping: one notification per drive per run. More drives than the grouping limit: one `summary`. First run: one `first-run`.
 
 Time is passed in, never read from the system clock inside the planner. This is what makes every rule testable.
+
+`planner.py` implements it since milestone M4. Its input is the state, an `Observation` of the run (each device as read, in standby or unreadable, with its findings and the current values of its event counters; the skipped devices; the tool conditions that hold now; whether the state was reset; whether the device scan worked), the configuration and the time. Its output is a `Plan`: the state with every change that needs no notification, and the notifications that are due, each with the changes that are applied only after it was handed over. How the rules are read where ADR 0009 leaves room:
+
+- A condition that is active but was never notified, because its notification failed, is planned as `problem` again. A condition that clears before it was ever notified goes silently.
+- A falling severity lowers the notified severity and value, so that a later rise is an `escalated` and the reminder follows the lower severity.
+- `worsened` applies to the checks whose worsening is *increase* in [docs/check-catalog.md](docs/check-catalog.md), and waits for the cool-down since the last notification about the drive, whatever that notification was.
+- An event counter without a baseline starts at its value; one below its baseline lowers it; one above it is notified after the event cool-down of the drive and check, and only then does the baseline move.
+- A device that answers without usable data is matched to the drive last read through the same name and type. A device that never answered with an identity gets a record of its own, keyed by name and type, that only holds `drive.unreadable`. While a drive is missing, unreadable or in standby, its other conditions are frozen.
+- When the device scan failed, drives that were not found were not looked for, and their absence is not counted.
+- A drive that is skipped as `excluded` or `no-smart` is no longer monitored, and its record is removed without a message. A condition of a check that was switched off is removed without a recovery.
+- The first run records every condition as notified and every counter as a baseline. Without the summary handed over, nothing of it is stored, and the next run is a first run again.
 
 ## 8. Configuration
 
@@ -197,6 +212,9 @@ recovery = true
 first_run_summary = true
 worsening_cooldown = "6h"
 event_cooldown = "24h"
+clear_runs = 2
+missing_runs = 2
+unreadable_runs = 2
 
 [notify.reminder]
 critical = "3d"
@@ -206,6 +224,7 @@ notice = "never"
 # Global override of one check
 [checks."temperature"]
 warning = { hdd = 48, ssd = 60, nvme = 72 }
+confirm_runs = 3
 
 [checks."ata.crc_errors"]
 enabled = false
@@ -224,11 +243,13 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-The loader accepts these keys: `transport` in `[notify]`; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; and the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)). Every other key in the example above is rejected as unknown until the milestone that implements it. Until the last-good configuration of FR-406 is built, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`.
+The loader of `config.py` accepts these keys since milestone M3: `transport` in `[notify]`, and since milestone M4 the settings of the notification policy in `[notify]` and `[notify.reminder]` (FR-404), with the defaults of [ADR 0009](docs/adr/0009-notification-policy.md): a reminder is a duration from `"1h"` to `"365d"` or `"never"`, a cool-down a duration from `"0s"` to `"365d"`, a count of runs a whole number from 1 to 100, and `max_drive_notifications` one from 1 to 1000; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)); the global overrides of `[checks."<check-id>"]`, which accept `enabled`, the thresholds `notice`, `warning` and `critical` that the check has, one number or, for the one check that differs per class, a table of the classes, and for a check of the kind condition its confirmation count `confirm_runs` (1, and 2 for the temperature, FR-308); and the per-drive overrides of `[[drive]]`, each with exactly one selector, an optional `comment`, `exclude`, `detail` and the same check overrides in a table `checks` (FR-403). Every other key in the example above is rejected as unknown until the milestone that implements it.
+
+After every successful validation the effective configuration is saved as `last-good-config.json` in the state directory (ADR 0011). A file that does not validate at run time leads to the last good one, or to the built-in defaults when there is none, together with a tool-level warning (FR-406); `pve-smart-alert doctor` reports the situation as a warning, and `pve-smart-alert config check` and `config show` answer from the same mechanism. An override that repeats the built-in default is dropped when the file is loaded, so that the reference, which lists every key with its default, changes nothing.
 
 ## 9. State
 
-File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-storage.md)). Shape:
+File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-storage.md)), written by `state.py` since milestone M4. Shape:
 
 ```json
 {
@@ -241,7 +262,9 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
     "result": "ok",
     "drives_evaluated": 6,
     "drives_skipped": 1,
-    "drives_failed": 0
+    "drives_failed": 0,
+    "notifications_sent": 1,
+    "notifications_failed": 0
   },
   "drives": {
     "Samsung SSD 870 EVO 1TB|S5Y1NX0R000001A": {
@@ -256,29 +279,48 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
       "last_seen": "2026-10-03T14:34:11Z",
       "missing_runs": 0,
       "unreadable_runs": 0,
+      "missing_notified": false,
+      "exempt_from_missing": false,
+      "last_notified": "2026-10-03T12:34:13Z",
       "baselines": { "ata.crc_errors": 12, "ata.error_log": 0 },
+      "event_notified": {},
       "conditions": {
         "ata.reallocated_sectors": {
           "severity": "warning",
           "first_detected": "2026-10-03T12:34:12Z",
+          "current_value": 8,
+          "threshold": 5,
+          "text": "8 sectors, at or above the warning threshold of 5",
           "last_notified": "2026-10-03T12:34:13Z",
           "notified_severity": "warning",
           "notified_value": 8,
-          "current_value": 8,
           "clear_runs": 0
         }
       },
-      "pending": {}
+      "pending": {},
+      "details": {
+        "firmware": "SVT02B6Q",
+        "capacity_bytes": 1000204886016,
+        "location": "pci-0000:00:17.0-ata-2",
+        "used_by": "ZFS pool \"tank\"",
+        "transport": "sata",
+        "removable": false
+      }
     }
   },
   "skipped": {
     "/dev/sda|scsi": { "reason": "logical-volume", "since": "2026-10-03T12:04:11Z" }
   },
-  "tool": { "conditions": {} }
+  "tool": { "conditions": {}, "last_notified": null }
 }
 ```
 
-`pending` holds conditions that were seen but still wait for confirmation.
+- The key of a drive is model and serial number, model and `wwn:` with the WWN when there is no serial number, and for a drive without either the model with `device:` and the path it was read through, because two such drives may be two drives ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)). A device that never answered with an identity is kept as `device:<name>|<type>` with `identity` set to `null`, and only ever holds the condition `drive.unreadable`.
+- `initialized` is `null` until a first run has been completed; a state without it is a first run.
+- A condition with `last_notified` set to `null` is active but was not notified yet, because its notification was not handed over; the next run plans it again. `pending` holds conditions that were seen but still wait for their confirmation count. `last_notified` of the drive is the time of the last notification about it, for the worsening cool-down; `event_notified` holds the same per event check, for the event cool-down.
+- `details` keeps what a notification about the drive shows while it cannot be read, for example when it is missing.
+- Atomic replacement: the file is written to a temporary file in the same directory with mode 0600, flushed to disk, renamed over the old file, and the directory is flushed.
+- A file that does not parse or validate, and one with a newer schema version than the program reads, is renamed to `state.json.corrupt-<timestamp>`; the run continues with empty state. A timestamp that lies in the future is read as the current time. Each schema version gets a migration function to the next one; version 1 is the first.
 
 ## 10. Notification integration
 
@@ -358,6 +400,8 @@ A plain-text message to `root` through `/usr/sbin/sendmail`. The subject starts 
 
 ### Example message
 
+`render.py` renders the messages since milestone M4. The golden files of the tests in `tests/fixtures/golden/` show every kind: a message about one drive for each event, the summary above the grouping limit, the first-run summary, and a message about the tool. A message about one drive:
+
 Subject:
 
 ```text
@@ -381,12 +425,13 @@ Used by:    ZFS pool "tank"
 Powered on: 14210 hours
 
 Findings:
-  WARNING  ata.reallocated_sectors
-           Reallocated sectors: 8 (previous: 0)
-           Thresholds: notice 1, warning 5, critical 70
+  WARNING   ata.reallocated_sectors  new
+            Reallocated sectors: 8
+            Thresholds: notice 1, warning 5, critical 70
 
 What to do:
-  Plan a replacement. Reallocated sectors that keep increasing indicate a failing drive.
+  A counter that keeps increasing indicates a failing drive. Plan a
+  replacement of the drive and make sure its data is backed up.
 
 This is the first notification for this problem. Without a change, the next
 reminder follows in 7 days. To adjust or silence this check for this drive,
@@ -395,13 +440,19 @@ see /etc/pve-smart-alert/config.toml.
 pve-smart-alert 1.0.0 on pve1
 ```
 
+- The status after the check is `new`, `escalated from <severity>`, `worse` or `reminder`; a later notification names the previous value as `(previous: 3)` and the time the condition became active. A recovery is listed as `RECOVERED` with the value it had, and the message has severity info. Conditions of the drive that are active but not due are listed under "Also active, nothing new".
+- The thresholds are the effective ones of the drive. "What to do" is the advice of the most severe open finding; the texts of every check and tool condition are in `TEXTS` of `render.py`, and a test keeps them complete.
+- The cluster name comes from `cluster_name` in `/etc/pve/corosync.conf`, the corosync configuration Proxmox VE keeps on pmxcfs for a cluster (corosync.conf(5), section `totem`); a node without that file is shown without a cluster. Checked on the test cluster (node `pve5`, Proxmox VE 9.2, 2026-10-12, by the maintainer): the file has `cluster_name` with the name of the cluster in its `totem` section.
+- A summary above the grouping limit lists each drive with its findings and carries only the field `event` = `summary`. The first-run summary lists the monitored drives with their findings, the devices without usable data, the skipped devices and the problems of the tool, and says when the state was reset. A message about the tool has the fields `event` with the event of its finding and `device` = `pve-smart-alert`.
+- Model, serial number, firmware and the other strings of a drive are stripped of control characters and cut to 200 characters before they are written.
+
 ## 11. Error handling
 
 | Situation | Behavior |
 | --- | --- |
 | smartctl is missing or not executable | No drive is evaluated. Tool condition `tool.smartctl_missing`, critical. Run exits 0 after reporting |
 | smartctl is older than 7.0 | Same, `tool.smartctl_too_old` |
-| Device scan fails or returns invalid JSON | Manual entries and drives known from state are still tried. `tool.scan_failed`, warning |
+| Device scan fails or returns invalid JSON | Manual entries are still read. Drives known from state that were not found are not counted as missing, because they were not looked for. `tool.scan_failed`, warning |
 | A drive cannot be opened or returns no identify data | Counted as unreadable for this run. After 2 runs: condition `drive.unreadable` |
 | smartctl exceeds the timeout | Process group is killed. Treated as unreadable. The run continues with the next drive |
 | smartctl returns invalid or truncated JSON | Treated as unreadable. Output is logged at debug level |
@@ -414,9 +465,9 @@ pve-smart-alert 1.0.0 on pve1
 | Configuration file is invalid | Last good configuration is used. `tool.config_invalid`, warning |
 | State file is unreadable or has an unknown schema | File is renamed, empty state is used, `tool.state_reset`. Next notification is one summary |
 | State directory is not writable | Run fails after delivering what it can. The failure unit reports it |
-| Another run holds the lock | Exit with a message and a distinct exit code. Not an error for the timer |
+| Another run holds the lock | Exit with a message and exit status 3. Not an error for the timer; the service unit of milestone M5 has to accept it |
 | pmxcfs is not available | The bridge fails. The mail fallback is used |
-| Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning |
+| Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning, when the bridge fails its `--check` at the start of a run |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
 | No matcher matches | Nothing is sent, and the call succeeds with an empty log. Not an error of the run. `pve-smart-alert doctor` reports the severity as not routed, and `pve-smart-alert test-notification` says that no matcher routes the test ([ADR 0020](docs/adr/0020-routing-check.md)) |

@@ -34,6 +34,22 @@ CONFIG_PATH: Final = Path("/etc/pve-smart-alert/config.toml")
 # documentation (ADR 0011).
 REFERENCE_PATH: Final = Path("/usr/share/doc/pve-smart-alert/config.reference.toml")
 
+# The state directory of the tool, and in it the last configuration that
+# passed validation (ADR 0007, ADR 0011).
+STATE_DIR: Final = Path("/var/lib/pve-smart-alert")
+LAST_GOOD_CONFIG_PATH: Final = STATE_DIR / "last-good-config.json"
+# What the tool remembers between runs (ADR 0007).
+STATE_PATH: Final = STATE_DIR / "state.json"
+
+# The corosync configuration of a cluster, on pmxcfs. A notification names
+# the cluster from it; the tool only reads it (ADR 0012).
+COROSYNC_CONF_PATH: Final = Path("/etc/pve/corosync.conf")
+
+# The runtime directory, and in it the lock that keeps two runs from
+# overlapping (ADR 0007, FR-605).
+RUN_DIR: Final = Path("/run/pve-smart-alert")
+LOCK_PATH: Final = RUN_DIR / "lock"
+
 # smartctl of the package smartmontools, the default of `smartctl.path`
 # (ADR 0004). The key exists so that tests and acceptance runs can use the
 # fake smartctl instead (ADR 0016).

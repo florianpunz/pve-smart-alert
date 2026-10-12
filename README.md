@@ -4,16 +4,16 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds and reads the drives of a host and shows them, but it does not evaluate them yet and sends no alert.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. It does not run by itself yet: a timer arrives with M5, until then `pve-smart-alert check` is run by hand.
 >
 > <details>
-> <summary>In progress: M3, evaluation and configuration</summary>
+> <summary>Next: M5, packaging, timer and installation</summary>
 >
 > - **M0 (done):** development tooling
 > - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
-> - **M3 (in progress):** evaluation and configuration
-> - **M4 (planned):** state and notification policy
+> - **M3 (done):** evaluation and configuration
+> - **M4 (done):** state and notification policy
 > - **M5 (planned):** packaging, timer and installation
 > - **M6 (planned):** SAS and hardware RAID on recorded data
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
@@ -39,7 +39,7 @@ apt install ./pve-smart-alert_*_all.deb
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
-- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, and the exclude rules of `[discovery]`.
+- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, the thresholds, the enabled state and the confirmation count of every check in `[checks."<check-id>"]`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
 
 ## Commands
 
@@ -47,8 +47,13 @@ The installed tool has these commands:
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, and the routing of notifications and of the fallback mail to root (FR-603). A last line names what it does not check yet |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, and the state file with the last run (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108) |
+| `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
+| `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
+| `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |
+| `pve-smart-alert config check` | Validates the whole configuration file; errors name the key and the line, and the exit status is non-zero (FR-405) |
+| `pve-smart-alert config show` | Prints every key with its effective value and where the value comes from, the file or the built-in default (FR-407); `--defaults` prints the built-in ones |
 | `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604) |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
 
@@ -56,6 +61,19 @@ Options of `test-notification`:
 
 - `--severity SEVERITY`: `info` (default), `notice`, `warning` or `error`
 - `--transport TRANSPORT`: `auto`, `pve-notify` or `mail`, as for `transport` in the configuration; without the option the configuration decides.
+
+## What is notified
+
+The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every value below is a key of `[notify]`.
+
+- A problem is notified once. It is notified again at once when its severity rises, when its value worsens at the same severity (at most every 6 hours per drive), and as a reminder: after 3 days for a critical finding, after 7 days for a warning, never for a notice. A temperature has to be seen in 2 runs in a row first.
+- A problem that is absent for 2 runs is notified as recovered, with severity `info`.
+- A rising error counter, such as the CRC errors of a cable, is notified when it rises; an old value never is.
+- A drive that is absent for 2 runs is notified once as missing; one that answers without usable data for 2 runs as unreadable. Removable and USB drives are never reported as missing.
+- All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
+- Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
+
+A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock.
 
 ## Notification routing
 
@@ -89,7 +107,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [PROJECT.md](PROJECT.md): purpose, audience, comparison with existing solutions, scope of version 1
 - [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
-- [docs/check-catalog.md](docs/check-catalog.md): planned checks and default thresholds
+- [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
 - [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each

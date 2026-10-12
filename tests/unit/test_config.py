@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -14,12 +16,19 @@ from pve_smart_alert.config import (
     DiscoverySettings,
     DriveSelector,
     ManualDevice,
+    NotifySettings,
+    ReminderSettings,
     SelectorKind,
     SmartctlSettings,
     TransportName,
+    drive_override,
+    effective_checks,
     load_config,
+    load_effective,
+    load_last_good,
+    save_last_good,
 )
-from pve_smart_alert.model import DriveIdentity
+from pve_smart_alert.model import DriveClass, DriveIdentity
 
 
 def write_config(tmp_path: Path, content: str) -> Path:
@@ -399,3 +408,470 @@ def test_a_wwn_is_compared_in_its_digits() -> None:
         assert DriveSelector(SelectorKind.WWN, notation).matches(SAMSUNG)
     assert not DriveSelector(SelectorKind.WWN, "5002538000000002").matches(SAMSUNG)
     assert not DriveSelector(SelectorKind.WWN, "5002538000000001").matches(QEMU)
+
+
+# The check overrides of [checks."<id>"] (ADR 0011, FR-402)
+
+
+def test_a_threshold_can_be_overridden_globally(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.reallocated_sectors"]\nwarning = 3\n')
+
+    config = load_config(path)
+
+    assert config.checks["ata.reallocated_sectors"].warning == 3
+
+
+def test_a_check_can_be_switched_off(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.crc_errors"]\nenabled = false\n')
+
+    config = load_config(path)
+
+    assert config.checks["ata.crc_errors"].enabled is False
+
+
+def test_a_check_that_is_off_by_default_can_be_switched_on(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."nvme.error_log"]\nenabled = true\n')
+
+    config = load_config(path)
+
+    assert config.checks["nvme.error_log"].enabled is True
+
+
+def test_an_unknown_check_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."no.such_check"]\nenabled = false\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown check "no.such_check"' in str(error.value)
+    assert error.value.key == 'checks."no.such_check"'
+
+
+def test_the_line_of_an_unknown_check_is_reported(tmp_path: Path) -> None:
+    # The check names a section of its own, not a key on a line, so the line
+    # has to be looked up in the form the section is written in.
+    path = write_config(
+        tmp_path, '[checks."wear"]\nenabled = false\n\n[checks."no.such_check"]\nenabled = false\n'
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.line == 4
+    assert str(error.value).endswith("(line 4)")
+
+
+def test_a_key_the_check_does_not_have_is_an_error(tmp_path: Path) -> None:
+    # A flag check has no thresholds; setting one would silently do nothing.
+    path = write_config(tmp_path, '[checks."health.failed"]\nwarning = 5\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert "this check accepts" in str(error.value)
+
+
+def test_the_margin_of_the_spare_check_is_the_warning_threshold(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."nvme.spare"]\nwarning = 20\n')
+
+    config = load_config(path)
+
+    assert config.checks["nvme.spare"].warning == 20
+    # The critical verdict is the threshold of the drive itself, not a
+    # number of the tool, so the check accepts no critical threshold.
+    with pytest.raises(ConfigError):
+        load_config(write_config(tmp_path, '[checks."nvme.spare"]\ncritical = 5\n'))
+
+
+def test_a_threshold_must_be_a_whole_number_of_zero_or_more(tmp_path: Path) -> None:
+    for value in ('warning = "many"', "warning = true", "warning = -1", "warning = 1.5"):
+        path = write_config(tmp_path, f'[checks."ata.pending_sectors"]\n{value}\n')
+        with pytest.raises(ConfigError) as error:
+            load_config(path)
+        assert "whole number" in str(error.value)
+
+
+def test_the_thresholds_of_the_temperature_can_be_set_per_class(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[checks."temperature"]\nwarning = { hdd = 48, ssd = 60, nvme = 70 }\n'
+    )
+
+    config = load_config(path)
+
+    # The classes that keep their default are dropped, so that the override
+    # holds only what differs from the built-in defaults.
+    assert config.checks["temperature"].warning == {"hdd": 48}
+
+
+def test_a_single_number_counts_for_every_class(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."temperature"]\nwarning = 45\n')
+
+    config = load_config(path)
+
+    assert config.checks["temperature"].warning == 45
+
+
+def test_a_table_of_classes_for_a_check_of_one_value_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.reallocated_sectors"]\nwarning = { hdd = 5 }\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert "whole number" in str(error.value)
+
+
+def test_a_class_the_check_does_not_accept_is_an_error(tmp_path: Path) -> None:
+    # The temperature accepts the three class names, nothing else.
+    path = write_config(tmp_path, '[checks."temperature"]\nwarning = { sata = 50 }\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'names the class "sata", which this check does not apply to' in str(error.value)
+
+
+def test_an_override_that_repeats_the_default_is_dropped(tmp_path: Path) -> None:
+    # The reference lists every key with its default, and loading it must
+    # change nothing (ADR 0011).
+    path = write_config(
+        tmp_path,
+        '[checks."ata.reallocated_sectors"]\nnotice = 1\nwarning = 5\ncritical = 70\n'
+        '[checks."temperature"]\nwarning = { hdd = 50, ssd = 60, nvme = 70 }\n'
+        '[checks."nvme.error_log"]\nenabled = false\n'
+        '[checks."health.failed"]\nenabled = true\n',
+    )
+
+    config = load_config(path)
+
+    assert config.checks == {}
+
+
+# The per-drive overrides of [[drive]] (ADR 0011, FR-403)
+
+
+def test_a_drive_entry_can_exclude_and_describe_a_drive(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\ncomment = "Worn, replacement ordered"\n'
+        "exclude = true\n",
+    )
+
+    config = load_config(path)
+
+    (entry,) = config.drives
+    assert entry.selector == DriveSelector(SelectorKind.SERIAL, "ANON-SN-0001")
+    assert entry.comment == "Worn, replacement ordered"
+    assert entry.exclude is True
+
+
+def test_a_drive_entry_can_name_another_detail_level(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[[drive]]\nmodel = "Samsung *"\ndetail = "basic"\nexclude = false\n'
+    )
+
+    config = load_config(path)
+
+    assert config.drives[0].detail is Detail.BASIC
+    assert config.drives[0].exclude is False
+
+
+def test_a_drive_entry_needs_exactly_one_selector(tmp_path: Path) -> None:
+    for content in (
+        '[[drive]]\ncomment = "no selector"\n',
+        '[[drive]]\nserial = "S1"\nmodel = "M"\n',
+    ):
+        path = write_config(tmp_path, content)
+        with pytest.raises(ConfigError) as error:
+            load_config(path)
+        assert "exactly one of" in str(error.value)
+
+
+def test_an_unknown_key_in_a_drive_entry_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[[drive]]\nserial = "S1"\nname = "/dev/sda"\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown key "name"' in str(error.value)
+
+
+def test_a_drive_entry_can_override_a_check(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\n\n[drive.checks."wear"]\nenabled = false\n',
+    )
+
+    config = load_config(path)
+
+    assert config.drives[0].checks["wear"].enabled is False
+
+
+def test_an_unknown_check_in_a_drive_entry_is_an_error(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[[drive]]\nserial = "S1"\n\n[drive.checks."no.such_check"]\nenabled = false\n'
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown check "no.such_check"' in str(error.value)
+    assert error.value.line == 4
+
+
+def test_the_first_matching_drive_entry_wins(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nmodel = "Samsung *"\n\n[drive.checks."wear"]\nenabled = false\n'
+        '\n[[drive]]\nserial = "ANON-SN-0001"\n\n[drive.checks."wear"]\nenabled = true\n',
+    )
+    config = load_config(path)
+    drive = DriveIdentity.of("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001")
+
+    entry = drive_override(config, drive)
+
+    assert entry is not None
+    assert entry.checks["wear"].enabled is False
+
+
+# The last good configuration (ADR 0011, FR-406)
+
+
+def test_the_last_good_configuration_survives_a_round_trip(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[notify]\ntransport = "mail"\n\n[checks."temperature"]\nwarning = { hdd = 48 }\n'
+        '\n[[drive]]\nserial = "ANON-SN-0001"\nexclude = true\n',
+    )
+    config = load_config(path)
+    last_good = tmp_path / "last-good-config.json"
+
+    save_last_good(config, last_good)
+    loaded = load_last_good(last_good)
+
+    assert loaded == replace(config, source=last_good)
+
+
+def test_without_a_last_good_configuration_there_are_the_defaults(
+    tmp_path: Path,
+) -> None:
+    assert load_last_good(tmp_path / "absent.json") is None
+
+    (tmp_path / "broken.json").write_text("{ not json", encoding="utf-8")
+    assert load_last_good(tmp_path / "broken.json") is None
+
+
+def test_an_invalid_file_leads_to_the_last_good_configuration(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[notify]\ntransport = "mail"\n')
+    last_good = tmp_path / "last-good-config.json"
+    save_last_good(load_config(path), last_good)
+    path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+
+    config, error = load_effective(path, last_good=last_good)
+
+    assert error is not None
+    assert 'unknown key "timeout"' in str(error)
+    assert config.notify.transport is TransportName.MAIL
+    assert config.source == last_good
+
+
+def test_without_a_last_good_configuration_an_invalid_file_leads_to_the_defaults(
+    tmp_path: Path,
+) -> None:
+    path = write_config(tmp_path, "[notify]\ntransport = 30\n")
+
+    config, error = load_effective(path, last_good=None)
+
+    assert error is not None
+    assert config == Config()
+
+
+def test_the_last_good_configuration_is_saved_after_a_validation(tmp_path: Path) -> None:
+    # The commands save it; here the save itself is the test.
+    path = write_config(tmp_path, '[checks."wear"]\nwarning = 90\n')
+    last_good = tmp_path / "last-good-config.json"
+
+    save_last_good(load_config(path), last_good)
+
+    loaded = load_last_good(last_good)
+    assert loaded is not None
+    assert loaded.checks["wear"].warning == 90
+
+
+# The settings of the notification policy (FR-404, ADR 0009)
+
+
+def test_the_policy_has_the_defaults_of_adr_0009(tmp_path: Path) -> None:
+    notify = load_config(tmp_path / "config.toml").notify
+
+    assert notify.max_drive_notifications == 3
+    assert notify.recovery is True
+    assert notify.first_run_summary is True
+    assert notify.worsening_cooldown == timedelta(hours=6)
+    assert notify.event_cooldown == timedelta(hours=24)
+    assert (notify.clear_runs, notify.missing_runs, notify.unreadable_runs) == (2, 2, 2)
+    assert notify.reminder == ReminderSettings(
+        critical=timedelta(days=3), warning=timedelta(days=7), notice=None
+    )
+
+
+def test_every_setting_of_the_policy_can_be_changed(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        "[notify]\n"
+        "max_drive_notifications = 5\n"
+        "recovery = false\n"
+        "first_run_summary = false\n"
+        'worsening_cooldown = "2h"\n'
+        'event_cooldown = "0s"\n'
+        "clear_runs = 3\n"
+        "missing_runs = 4\n"
+        "unreadable_runs = 1\n"
+        "\n[notify.reminder]\n"
+        'critical = "1d"\n'
+        'warning = "never"\n'
+        'notice = "30d"\n',
+    )
+
+    notify = load_config(path).notify
+
+    assert notify == NotifySettings(
+        max_drive_notifications=5,
+        recovery=False,
+        first_run_summary=False,
+        worsening_cooldown=timedelta(hours=2),
+        event_cooldown=timedelta(0),
+        clear_runs=3,
+        missing_runs=4,
+        unreadable_runs=1,
+        reminder=ReminderSettings(
+            critical=timedelta(days=1), warning=None, notice=timedelta(days=30)
+        ),
+    )
+
+
+def test_a_reminder_left_out_keeps_its_default(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[notify.reminder]\nwarning = "14d"\n')
+
+    reminder = load_config(path).notify.reminder
+
+    assert reminder == ReminderSettings(warning=timedelta(days=14))
+
+
+@pytest.mark.parametrize(
+    ("content", "key", "message"),
+    [
+        ("max_drive_notifications = 0", "notify.max_drive_notifications", "from 1 to 1000"),
+        ('max_drive_notifications = "3"', "notify.max_drive_notifications", "whole number"),
+        ("clear_runs = 0", "notify.clear_runs", "from 1 to 100"),
+        ("missing_runs = 101", "notify.missing_runs", "from 1 to 100"),
+        ("unreadable_runs = true", "notify.unreadable_runs", "whole number"),
+        ('recovery = "yes"', "notify.recovery", "true or false"),
+        ('worsening_cooldown = "never"', "notify.worsening_cooldown", '"0s" switches it off'),
+        ('event_cooldown = "1w"', "notify.event_cooldown", "a duration"),
+        ('event_cooldown = "400d"', "notify.event_cooldown", 'between "0s" and "365d"'),
+        ("reminder = 5", "notify.reminder", "must be a table"),
+    ],
+)
+def test_a_wrong_setting_of_the_policy_names_the_key(
+    tmp_path: Path, content: str, key: str, message: str
+) -> None:
+    path = write_config(tmp_path, f"[notify]\n{content}\n")
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.key == key
+    assert message in str(error.value)
+    assert error.value.line == 2
+
+
+@pytest.mark.parametrize(
+    ("content", "key", "message"),
+    [
+        ('critical = "30m"', "notify.reminder.critical", 'between "1h" and "365d" or "never"'),
+        ("warning = 7", "notify.reminder.warning", "must be a string"),
+        ('error = "1d"', "notify.reminder.error", 'unknown key "error"'),
+    ],
+)
+def test_a_wrong_reminder_names_the_key(
+    tmp_path: Path, content: str, key: str, message: str
+) -> None:
+    path = write_config(tmp_path, f"[notify.reminder]\n{content}\n")
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.key == key
+    assert message in str(error.value)
+
+
+def test_the_confirmation_count_is_set_per_check(tmp_path: Path) -> None:
+    # FR-404: the confirmation count of a condition; the temperature needs two
+    # runs by default (FR-308), every other condition one.
+    path = write_config(
+        tmp_path,
+        '[checks."temperature"]\nconfirm_runs = 3\n\n[checks."wear"]\nconfirm_runs = 2\n',
+    )
+    config = load_config(path)
+    identity = DriveIdentity.of("Model", serial="ANON-SN-0001")
+
+    settings = effective_checks(config, identity, DriveClass.SSD)
+
+    assert settings["temperature"].confirm_runs == 3
+    assert settings["wear"].confirm_runs == 2
+    assert settings["ata.pending_sectors"].confirm_runs == 1
+    assert effective_checks(Config(), identity, DriveClass.SSD)["temperature"].confirm_runs == 2
+
+
+def test_the_confirmation_count_can_be_set_for_one_drive(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\n\n[drive.checks."temperature"]\nconfirm_runs = 1\n',
+    )
+    config = load_config(path)
+
+    chosen = effective_checks(config, DriveIdentity.of("M", serial="ANON-SN-0001"), DriveClass.SSD)
+    other = effective_checks(config, DriveIdentity.of("M", serial="ANON-SN-0002"), DriveClass.SSD)
+
+    assert chosen["temperature"].confirm_runs == 1
+    assert other["temperature"].confirm_runs == 2
+
+
+def test_an_event_takes_no_confirmation_count(tmp_path: Path) -> None:
+    # An increase of a counter is reported when it is seen (ADR 0009).
+    path = write_config(tmp_path, '[checks."ata.crc_errors"]\nconfirm_runs = 2\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown key "confirm_runs"' in str(error.value)
+
+
+def test_a_confirmation_count_of_zero_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."wear"]\nconfirm_runs = 0\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.key == 'checks."wear".confirm_runs'
+
+
+def test_a_confirmation_count_that_repeats_the_default_is_dropped(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."temperature"]\nconfirm_runs = 2\n')
+
+    assert load_config(path).checks == {}
+
+
+def test_the_policy_survives_the_last_good_round_trip(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        "[notify]\nmax_drive_notifications = 7\nrecovery = false\n"
+        'worsening_cooldown = "90m"\n\n[notify.reminder]\nwarning = "never"\nnotice = "2d"\n'
+        '\n[checks."temperature"]\nconfirm_runs = 4\n',
+    )
+    config = load_config(path)
+    last_good = tmp_path / "last-good-config.json"
+
+    save_last_good(config, last_good)
+
+    assert load_last_good(last_good) == replace(config, source=last_good)

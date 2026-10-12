@@ -1,0 +1,33 @@
+Subject: [pve-smart-alert] CRITICAL pve1: /dev/sdb Samsung SSD 870 EVO 1TB (ANON-SN-0001): 20 pending sectors
+
+A drive in pve1 needs attention.
+
+Host:       pve1 (cluster: lab)
+Drive:      /dev/sdb [sat]
+Model:      Samsung SSD 870 EVO 1TB
+Serial:     ANON-SN-0001
+WWN:        5000000000000001
+Firmware:   SVT02B6Q
+Capacity:   1.00 TB, SSD
+Location:   pci-0000:00:17.0-ata-2
+Used by:    ZFS pool "tank"
+Powered on: 14210 hours
+
+Findings:
+  CRITICAL  ata.pending_sectors  escalated from warning
+            Pending sectors: 20 (previous: 3)
+            Thresholds: warning 1, critical 16
+            Active since 2026-10-03T12:34:12Z
+
+Also active, nothing new:
+  WARNING   ata.reallocated_sectors: 8
+
+What to do:
+  A counter that keeps increasing indicates a failing drive. Plan a
+  replacement of the drive and make sure its data is backed up.
+
+The problem was notified before. Without a change, the next reminder follows
+in 3 days. To adjust or silence this check for this drive, see
+/etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1

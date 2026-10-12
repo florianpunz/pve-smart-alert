@@ -26,7 +26,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from pve_smart_alert.collect import Collected, Status, collect_drive
-from pve_smart_alert.config import Config
+from pve_smart_alert.config import Config, SmartctlSettings, drive_override
 from pve_smart_alert.discovery.enrichment import (
     HOST,
     NOT_DISKS,
@@ -234,6 +234,22 @@ def _examine(
         )
     snapshot = replace(snapshot, location=details.location, membership=details.membership)
 
+    # A per-drive override can name another detail level for the drive. Which
+    # level a drive needs is known only after it was read, so the first answer
+    # is made with the level of the configuration and an override has the
+    # drive read once more with its own (FR-403).
+    override = drive_override(config, snapshot.identity)
+    if (
+        override is not None
+        and override.detail is not None
+        and override.detail is not config.smartctl.detail
+    ):
+        again = _read_again(
+            candidate, replace(config.smartctl, detail=override.detail), details, runner=runner
+        )
+        if again is not None:
+            snapshot, collected = again
+
     if snapshot.smart_available is False:
         return Found(
             candidate,
@@ -255,9 +271,52 @@ def _examine(
                 detail=rule.describe(),
                 details=details,
             )
+    if override is not None and override.exclude:
+        return Found(
+            candidate,
+            Outcome.SKIPPED,
+            snapshot=snapshot,
+            collected=collected,
+            reason=SkipReason.EXCLUDED,
+            detail=f"{override.selector.describe()}, per-drive override",
+            details=details,
+        )
     return Found(
         candidate, Outcome.MONITORED, snapshot=snapshot, collected=collected, details=details
     )
+
+
+def _read_again(
+    candidate: Candidate,
+    settings: SmartctlSettings,
+    details: Details,
+    *,
+    runner: ProcessRunner,
+) -> tuple[Snapshot, Collected] | None:
+    """Read a device once more with other settings; `None` when that brought nothing."""
+    again = collect_drive(
+        candidate.name,
+        candidate.type,
+        settings=settings,
+        protocol=candidate.protocol,
+        runner=runner,
+    )
+    if again.status is not Status.OK or again.document is None:
+        return None
+    try:
+        parsed = parse(
+            again.document,
+            access=DeviceAccess(candidate.name, candidate.type, candidate.protocol or ""),
+            collection=Collection(
+                smartctl_version=again.smartctl_version,
+                exit_status=again.exit_status or 0,
+                messages=again.messages,
+                duration_seconds=again.duration_seconds,
+            ),
+        )
+    except ParseError:
+        return None
+    return replace(parsed, location=details.location, membership=details.membership), again
 
 
 def _deduplicate(found: list[Found]) -> tuple[Found, ...]:

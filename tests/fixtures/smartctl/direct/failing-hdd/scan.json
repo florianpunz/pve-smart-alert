@@ -1,0 +1,25 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      5
+    ],
+    "argv": [
+      "smartctl",
+      "--scan-open",
+      "--json=c"
+    ]
+  },
+  "devices": [
+    {
+      "name": "/dev/sda",
+      "info_name": "/dev/sda [SAT]",
+      "type": "sat",
+      "protocol": "ATA"
+    }
+  ]
+}

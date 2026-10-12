@@ -3,16 +3,18 @@
 This is the living list of checks and their default thresholds.
 The model and the reasoning are in [ADR 0010](adr/0010-health-evaluation-and-default-thresholds.md); the notification behavior of conditions and events is in [ADR 0009](adr/0009-notification-policy.md).
 
-The numbers are **provisional**. They are reviewed in milestone M3 of the [roadmap](../ROADMAP.md), which also says how far the checks are built.
+The numbers are **provisional**. They were reviewed in milestone M3 of the [roadmap](../ROADMAP.md) against the recordings of the test cluster: the healthy drives of all three nodes stay below every threshold. The review is repeated as new recordings arrive; feedback that shows a default as too noisy or too quiet changes it without a new decision record, as long as the model and the principles hold.
+
+The checks are implemented since milestone M3 (`src/pve_smart_alert/checks.py`), except where a note says otherwise.
 
 ## How to read the tables
 
 - **ID**: stable identifier, used in the configuration (`[checks."<id>"]`) and shown in notifications. Renaming an ID is a breaking change.
 - **Kind**:
   - *condition*: a state that is active until it clears. Reminders and recovery apply.
-  - *event*: an increase of a cumulative counter since the stored baseline. Reported, then the baseline moves.
-- **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used.
-- **Worsening**: *increase* means every further increase is reported, subject to the cool-down. *escalation* means only a change to a higher severity is reported.
+  - *event*: an increase of a cumulative counter since the baseline stored for the drive. Reported, then the baseline moves. A drive seen for the first time starts from its current values, so an old non-zero counter never alerts, and a counter below its baseline lowers it (FR-306).
+- **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used by default; it can still be set in the configuration, except where a note says otherwise.
+- **Worsening**: *increase* means every further increase at the same severity is reported, subject to the cool-down of the drive. *escalation* means only a change to a higher severity is reported. The notification planner applies it ([ARCHITECTURE.md](../ARCHITECTURE.md) section 7), and a test keeps this column and the catalog of the code in step.
 - A check whose source value is missing is not applicable and produces nothing.
 
 Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treated as `hdd`), `nvme`.
@@ -32,9 +34,10 @@ Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treate
 Notes:
 
 - `health.failed` is not used for NVMe. The NVMe verdict is the Critical Warning byte, which is evaluated bit by bit below.
-- `temperature`: for SAS drives, critical is also raised at the drive's own trip temperature if it reports one. For NVMe, Critical Warning bit 1 raises at least a warning.
-- `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface. The source used is shown with the value.
+- `temperature`: the limits of the drive itself are not read; the fixed limits per class apply until [Q-T4](../OPEN-QUESTIONS.md) is answered. For NVMe, Critical Warning bit 1 raises at least a warning. On hosts with smartmontools 7.4 the NVMe limits do not exist in the JSON at all ([Research 03](research/03-smart-indicators.md)).
+- `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface, and last the same kind of guess made by smartmontools. The source used is shown with the value. For ATA, `endurance_used` counts as the first source only when the device statistics were read: without them smartmontools guesses it from a vendor attribute, and the guess is named for what it is ([Research 03](research/03-smart-indicators.md)); with `smartctl.detail = "basic"` the wear of an SSD therefore comes from a vendor attribute.
 - `selftest.failed` only reads logs. The tool never starts a self-test.
+- `drive.unreadable` and `drive.missing` are raised by the notification planner from consecutive runs, not from the data of a drive, and their counts are `notify.unreadable_runs` and `notify.missing_runs` (default 2). They accept only `enabled`. A device that never answered with a model and serial number is unreadable under its device name and type. While a drive is missing or unreadable, its other conditions are frozen: no reminders, no recovery.
 
 ## SATA (ATA attributes)
 
@@ -54,7 +57,7 @@ Notes:
 Notes:
 
 - Raw values of attributes 1 (read error rate) and 7 (seek error rate) are never evaluated. They are packed on some vendors' drives.
-- `ata.command_timeouts`: the raw value is packed on some drives. The decoding rule is an open question.
+- `ata.command_timeouts`: the raw value is packed on some drives; where the string form has several parts, the decoded first number counts (Q-T1). The threshold is met strictly above its value: up to 100 timeouts are what clean drives show.
 - The thresholds were derived from hard disk data. They apply to SATA SSDs for lack of better data.
 - The recordings of the test cluster show values a check must not misread: a worst value of 0 with a threshold of 0 on attribute 187, a packed raw value of the temperature attribute 194, and the placeholder temperature limits -127 and 127 ([Research 06](research/06-test-cluster-recordings.md#quirks-seen)).
 
@@ -68,12 +71,13 @@ Notes:
 | `nvme.backup_failed` | Critical Warning bit 4 | condition | – | – | flag | – |
 | `nvme.pmr_unreliable` | Critical Warning bit 5 | condition | – | flag | – | – |
 | `nvme.media_errors` | Media and data integrity errors | condition | – | 1 | – | increase |
-| `nvme.thermal_excursion` | Time above the critical temperature increased | event | – | flag | – | – |
+| `nvme.thermal_excursion` | Time above the critical temperature (`critical_comp_time`, minutes) increased | event | – | flag | – | – |
 | `nvme.error_log` | Number of error log entries increased | event, **disabled by default** | flag | – | – | – |
 
 Notes:
 
 - If the drive reports no spare threshold, 10 % is assumed.
+- `nvme.spare` accepts only `enabled` and `warning` in the configuration, and `warning` is the margin in points above the threshold of the drive, 15 by default. The critical verdict is the threshold of the drive itself, which the tool does not set.
 - `nvme.error_log` is off because many drives log harmless entries, and reading logs can itself add entries on some drives with smartmontools 7.4.
 
 ## SAS (SCSI log pages)
@@ -88,6 +92,7 @@ Notes:
 
 - Corrected errors are normal on SAS drives and are not evaluated.
 - No public failure-rate data was found for these values. The defaults are the weakest in the catalog.
+- No parser produces these metrics until milestone M6; the checks exist so that their identifiers are stable from now on, and they are never applicable until then.
 
 ## Conditions of the tool itself
 
@@ -107,6 +112,7 @@ Notes:
 
 - `tool.state_reset` is a one-time event. It is mentioned in the summary that follows the reset and has no recovery message.
 - All others are conditions. They clear, with a recovery message, when the cause is gone.
+- `tool_conditions.py` detects them at the start of a run since milestone M4, except `tool.unsupported_controller`, which arrives with milestone M6. `tool.smartctl_too_old` is read from the version of the device scan, or, when the scan writes no JSON, from the first line of `smartctl --version`, which starts with `smartctl 7.5` on `pve1` (smartmontools 7.5, checked on 2026-10-12). `tool.transport_degraded` holds when the notify bridge, asked to load the notification system without sending, fails; with `transport = mail` there is no bridge to fail.
 
 ## Deliberately not checked
 

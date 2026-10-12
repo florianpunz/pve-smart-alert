@@ -15,6 +15,8 @@ import pytest
 from hosts import Host
 
 from pve_smart_alert.config import (
+    Detail,
+    DriveOverride,
     DriveSelector,
     ManualDevice,
     SelectorKind,
@@ -366,3 +368,48 @@ def test_an_older_lsblk_writes_flags_as_text() -> None:
 
 def test_lsblk_without_json_is_an_error_of_enrichment() -> None:
     assert parse_block_devices("lsblk: unknown column").error == "lsblk answered without valid JSON"
+
+
+# The per-drive overrides (FR-403)
+
+
+def test_a_drive_excluded_by_an_override_is_skipped(pve7: Host) -> None:
+    drives = (
+        DriveOverride(
+            selector=DriveSelector(SelectorKind.SERIAL, "ANON-SN-0001"),
+            comment="Worn, replacement ordered",
+            exclude=True,
+        ),
+    )
+
+    discovery = pve7.discover(drives=drives)
+
+    assert discovery.devices[0].outcome is Outcome.SKIPPED
+    assert discovery.devices[0].reason is SkipReason.EXCLUDED
+    assert discovery.devices[0].detail == 'serial = "ANON-SN-0001", per-drive override'
+    assert [found.outcome for found in discovery.devices[1:]] == [
+        Outcome.MONITORED,
+        Outcome.MONITORED,
+    ]
+
+
+def test_a_drive_with_another_detail_level_is_read_again(pve7: Host) -> None:
+    drives = (
+        DriveOverride(
+            selector=DriveSelector(SelectorKind.MODEL, "Samsung SSD 850 EVO*"),
+            detail=Detail.BASIC,
+        ),
+    )
+
+    discovery = pve7.discover(drives=drives)
+
+    # The first read answers with the level of the configuration, the second
+    # with the level of the override, so the drive was read twice.
+    assert discovery.devices[0].outcome is Outcome.MONITORED
+    calls = pve7.read_devices()
+    assert len(calls) == 4
+    assert calls.count("/dev/sda") == 2
+    log = [json.loads(line) for line in pve7.log.read_text(encoding="utf-8").splitlines()]
+    sda_calls = [call for call in log if call[-1] == "/dev/sda"]
+    assert "--xall" in sda_calls[0]
+    assert "--all" in sda_calls[1]
