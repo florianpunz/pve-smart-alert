@@ -28,6 +28,9 @@ timeout = "30s"
 # How much smartctl reads (ADR 0004).
 #   extended  smartctl --xall, with the device statistics and the SCT data
 #   basic     smartctl --all, for hardware that reacts badly to the extended logs
+# With basic the wear of an SSD comes from a vendor attribute, because the
+# device statistics that carry the vendor-neutral value are not read
+# (Research 03, docs/research/ in the repository).
 detail = "extended"
 
 [discovery]
