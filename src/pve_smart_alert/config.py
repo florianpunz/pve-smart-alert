@@ -636,7 +636,13 @@ def _checks(
             raise ConfigError(
                 f'unknown check "{name}" in [{where}]',
                 key=f'{where}."{name}"',
-                line=_find_line(text, name),
+                # The check names a section of its own, so the line is looked
+                # up in the form the section is written in.
+                line=(
+                    _find_line(text, f'[{where}."{name}"]')
+                    or _find_line(text, f"[{where}.'{name}']")
+                    or _find_line(text, name)
+                ),
             )
         override = _check_override(_table_of(table), check, where=f'{where}."{name}"', text=text)
         if override != CheckOverride():

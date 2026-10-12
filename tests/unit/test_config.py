@@ -442,6 +442,20 @@ def test_an_unknown_check_is_an_error(tmp_path: Path) -> None:
     assert error.value.key == 'checks."no.such_check"'
 
 
+def test_the_line_of_an_unknown_check_is_reported(tmp_path: Path) -> None:
+    # The check names a section of its own, not a key on a line, so the line
+    # has to be looked up in the form the section is written in.
+    path = write_config(
+        tmp_path, '[checks."wear"]\nenabled = false\n\n[checks."no.such_check"]\nenabled = false\n'
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.line == 4
+    assert str(error.value).endswith("(line 4)")
+
+
 def test_a_key_the_check_does_not_have_is_an_error(tmp_path: Path) -> None:
     # A flag check has no thresholds; setting one would silently do nothing.
     path = write_config(tmp_path, '[checks."health.failed"]\nwarning = 5\n')
@@ -596,6 +610,7 @@ def test_an_unknown_check_in_a_drive_entry_is_an_error(tmp_path: Path) -> None:
         load_config(path)
 
     assert 'unknown check "no.such_check"' in str(error.value)
+    assert error.value.line == 4
 
 
 def test_the_first_matching_drive_entry_wins(tmp_path: Path) -> None:
