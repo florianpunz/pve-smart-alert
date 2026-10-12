@@ -217,7 +217,8 @@ State: in progress on the branch `feature/m5-packaging`.
 
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package; only the timer is enabled.
 - Done: the lines `timer`, `pve` and `smartd` of `doctor`, which complete FR-603 except the unsupported controllers of M6.
-- Next: `install.sh`, the release pipeline with the package test in a container, and the sandboxing decision.
+- Done: `scripts/install.sh`; the package test of ADR 0016 in a clean container in CI (`scripts/package-test.sh`); the release workflow `.github/workflows/release.yml`.
+- Next: the package test passing in CI (Q-P3), the tests on `pve1` (timer, upgrade, reboot, failure mail, purge, Q-P2, Q-N4), and the sandboxing decision (Q-P1).
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 

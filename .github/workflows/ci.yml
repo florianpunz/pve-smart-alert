@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow runs the same checks on a tag before it publishes.
+  workflow_call:
 
 # The workflow only reads the repository.
 permissions:
@@ -172,3 +174,10 @@ jobs:
       # with milestone M7; until then lintian warns that it is missing.
       - name: Run lintian
         run: lintian --fail-on error dist/*.deb
+
+      # ADR 0016, layer 4: install, run, purge in a clean Debian container
+      # with the Proxmox VE package repository (Q-P3).
+      - name: Install, run and purge in a clean Proxmox VE container
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work debian:trixie \
+            sh scripts/package-test.sh "$(ls dist/*.deb)"

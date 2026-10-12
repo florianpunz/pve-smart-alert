@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `pve-smart-alert doctor` reports the timer with its interval and next run, the version of Proxmox VE, and whether smartd is active and mails root, which reports some problems twice; the README says how to quiet smartd by hand (FR-603, [ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
 
+- `install.sh` installs the newest release, or a pinned one, after verifying the checksum of the package ([ADR 0013](docs/adr/0013-packaging-and-installation.md)).
+
 ### Changed
 
 - `pve-smart-alert doctor` reports a configuration file that does not validate as a warning that says which configuration a run continues with, instead of failing: monitoring does not stop (FR-406).

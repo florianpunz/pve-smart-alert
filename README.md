@@ -31,11 +31,20 @@
 
 ## Installation
 
-There is no release yet. `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper. Copy it to each node and install it there as root:
+There is no public release yet: the repository is still private, and the download URLs below work once it is public. Until then, `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper; copy it to each node and install it there as root with `apt install ./pve-smart-alert_*_all.deb`.
+
+Once a release is published, either command installs the newest one on a node, as root ([ADR 0013](docs/adr/0013-packaging-and-installation.md)); on a cluster, run it on each node:
 
 ```sh
-apt install ./pve-smart-alert_*_all.deb
+# Download the package and install it with apt
+wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert/releases/latest/download/pve-smart-alert.deb \
+  && apt install -y /tmp/pve-smart-alert.deb
+
+# The same, with the checksum verified; PVE_SMART_ALERT_VERSION=0.5.0 pins a version
+wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
+
+The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` one line per run. `systemctl edit pve-smart-alert.timer` changes the interval with a drop-in.
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.

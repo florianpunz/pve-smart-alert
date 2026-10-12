@@ -24,7 +24,8 @@ DPKG_BUILD := dpkg-buildpackage
 # The shell scripts of the repository, syntax-checked and, where shellcheck is
 # installed, linted (ADR 0016).
 SHELL_SCRIPTS := libexec/pve-smart-alert libexec/report-failure debian/postrm \
-	scripts/collect-node-data.sh tests/fake-smartctl
+	scripts/collect-node-data.sh scripts/install.sh \
+	scripts/package-test.sh tests/fake-smartctl
 
 RUFF  := $(BIN)/python -m ruff
 MYPY  := $(BIN)/python -m mypy
