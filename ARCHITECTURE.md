@@ -499,7 +499,7 @@ Nothing else is created or changed ([ADR 0012](docs/adr/0012-read-only-and-coexi
 
 ## 13. systemd units
 
-Sketch of the intended units ([ADR 0006](docs/adr/0006-scheduling.md)):
+The units of [ADR 0006](docs/adr/0006-scheduling.md) are in `systemd/` and installed into `/usr/lib/systemd/system/` since milestone M5. The package enables and starts only the timer; the check service is started by the timer, the failure service by `OnFailure=`, and neither has an `[Install]` section.
 
 ```ini
 # pve-smart-alert.timer
@@ -515,13 +515,13 @@ WantedBy=timers.target
 ```ini
 # pve-smart-alert.service
 [Unit]
-Description=PVE SMART Alert drive health check
 After=pve-cluster.service
 OnFailure=pve-smart-alert-failure.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/pve-smart-alert check
+SuccessExitStatus=3
 RuntimeDirectory=pve-smart-alert
 RuntimeDirectoryPreserve=yes
 StateDirectory=pve-smart-alert
@@ -532,7 +532,18 @@ IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 ```
 
-Sandboxing options of systemd are applied only where they are known not to interfere with mail submission or with the notification targets, which run inside the bridge process. Which options are safe is an open question to be settled in the packaging milestone.
+```ini
+# pve-smart-alert-failure.service
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pve-smart-alert/report-failure
+TimeoutStartSec=2min
+```
+
+- Exit status 3, a run skipped because another run holds the lock, counts as success and does not start the failure reporter.
+- `report-failure` is a POSIX shell script that uses none of the code of the tool. It sends the last 30 lines of the journal of the check service as mail to root through `/usr/sbin/sendmail`, with the subject `[pve-smart-alert] ERROR <host>: the drive health check failed`. The stamp file `/run/pve-smart-alert/failure-reported` holds the day (UTC) of the last mail, so at most one mail is sent per day; it is written only after the mail command took the message, and a reboot clears it.
+
+Sandboxing options of systemd are applied only where they are known not to interfere with mail submission or with the notification targets, which run inside the bridge process. Which options are safe is an open question to be settled in the packaging milestone (Q-P1).
 
 ## 14. Security
 

@@ -6,6 +6,9 @@
 
 libexec/pve-smart-alert		usr/sbin
 libexec/notify-bridge		usr/libexec/pve-smart-alert
+libexec/report-failure		usr/libexec/pve-smart-alert
+systemd/*.service		usr/lib/systemd/system
+systemd/*.timer			usr/lib/systemd/system
 src/pve_smart_alert		usr/share/pve-smart-alert
 templates/*.hbs			usr/share/pve-manager/templates/default
 config/config.toml		etc/pve-smart-alert

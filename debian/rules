@@ -22,3 +22,11 @@ override_dh_install:
 	# They never belong in the package, whatever the checkout looked like: the
 	# exclusion is what keeps the source tree installable as it is (ADR 0013).
 	dh_install --exclude=__pycache__
+
+# Only the timer is enabled and started. The check service is started by the
+# timer, and the failure service by OnFailure=; neither has an [Install]
+# section, and neither may be started by an installation or an upgrade
+# (ADR 0006, ADR 0013). A timer that starts later than OnBootSec after boot
+# elapses at once, which runs the first check right after the installation.
+override_dh_installsystemd:
+	dh_installsystemd pve-smart-alert.timer

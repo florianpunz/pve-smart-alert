@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# One run of PVE SMART Alert, started by pve-smart-alert.timer (ADR 0006).
+
+[Unit]
+Description=PVE SMART Alert drive health check
+Documentation=https://github.com/florianpunz/pve-smart-alert
+# The notification configuration lives on pmxcfs. Ordered after it, but not
+# depending on it: without pmxcfs the check still runs and the mail fallback
+# is used (ADR 0006, ADR 0008).
+After=pve-cluster.service
+OnFailure=pve-smart-alert-failure.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/pve-smart-alert check
+# 3: another run holds the lock and this one was skipped (FR-605). That is not
+# a failure and must not reach the failure reporter.
+SuccessExitStatus=3
+RuntimeDirectory=pve-smart-alert
+RuntimeDirectoryPreserve=yes
+StateDirectory=pve-smart-alert
+StateDirectoryMode=0700
+# Runs cannot pile up on a host with many unresponsive drives (NFR-08).
+TimeoutStartSec=15min
+# Reduced CPU and I/O priority (NFR-09).
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

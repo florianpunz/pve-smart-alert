@@ -1,0 +1,57 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Reports a failed run of pve-smart-alert.service as mail to root. Started by
+# pve-smart-alert-failure.service through OnFailure= (ADR 0006, ADR 0009).
+#
+# It uses none of the code of the tool, because the failure may be in that
+# code, and nothing but the mail command and the journal. At most one mail is
+# sent per day: a stamp file in the runtime directory holds the day of the
+# last one (FR-519). The stamp is written only after the mail command took
+# the message, so that a failed attempt is repeated on the next failure.
+#
+# The variables PVE_SMART_ALERT_RUN_DIR, PVE_SMART_ALERT_SENDMAIL and
+# PVE_SMART_ALERT_JOURNALCTL exist for the tests; the unit sets none of them.
+set -u
+
+run_dir=${PVE_SMART_ALERT_RUN_DIR:-/run/pve-smart-alert}
+sendmail=${PVE_SMART_ALERT_SENDMAIL:-/usr/sbin/sendmail}
+journalctl=${PVE_SMART_ALERT_JOURNALCTL:-journalctl}
+stamp="$run_dir/failure-reported"
+today=$(date -u +%Y-%m-%d)
+
+if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$today" ]; then
+	echo "a failure was already reported today; no mail is sent"
+	exit 0
+fi
+
+host=$(hostname)
+log=$("$journalctl" --unit=pve-smart-alert.service --lines=30 --no-pager --output=short-iso 2>&1)
+
+if ! {
+	printf 'To: root\n'
+	printf 'Subject: [pve-smart-alert] ERROR %s: the drive health check failed\n' "$host"
+	printf 'Content-Type: text/plain; charset=UTF-8\n'
+	printf '\n'
+	printf 'A run of pve-smart-alert.service on %s failed. Until it runs again,\n' "$host"
+	printf 'drive problems on this host may not be reported.\n'
+	printf '\n'
+	printf 'See what happened with:\n'
+	printf '  systemctl status pve-smart-alert.service\n'
+	printf '  journalctl -u pve-smart-alert.service\n'
+	printf '  pve-smart-alert doctor\n'
+	printf '\n'
+	printf 'The last lines of the journal of the service:\n'
+	printf '\n'
+	printf '%s\n' "$log"
+	printf '\n'
+	printf 'This mail is sent at most once per day. It does not use the code of\n'
+	printf 'pve-smart-alert, which may be what failed.\n'
+} | "$sendmail" -i -t; then
+	echo "the mail command did not take the report of the failure" >&2
+	exit 1
+fi
+
+mkdir -p "$run_dir"
+printf '%s\n' "$today" >"$stamp"
+echo "the failure was reported as mail to root"

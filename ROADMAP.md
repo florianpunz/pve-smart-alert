@@ -12,7 +12,8 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
-| M5 to M7 | Planned |
+| M5: Packaging, timer and installation | In progress |
+| M6 to M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -211,6 +212,11 @@ Result you can test:
 8. A node that has lost quorum still runs its check and sends through the fallback if needed.
 
 From here on the tool runs permanently on the maintainer's cluster. Version tag: 0.5.0.
+
+State: in progress on the branch `feature/m5-packaging`.
+
+- Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package; only the timer is enabled.
+- Next: the lines `timer`, `pve` and `smartd` of `doctor`, then `install.sh`, the release pipeline with the package test in a container, and the sandboxing decision.
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 

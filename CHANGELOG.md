@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pve-smart-alert status` shows the last run and every drive with its active conditions from the state, and `--json` prints the state (FR-602).
 - `pve-smart-alert doctor` reports the state file and the last run in a line `state`.
 
+- The package installs a systemd timer that runs `pve-smart-alert check` 3 minutes after boot and then every 30 minutes, and enables it; installing the package starts the first check ([ADR 0006](docs/adr/0006-scheduling.md)). A run that fails sends a short mail to root, at most once per day, through a script that does not use the code of the tool (FR-519).
+
 ### Changed
 
 - `pve-smart-alert doctor` reports a configuration file that does not validate as a warning that says which configuration a run continues with, instead of failing: monitoring does not stop (FR-406).

@@ -21,6 +21,11 @@ DIST   := dist
 
 DPKG_BUILD := dpkg-buildpackage
 
+# The shell scripts of the repository, syntax-checked and, where shellcheck is
+# installed, linted (ADR 0016).
+SHELL_SCRIPTS := libexec/pve-smart-alert libexec/report-failure debian/postrm \
+	scripts/collect-node-data.sh tests/fake-smartctl
+
 RUFF  := $(BIN)/python -m ruff
 MYPY  := $(BIN)/python -m mypy
 PYTEST := $(BIN)/python -m pytest
@@ -70,9 +75,14 @@ typecheck: $(STAMP)
 hygiene:
 	$(PYTHON) scripts/check_hygiene.py
 	$(PYTHON) scripts/check_version_sync.py
-	@for script in libexec/pve-smart-alert debian/postrm scripts/collect-node-data.sh tests/fake-smartctl; do \
+	@for script in $(SHELL_SCRIPTS); do \
 		sh -n $$script || exit 1; \
 	done
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck $(SHELL_SCRIPTS); \
+	else \
+		echo "shellcheck is not installed, the shell scripts are only syntax-checked"; \
+	fi
 	@if command -v perl >/dev/null 2>&1; then \
 		perl -c libexec/notify-bridge; \
 	else \

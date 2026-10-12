@@ -80,6 +80,10 @@ jobs:
           for path in \
             ./usr/sbin/pve-smart-alert \
             ./usr/libexec/pve-smart-alert/notify-bridge \
+            ./usr/libexec/pve-smart-alert/report-failure \
+            ./usr/lib/systemd/system/pve-smart-alert.service \
+            ./usr/lib/systemd/system/pve-smart-alert.timer \
+            ./usr/lib/systemd/system/pve-smart-alert-failure.service \
             ./usr/share/pve-smart-alert/pve_smart_alert/__init__.py \
             ./usr/share/pve-smart-alert/pve_smart_alert/cli.py \
             ./usr/share/pve-smart-alert/pve_smart_alert/transports/pve_notify.py \
@@ -146,7 +150,7 @@ jobs:
           root=$(mktemp -d)
           dpkg-deb --extract dist/*.deb "$root"
 
-          for program in usr/sbin/pve-smart-alert usr/libexec/pve-smart-alert/notify-bridge
+          for program in usr/sbin/pve-smart-alert usr/libexec/pve-smart-alert/notify-bridge usr/libexec/pve-smart-alert/report-failure
           do
             if [ ! -x "$root/$program" ]; then
               echo "not executable: /$program"
