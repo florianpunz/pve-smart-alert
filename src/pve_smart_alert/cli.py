@@ -9,13 +9,26 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tomllib
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pve_smart_alert import __version__
 from pve_smart_alert.anonymize import AnonymizationError
-from pve_smart_alert.config import ConfigError, NotifySettings, TransportName, load_config
+from pve_smart_alert.check_report import render as render_check_report
+from pve_smart_alert.checks import evaluate as evaluate_checks
+from pve_smart_alert.config import (
+    Config,
+    ConfigError,
+    NotifySettings,
+    TransportName,
+    effective_checks,
+    load_config,
+    load_effective,
+    save_last_good,
+)
+from pve_smart_alert.config_report import render as render_config_report
 from pve_smart_alert.discovery import Candidate, discover
 from pve_smart_alert.doctor import CheckResult, Status, run_doctor
 from pve_smart_alert.dump import DumpError, dump_fixture
@@ -26,7 +39,7 @@ from pve_smart_alert.model import (
     PveSeverity,
     node_name,
 )
-from pve_smart_alert.paths import ROOT_FORWARD_PATH
+from pve_smart_alert.paths import CONFIG_PATH, LAST_GOOD_CONFIG_PATH, ROOT_FORWARD_PATH
 from pve_smart_alert.render import render_test_notification
 from pve_smart_alert.routing import (
     FORWARDED_MAIL_TYPE,
@@ -123,6 +136,51 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(),
         help="the directory the archive is written to (default: the current one)",
     )
+
+    check = commands.add_parser(
+        "check",
+        help="evaluate the drives of this host and show what the checks found",
+        description=(
+            "Evaluate the drives of this host against the checks of the catalog."
+            " --dry-run prints the findings; no notification is sent and no state"
+            " is changed. The run that plans and sends notifications arrives with"
+            " the next milestone."
+        ),
+    )
+    check.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the findings instead of planning notifications",
+    )
+
+    config = commands.add_parser(
+        "config",
+        help="work with the configuration file",
+        description="Validate the configuration file, or show the effective configuration.",
+    )
+    config_commands = config.add_subparsers(dest="config_command", metavar="COMMAND")
+    config_commands.required = True
+    config_commands.add_parser(
+        "check",
+        help="validate the configuration file",
+        description=(
+            "Validate the whole configuration file. Errors name the key and the"
+            " line, and the command exits non-zero (FR-405)."
+        ),
+    )
+    show = config_commands.add_parser(
+        "show",
+        help="print the effective configuration",
+        description=(
+            "Print every key with its effective value and where the value comes"
+            " from, the file or the built-in default (FR-407)."
+        ),
+    )
+    show.add_argument(
+        "--defaults",
+        action="store_true",
+        help="print the built-in defaults instead of the effective configuration",
+    )
     return parser
 
 
@@ -137,6 +195,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _doctor()
     if arguments.command == "scan":
         return _scan()
+    if arguments.command == "check":
+        if not arguments.dry_run:
+            parser.error(
+                "check needs --dry-run; the run that plans and sends notifications arrives"
+                " with the next milestone"
+            )
+        return _check_dry_run()
+    if arguments.command == "config":
+        if arguments.config_command == "check":
+            return _config_check()
+        return _config_show(defaults=arguments.defaults)
     if arguments.command == "dump-fixture":
         if arguments.all == bool(arguments.devices):
             parser.error("dump-fixture needs either --all or the devices to record")
@@ -269,6 +338,83 @@ def _scan() -> int:
 def _reading(candidate: Candidate) -> None:
     """Show on standard error which device is read, since a read can take long."""
     print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
+
+
+def _check_dry_run() -> int:
+    """Evaluate the drives of this host and print the findings (FR-601, FR-301)."""
+    config, error = load_effective(last_good=LAST_GOOD_CONFIG_PATH)
+    if error is not None:
+        # The run goes on with the last good configuration; this is the
+        # tool-level warning of FR-406, as a line on standard error.
+        print(f"{PROGRAM}: {error}", file=sys.stderr)
+        print(f"{PROGRAM}: the last good configuration is in use", file=sys.stderr)
+    else:
+        _save_last_good(config)
+
+    discovery = discover(config, on_device=_reading)
+    evaluations = []
+    for found in discovery.monitored:
+        snapshot = found.snapshot
+        if snapshot is None:
+            continue
+        settings = effective_checks(config, snapshot.identity, snapshot.drive_class)
+        evaluations.append((found, evaluate_checks(snapshot, settings)))
+    for line in render_check_report(discovery, evaluations, smartctl_path=config.smartctl.path):
+        print(line)
+
+    findings = [finding for _, items in evaluations for finding in items]
+    return EXIT_PROBLEM if findings else EXIT_OK
+
+
+def _config_check() -> int:
+    """Validate the configuration file (FR-405, FR-407)."""
+    try:
+        config = load_config(CONFIG_PATH)
+    except ConfigError as error:
+        print(f"{CONFIG_PATH}: {error}")
+        return EXIT_PROBLEM
+
+    _save_last_good(config)
+    where = config.source if config.source is not None else f"no file at {CONFIG_PATH}"
+    print(f"{where}: valid")
+    return EXIT_OK
+
+
+def _config_show(*, defaults: bool) -> int:
+    """Print the effective configuration and the origin of each value (FR-407)."""
+    raw = None if defaults else _raw_document(CONFIG_PATH)
+    if defaults:
+        config, error = Config(), None
+    else:
+        config, error = load_effective(last_good=LAST_GOOD_CONFIG_PATH)
+    if error is not None:
+        # What a run uses is shown even then, and the error with it.
+        print(f"{PROGRAM}: {error}", file=sys.stderr)
+
+    for line in render_config_report(config, raw, error=error):
+        print(line)
+    return EXIT_OK
+
+
+def _raw_document(path: Path) -> dict[str, object] | None:
+    """Return the configuration file as parsed, or `None` when it cannot be read."""
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return None
+
+
+def _save_last_good(config: Config) -> None:
+    """Save the effective configuration as the last good one (ADR 0011).
+
+    A save that does not work, for example without the rights to write the
+    state directory, does not stop the command: the answer of the command
+    matters more, and the next run as root saves again.
+    """
+    try:
+        save_last_good(config, LAST_GOOD_CONFIG_PATH)
+    except OSError as error:
+        print(f"{PROGRAM}: the last good configuration was not saved: {error}", file=sys.stderr)
 
 
 def _dump_fixture(arguments: argparse.Namespace) -> int:

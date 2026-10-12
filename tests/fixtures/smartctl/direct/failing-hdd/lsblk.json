@@ -1,0 +1,14 @@
+{
+  "blockdevices": [
+    {
+      "name": "sda",
+      "kname": "sda",
+      "type": "disk",
+      "tran": "sata",
+      "rm": false,
+      "hotplug": false,
+      "fstype": null,
+      "label": null
+    }
+  ]
+}

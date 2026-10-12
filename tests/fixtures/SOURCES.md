@@ -14,6 +14,7 @@ They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py
 | `direct/test-cluster-pve6` | Same, node `pve6`. Samsung SSD 750 EVO 500GB, WDC PC SN720 | Anonymized | AGPL-3.0-or-later |
 | `direct/test-cluster-pve7` | Same, node `pve7`. Samsung SSD 850 EVO 250GB, two Samsung MZVLW256HEHP (PM961) | Anonymized | AGPL-3.0-or-later |
 | `direct/standalone-pve1` | [Research 07](../../docs/research/07-standalone-host-pve1.md): the standalone test host `pve1` of the maintainer, not part of the test cluster, recorded on 2026-10-08 by the collection script. Intenso SSD; a USB device that the scan does not list | Anonymized | AGPL-3.0-or-later |
+| `direct/failing-hdd` | Derived by hand from the recording of `test-cluster-pve7`: a hard disk that fails several checks at once, for the tests of the evaluation of milestone M3 and its acceptance step 2. Identity and values replaced, derived on 2026-10-12 | Anonymized and modified | AGPL-3.0-or-later |
 
 ## Notification configuration: `pvesh/`
 

@@ -52,3 +52,130 @@ device = []
 #       { serial = "S2R5NX0H123456A" },
 #   ]
 exclude = []
+
+# The checks of the catalog, each with its default thresholds
+# (docs/check-catalog.md). Every threshold and the enabled state can be
+# overridden here for the whole host, and per drive in [[drive]]. A severity
+# that a check does not use by default can be set just the same; wear, for
+# example, never becomes critical by default (FR-307).
+
+[checks."health.failed"]
+enabled = true
+
+[checks."selftest.failed"]
+enabled = true
+
+[checks."temperature"]
+# The limits differ per drive class; a table names them one by one, a single
+# number counts for every class.
+enabled = true
+warning = { hdd = 50, ssd = 60, nvme = 70 }
+critical = { hdd = 60, ssd = 70, nvme = 80 }
+
+[checks."wear"]
+enabled = true
+notice = 80
+warning = 95
+
+[checks."smart.disabled"]
+enabled = true
+
+[checks."ata.attribute_failing"]
+enabled = true
+
+[checks."ata.reallocated_sectors"]
+enabled = true
+notice = 1
+warning = 5
+critical = 70
+
+[checks."ata.reported_uncorrectable"]
+enabled = true
+warning = 1
+critical = 20
+
+[checks."ata.command_timeouts"]
+enabled = true
+warning = 100
+
+[checks."ata.pending_sectors"]
+enabled = true
+warning = 1
+critical = 16
+
+[checks."ata.offline_uncorrectable"]
+enabled = true
+warning = 1
+critical = 10
+
+[checks."ata.spin_retries"]
+enabled = true
+warning = 1
+
+[checks."ata.end_to_end_errors"]
+enabled = true
+warning = 1
+
+[checks."ata.crc_errors"]
+enabled = true
+
+[checks."ata.error_log"]
+enabled = true
+
+[checks."nvme.spare"]
+# The warning threshold is the margin in points above the threshold of the
+# drive itself.
+enabled = true
+warning = 15
+
+[checks."nvme.reliability_degraded"]
+enabled = true
+
+[checks."nvme.read_only"]
+enabled = true
+
+[checks."nvme.backup_failed"]
+enabled = true
+
+[checks."nvme.pmr_unreliable"]
+enabled = true
+
+[checks."nvme.media_errors"]
+enabled = true
+warning = 1
+
+[checks."nvme.thermal_excursion"]
+enabled = true
+
+[checks."nvme.error_log"]
+# Off by default: many drives log harmless entries, and reading the log can
+# add entries on some drives with smartmontools 7.4.
+enabled = false
+
+[checks."scsi.grown_defects"]
+enabled = true
+notice = 1
+warning = 100
+
+[checks."scsi.uncorrected_errors"]
+enabled = true
+warning = 1
+
+[checks."scsi.pending_defects"]
+enabled = true
+warning = 1
+
+# Overrides for one drive (FR-403). A drive is selected by exactly one of
+# model, serial or wwn, with the same meaning as in the exclude rules above.
+# The first entry that matches a drive wins. An entry can exclude the drive
+# from monitoring, name another smartctl detail level for it, and override
+# any check for it. There are none by default. One entry looks like this:
+#
+#   [[drive]]
+#   serial = "S4EWNX0M123456A"
+#   comment = "Worn, replacement ordered"
+#   exclude = false
+#   detail = "extended"
+#
+#   [drive.checks."wear"]
+#   enabled = false

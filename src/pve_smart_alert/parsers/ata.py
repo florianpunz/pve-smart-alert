@@ -12,7 +12,9 @@ test cluster packs (Research 06).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
+from typing import Final
 
 from pve_smart_alert.model import (
     Collection,
@@ -33,6 +35,15 @@ from pve_smart_alert.parsers.common import (
 )
 from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC, ata_wear
 
+# The raw value of attribute 188 packs several counters on some drives. Where
+# the string form has several parts, smartctl writes them as "N (a/b/c)" and
+# the first number is the total; otherwise the raw number is the value
+# (Q-T1, docs/check-catalog.md).
+_TIMEOUT_STRING: Final = re.compile(r"([0-9]+) \([0-9]+/[0-9]+/[0-9]+\)")
+
+# The attribute that carries the command timeouts.
+_TIMEOUT_ATTRIBUTE: Final = 188
+
 
 def parse(
     document: Mapping[str, object], *, access: DeviceAccess, collection: Collection
@@ -51,6 +62,7 @@ def parse(
             continue
         put(metrics, f"ata.attr.{number}.value", integer(attribute, "value"))
         put(metrics, f"ata.attr.{number}.raw", integer(section(attribute, "raw"), "value"))
+    put(metrics, "ata.command_timeouts", _command_timeouts(document))
 
     return Snapshot(
         identity=identity_of(document, wwn=wwn_of(document)),
@@ -127,3 +139,16 @@ def _error_log_count(document: Mapping[str, object]) -> int | None:
     log = section(document, "ata_smart_error_log")
     count = integer(section(log, "extended"), "count")
     return count if count is not None else integer(section(log, "summary"), "count")
+
+
+def _command_timeouts(document: Mapping[str, object]) -> int | None:
+    """Return the command timeouts of attribute 188, decoded (Q-T1)."""
+    for attribute in entries(document, "ata_smart_attributes", "table"):
+        if integer(attribute, "id") != _TIMEOUT_ATTRIBUTE:
+            continue
+        raw = section(attribute, "raw")
+        decoded = _TIMEOUT_STRING.fullmatch(text(raw, "string") or "")
+        if decoded is not None:
+            return int(decoded.group(1))
+        return integer(raw, "value")
+    return None

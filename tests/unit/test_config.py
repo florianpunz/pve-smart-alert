@@ -17,7 +17,11 @@ from pve_smart_alert.config import (
     SelectorKind,
     SmartctlSettings,
     TransportName,
+    drive_override,
     load_config,
+    load_effective,
+    load_last_good,
+    save_last_good,
 )
 from pve_smart_alert.model import DriveIdentity
 
@@ -399,3 +403,277 @@ def test_a_wwn_is_compared_in_its_digits() -> None:
         assert DriveSelector(SelectorKind.WWN, notation).matches(SAMSUNG)
     assert not DriveSelector(SelectorKind.WWN, "5002538000000002").matches(SAMSUNG)
     assert not DriveSelector(SelectorKind.WWN, "5002538000000001").matches(QEMU)
+
+
+# The check overrides of [checks."<id>"] (ADR 0011, FR-402)
+
+
+def test_a_threshold_can_be_overridden_globally(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.reallocated_sectors"]\nwarning = 3\n')
+
+    config = load_config(path)
+
+    assert config.checks["ata.reallocated_sectors"].warning == 3
+
+
+def test_a_check_can_be_switched_off(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.crc_errors"]\nenabled = false\n')
+
+    config = load_config(path)
+
+    assert config.checks["ata.crc_errors"].enabled is False
+
+
+def test_a_check_that_is_off_by_default_can_be_switched_on(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."nvme.error_log"]\nenabled = true\n')
+
+    config = load_config(path)
+
+    assert config.checks["nvme.error_log"].enabled is True
+
+
+def test_an_unknown_check_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."no.such_check"]\nenabled = false\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown check "no.such_check"' in str(error.value)
+    assert error.value.key == 'checks."no.such_check"'
+
+
+def test_a_key_the_check_does_not_have_is_an_error(tmp_path: Path) -> None:
+    # A flag check has no thresholds; setting one would silently do nothing.
+    path = write_config(tmp_path, '[checks."health.failed"]\nwarning = 5\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert "this check accepts" in str(error.value)
+
+
+def test_the_margin_of_the_spare_check_is_the_warning_threshold(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."nvme.spare"]\nwarning = 20\n')
+
+    config = load_config(path)
+
+    assert config.checks["nvme.spare"].warning == 20
+    # The critical verdict is the threshold of the drive itself, not a
+    # number of the tool, so the check accepts no critical threshold.
+    with pytest.raises(ConfigError):
+        load_config(write_config(tmp_path, '[checks."nvme.spare"]\ncritical = 5\n'))
+
+
+def test_a_threshold_must_be_a_whole_number_of_zero_or_more(tmp_path: Path) -> None:
+    for value in ('warning = "many"', "warning = true", "warning = -1", "warning = 1.5"):
+        path = write_config(tmp_path, f'[checks."ata.pending_sectors"]\n{value}\n')
+        with pytest.raises(ConfigError) as error:
+            load_config(path)
+        assert "whole number" in str(error.value)
+
+
+def test_the_thresholds_of_the_temperature_can_be_set_per_class(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[checks."temperature"]\nwarning = { hdd = 48, ssd = 60, nvme = 70 }\n'
+    )
+
+    config = load_config(path)
+
+    # The classes that keep their default are dropped, so that the override
+    # holds only what differs from the built-in defaults.
+    assert config.checks["temperature"].warning == {"hdd": 48}
+
+
+def test_a_single_number_counts_for_every_class(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."temperature"]\nwarning = 45\n')
+
+    config = load_config(path)
+
+    assert config.checks["temperature"].warning == 45
+
+
+def test_a_table_of_classes_for_a_check_of_one_value_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."ata.reallocated_sectors"]\nwarning = { hdd = 5 }\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert "whole number" in str(error.value)
+
+
+def test_a_class_the_check_does_not_accept_is_an_error(tmp_path: Path) -> None:
+    # The temperature accepts the three class names, nothing else.
+    path = write_config(tmp_path, '[checks."temperature"]\nwarning = { sata = 50 }\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'names the class "sata", which this check does not apply to' in str(error.value)
+
+
+def test_an_override_that_repeats_the_default_is_dropped(tmp_path: Path) -> None:
+    # The reference lists every key with its default, and loading it must
+    # change nothing (ADR 0011).
+    path = write_config(
+        tmp_path,
+        '[checks."ata.reallocated_sectors"]\nnotice = 1\nwarning = 5\ncritical = 70\n'
+        '[checks."temperature"]\nwarning = { hdd = 50, ssd = 60, nvme = 70 }\n'
+        '[checks."nvme.error_log"]\nenabled = false\n'
+        '[checks."health.failed"]\nenabled = true\n',
+    )
+
+    config = load_config(path)
+
+    assert config.checks == {}
+
+
+# The per-drive overrides of [[drive]] (ADR 0011, FR-403)
+
+
+def test_a_drive_entry_can_exclude_and_describe_a_drive(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\ncomment = "Worn, replacement ordered"\n'
+        "exclude = true\n",
+    )
+
+    config = load_config(path)
+
+    (entry,) = config.drives
+    assert entry.selector == DriveSelector(SelectorKind.SERIAL, "ANON-SN-0001")
+    assert entry.comment == "Worn, replacement ordered"
+    assert entry.exclude is True
+
+
+def test_a_drive_entry_can_name_another_detail_level(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[[drive]]\nmodel = "Samsung *"\ndetail = "basic"\nexclude = false\n'
+    )
+
+    config = load_config(path)
+
+    assert config.drives[0].detail is Detail.BASIC
+    assert config.drives[0].exclude is False
+
+
+def test_a_drive_entry_needs_exactly_one_selector(tmp_path: Path) -> None:
+    for content in (
+        '[[drive]]\ncomment = "no selector"\n',
+        '[[drive]]\nserial = "S1"\nmodel = "M"\n',
+    ):
+        path = write_config(tmp_path, content)
+        with pytest.raises(ConfigError) as error:
+            load_config(path)
+        assert "exactly one of" in str(error.value)
+
+
+def test_an_unknown_key_in_a_drive_entry_is_an_error(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[[drive]]\nserial = "S1"\nname = "/dev/sda"\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown key "name"' in str(error.value)
+
+
+def test_a_drive_entry_can_override_a_check(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\n\n[drive.checks."wear"]\nenabled = false\n',
+    )
+
+    config = load_config(path)
+
+    assert config.drives[0].checks["wear"].enabled is False
+
+
+def test_an_unknown_check_in_a_drive_entry_is_an_error(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path, '[[drive]]\nserial = "S1"\n\n[drive.checks."no.such_check"]\nenabled = false\n'
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'unknown check "no.such_check"' in str(error.value)
+
+
+def test_the_first_matching_drive_entry_wins(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nmodel = "Samsung *"\n\n[drive.checks."wear"]\nenabled = false\n'
+        '\n[[drive]]\nserial = "ANON-SN-0001"\n\n[drive.checks."wear"]\nenabled = true\n',
+    )
+    config = load_config(path)
+    drive = DriveIdentity.of("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001")
+
+    entry = drive_override(config, drive)
+
+    assert entry is not None
+    assert entry.checks["wear"].enabled is False
+
+
+# The last good configuration (ADR 0011, FR-406)
+
+
+def test_the_last_good_configuration_survives_a_round_trip(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    path = write_config(
+        tmp_path,
+        '[notify]\ntransport = "mail"\n\n[checks."temperature"]\nwarning = { hdd = 48 }\n'
+        '\n[[drive]]\nserial = "ANON-SN-0001"\nexclude = true\n',
+    )
+    config = load_config(path)
+    last_good = tmp_path / "last-good-config.json"
+
+    save_last_good(config, last_good)
+    loaded = load_last_good(last_good)
+
+    assert loaded == replace(config, source=last_good)
+
+
+def test_without_a_last_good_configuration_there_are_the_defaults(
+    tmp_path: Path,
+) -> None:
+    assert load_last_good(tmp_path / "absent.json") is None
+
+    (tmp_path / "broken.json").write_text("{ not json", encoding="utf-8")
+    assert load_last_good(tmp_path / "broken.json") is None
+
+
+def test_an_invalid_file_leads_to_the_last_good_configuration(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[notify]\ntransport = "mail"\n')
+    last_good = tmp_path / "last-good-config.json"
+    save_last_good(load_config(path), last_good)
+    path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+
+    config, error = load_effective(path, last_good=last_good)
+
+    assert error is not None
+    assert 'unknown key "timeout"' in str(error)
+    assert config.notify.transport is TransportName.MAIL
+    assert config.source == last_good
+
+
+def test_without_a_last_good_configuration_an_invalid_file_leads_to_the_defaults(
+    tmp_path: Path,
+) -> None:
+    path = write_config(tmp_path, "[notify]\ntransport = 30\n")
+
+    config, error = load_effective(path, last_good=None)
+
+    assert error is not None
+    assert config == Config()
+
+
+def test_the_last_good_configuration_is_saved_after_a_validation(tmp_path: Path) -> None:
+    # The commands save it; here the save itself is the test.
+    path = write_config(tmp_path, '[checks."wear"]\nwarning = 90\n')
+    last_good = tmp_path / "last-good-config.json"
+
+    save_last_good(load_config(path), last_good)
+
+    loaded = load_last_good(last_good)
+    assert loaded is not None
+    assert loaded.checks["wear"].warning == 90

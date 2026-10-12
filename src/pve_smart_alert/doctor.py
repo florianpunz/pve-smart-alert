@@ -21,6 +21,7 @@ from pve_smart_alert.config import (
     SmartctlSettings,
     TransportName,
     load_config,
+    load_last_good,
 )
 from pve_smart_alert.discovery.sources import parse_scan
 from pve_smart_alert.model import NOTIFICATION_TYPE, PveSeverity, node_name
@@ -28,6 +29,7 @@ from pve_smart_alert.paths import (
     BODY_TEMPLATE,
     BRIDGE_PATH,
     CONFIG_PATH,
+    LAST_GOOD_CONFIG_PATH,
     PVESH_PATH,
     REFERENCE_PATH,
     ROOT_FORWARD_PATH,
@@ -138,19 +140,32 @@ def run_doctor(
     ]
 
 
-def check_config(path: Path) -> tuple[CheckResult, Config | None]:
-    """Check the configuration file and return it, or `None` when it cannot be used."""
+def check_config(
+    path: Path, *, last_good: Path | None = LAST_GOOD_CONFIG_PATH
+) -> tuple[CheckResult, Config | None]:
+    """Check the configuration file and return the configuration a run uses.
+
+    An invalid file does not fail this check, because a run continues with
+    the last good configuration or the defaults (FR-406); it warns and says
+    which of the two is in use.
+    """
     try:
         config = load_config(path)
     except ConfigError as error:
+        fallback = load_last_good(last_good)
+        if fallback is not None:
+            detail = f"{path}: {error}; runs continue with the last good configuration"
+        else:
+            fallback = Config()
+            detail = f"{path}: {error}; runs continue with the built-in defaults"
         return (
             CheckResult(
                 "config",
-                Status.FAIL,
-                f"{path}: {error}",
+                Status.WARN,
+                detail,
                 advice=f"the keys this version reads are listed in {REFERENCE_PATH}",
             ),
-            None,
+            fallback,
         )
 
     if config.source is None:

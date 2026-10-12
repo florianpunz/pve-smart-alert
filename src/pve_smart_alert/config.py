@@ -6,17 +6,26 @@ behavior are described in ADR 0011 and ARCHITECTURE.md section 8.
 
 This module reads the keys that are implemented: `[notify] transport`,
 `[smartctl]` with `path`, `timeout` and `detail`, the manual devices of
-`[[discovery.device]]` and the exclude rules of `[discovery]`. The validation
-is strict: an unknown section, an unknown key, a wrong type and a value out of
-range are errors that name the place (FR-405), and every other key of
-ADR 0011 counts as unknown until it is implemented. The last-good
-configuration and the run-time fallback of FR-406 are not built yet and are
-deliberately not imitated here: an invalid file is an error for the
-interactive commands and is reported by `pve-smart-alert doctor`.
+`[[discovery.device]]`, the exclude rules of `[discovery]`, the global
+overrides of `[checks."<check-id>"]` and the per-drive overrides of
+`[[drive]]`, which can exclude a drive, set its smartctl detail level and
+override any check for it. The validation is strict: an unknown section, an
+unknown key, a wrong type and a value out of range are errors that name the
+place (FR-405). An override that repeats the built-in default is dropped, so
+that the reference file, which lists every key with its default, changes
+nothing when it is loaded.
+
+An invalid file never stops a run: `load_effective` returns the last
+configuration that passed validation, saved as `last-good-config.json` by
+`save_last_good`, or the built-in defaults when there is none, together with
+the error (FR-406). What a run then uses is `effective_checks`: the built-in
+defaults of the catalog, overridden by the global configuration, overridden
+by the first matching per-drive override (ARCHITECTURE.md section 6).
 """
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from collections.abc import Mapping
@@ -25,8 +34,15 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from pve_smart_alert.model import DriveIdentity
-from pve_smart_alert.paths import CONFIG_PATH, SMARTCTL_PATH
+from pve_smart_alert.checks import (
+    CATALOG,
+    Check,
+    EffectiveCheck,
+    Thresholds,
+    default_checks,
+)
+from pve_smart_alert.model import DriveClass, DriveIdentity
+from pve_smart_alert.paths import CONFIG_PATH, LAST_GOOD_CONFIG_PATH, SMARTCTL_PATH
 
 
 class TransportName(StrEnum):
@@ -50,12 +66,26 @@ _TRANSPORT_VALUES: Final = tuple(item.value for item in TransportName)
 _DETAIL_VALUES: Final = tuple(item.value for item in Detail)
 
 # Which sections and keys this version knows. Anything else is an error
-# (ADR 0011). The table grows with the sections that are implemented.
+# (ADR 0011). The table grows with the sections that are implemented. The
+# sections `checks` and `drive` are validated by their own builders, because
+# the keys of `checks` are the identifiers of the catalog and `drive` is a
+# list of tables.
 _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
     "notify": frozenset({"transport"}),
     "smartctl": frozenset({"path", "timeout", "detail"}),
     "discovery": frozenset({"device", "exclude"}),
 }
+_DYNAMIC_SECTIONS: Final = ("checks", "drive")
+
+# The keys of a table that overrides one check (ADR 0011).
+_CHECK_KEYS: Final = ("enabled", "notice", "warning", "critical")
+
+# The names of the drive classes, as the configuration writes them.
+_CLASS_NAMES: Final = tuple(item.value for item in DriveClass)
+
+# The keys of one `[[drive]]` entry: one selector (ADR 0024), a comment, the
+# exclusion, the smartctl detail level and the check overrides (FR-403).
+_DRIVE_KEYS: Final = ("model", "serial", "wwn", "comment", "exclude", "detail", "checks")
 
 # The keys of one manual device, both required (FR-104).
 _DEVICE_KEYS: Final = ("name", "type")
@@ -176,6 +206,36 @@ class DiscoverySettings:
 
 
 @dataclass(frozen=True)
+class CheckOverride:
+    """One `[checks."<id>"]` or `[drive.checks."<id>"]` table (ADR 0011).
+
+    Every value is what it overrides; `None` leaves the default in place. A
+    threshold is one number, or, for the one check whose thresholds differ
+    per drive class, a table that names the classes.
+    """
+
+    enabled: bool | None = None
+    notice: int | Mapping[str, int] | None = None
+    warning: int | Mapping[str, int] | None = None
+    critical: int | Mapping[str, int] | None = None
+
+
+@dataclass(frozen=True)
+class DriveOverride:
+    """One `[[drive]]` entry: what is overridden for one drive (FR-403).
+
+    A drive is selected by exactly one of model, serial or WWN (ADR 0024).
+    The first entry that matches a drive wins (ARCHITECTURE.md section 6).
+    """
+
+    selector: DriveSelector
+    comment: str | None = None
+    exclude: bool = False
+    detail: Detail | None = None
+    checks: Mapping[str, CheckOverride] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Config:
     """The effective configuration.
 
@@ -187,6 +247,8 @@ class Config:
     notify: NotifySettings = NotifySettings()
     smartctl: SmartctlSettings = field(default_factory=SmartctlSettings)
     discovery: DiscoverySettings = field(default_factory=DiscoverySettings)
+    checks: Mapping[str, CheckOverride] = field(default_factory=dict)
+    drives: tuple[DriveOverride, ...] = ()
     source: Path | None = None
 
 
@@ -207,6 +269,294 @@ def load_config(path: Path | None = None) -> Config:
     data = _parse(text, source)
     _check_known_keys(data, text)
     return _build(data, source=source, text=text)
+
+
+def load_effective(
+    path: Path | None = None, *, last_good: Path | None = LAST_GOOD_CONFIG_PATH
+) -> tuple[Config, ConfigError | None]:
+    """Load the configuration the way a run does (FR-406).
+
+    The file is tried first. When it is invalid, the last configuration that
+    passed validation is used, and when there is none the built-in defaults;
+    the run continues either way. The error is returned with the
+    configuration, so that the caller can raise the warning that names it.
+    """
+    try:
+        return load_config(path), None
+    except ConfigError as error:
+        fallback = load_last_good(last_good) if last_good is not None else None
+        return (fallback if fallback is not None else Config()), error
+
+
+def save_last_good(config: Config, path: Path | None = LAST_GOOD_CONFIG_PATH) -> None:
+    """Save the effective configuration as the last good one (ADR 0011).
+
+    A new directory is created only for the file of the tool itself. An
+    administrator who runs a command without the rights to write the state
+    directory gets the error from the command, not from the run: the caller
+    decides what a failed save means.
+    """
+    assert path is not None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_to_json(config), indent=2) + "\n", encoding="utf-8")
+
+
+def load_last_good(path: Path | None = LAST_GOOD_CONFIG_PATH) -> Config | None:
+    """Return the last configuration that passed validation, or `None`.
+
+    `None` also answers a file that cannot be read or cannot be understood:
+    the run then continues with the built-in defaults (FR-406).
+    """
+    if path is None:
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        return _from_json(data, source=path)
+    except (ConfigError, ValueError, TypeError):
+        return None
+
+
+def _to_json(config: Config) -> dict[str, object]:
+    """Return the effective configuration as one JSON document (ADR 0011)."""
+    return {
+        "notify": {"transport": config.notify.transport.value},
+        "smartctl": {
+            "path": str(config.smartctl.path),
+            "timeout_seconds": config.smartctl.timeout_seconds,
+            "detail": config.smartctl.detail.value,
+        },
+        "discovery": {
+            "devices": [
+                {"name": device.name, "type": device.type} for device in config.discovery.devices
+            ],
+            "exclude": [
+                {"kind": rule.kind.value, "value": rule.value} for rule in config.discovery.exclude
+            ],
+        },
+        "checks": {
+            name: {
+                "enabled": override.enabled,
+                "notice": override.notice,
+                "warning": override.warning,
+                "critical": override.critical,
+            }
+            for name, override in config.checks.items()
+        },
+        "drives": [
+            {
+                "kind": entry.selector.kind.value,
+                "value": entry.selector.value,
+                "comment": entry.comment,
+                "exclude": entry.exclude,
+                "detail": entry.detail.value if entry.detail is not None else None,
+                "checks": {
+                    name: {
+                        "enabled": override.enabled,
+                        "notice": override.notice,
+                        "warning": override.warning,
+                        "critical": override.critical,
+                    }
+                    for name, override in entry.checks.items()
+                },
+            }
+            for entry in config.drives
+        ],
+    }
+
+
+def _from_json(data: Mapping[str, object], *, source: Path) -> Config:
+    """Return the configuration of a last-good document."""
+    notify = _table_of(data.get("notify"))
+    smartctl = _table_of(data.get("smartctl"))
+    discovery = _table_of(data.get("discovery"))
+    return Config(
+        notify=NotifySettings(
+            transport=TransportName(_json_text(notify, "transport") or TransportName.AUTO.value)
+        ),
+        smartctl=SmartctlSettings(
+            path=Path(_json_text(smartctl, "path") or str(SMARTCTL_PATH)),
+            timeout_seconds=_number(
+                smartctl, "timeout_seconds", SmartctlSettings().timeout_seconds
+            ),
+            detail=Detail(_json_text(smartctl, "detail") or Detail.EXTENDED.value),
+        ),
+        discovery=DiscoverySettings(
+            devices=tuple(
+                ManualDevice(
+                    name=_json_text(device, "name") or "",
+                    type=_json_text(device, "type") or "",
+                )
+                for device in _list_of(discovery.get("devices"))
+            ),
+            exclude=tuple(
+                DriveSelector(
+                    SelectorKind(_json_text(rule, "kind") or SelectorKind.MODEL.value),
+                    _json_text(rule, "value") or "",
+                )
+                for rule in _list_of(discovery.get("exclude"))
+            ),
+        ),
+        checks=_overrides_of(_table_of(data.get("checks"))),
+        drives=tuple(
+            DriveOverride(
+                selector=DriveSelector(
+                    SelectorKind(_json_text(entry, "kind") or SelectorKind.MODEL.value),
+                    _json_text(entry, "value") or "",
+                ),
+                comment=_json_text(entry, "comment"),
+                exclude=bool(entry.get("exclude")),
+                detail=Detail(_json_text(entry, "detail") or Detail.EXTENDED.value)
+                if entry.get("detail") is not None
+                else None,
+                checks=_overrides_of(_table_of(entry.get("checks"))),
+            )
+            for entry in _list_of(data.get("drives"))
+        ),
+        source=source,
+    )
+
+
+def _overrides_of(table: Mapping[str, object]) -> dict[str, CheckOverride]:
+    """Return the check overrides of a last-good document."""
+    result: dict[str, CheckOverride] = {}
+    for name, entry in table.items():
+        override = _override_of(_table_of(entry))
+        if override != CheckOverride():
+            result[name] = override
+    return result
+
+
+def _override_of(table: Mapping[str, object]) -> CheckOverride:
+    """Return one check override of a last-good document."""
+    enabled = table.get("enabled")
+    return CheckOverride(
+        enabled=enabled if isinstance(enabled, bool) else None,
+        notice=_json_number(table, "notice"),
+        warning=_json_number(table, "warning"),
+        critical=_json_number(table, "critical"),
+    )
+
+
+def _json_number(table: Mapping[str, object], key: str) -> int | Mapping[str, int] | None:
+    """Return a threshold of a last-good document: one number or a table of them."""
+    value = table.get(key)
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, dict):
+        numbers = {
+            name: number
+            for name, number in value.items()
+            if isinstance(name, str) and isinstance(number, int) and not isinstance(number, bool)
+        }
+        return numbers or None
+    return None
+
+
+def _json_text(node: Mapping[str, object], key: str) -> str | None:
+    """Return a string value of a last-good document, or `None`."""
+    value = node.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _list_of(value: object) -> tuple[Mapping[str, object], ...]:
+    """Return the tables of a JSON list, or an empty one."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(entry for entry in value if isinstance(entry, dict))
+
+
+def _number(node: Mapping[str, object], key: str, default: float) -> float:
+    """Return a number of a last-good document, or the default."""
+    value = node.get(key)
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else default
+
+
+def drive_override(config: Config, identity: DriveIdentity) -> DriveOverride | None:
+    """Return the first per-drive override that selects this drive, or `None`.
+
+    The first matching entry wins (ARCHITECTURE.md section 6).
+    """
+    return next((entry for entry in config.drives if entry.selector.matches(identity)), None)
+
+
+def effective_checks(
+    config: Config, identity: DriveIdentity, drive_class: DriveClass
+) -> dict[str, EffectiveCheck]:
+    """Return the settings of every check as they apply to one drive.
+
+    The built-in defaults of the catalog, overridden by the global
+    configuration, overridden by the first matching per-drive override
+    (ARCHITECTURE.md section 6, FR-402, FR-403).
+    """
+    drive = drive_override(config, identity)
+    result: dict[str, EffectiveCheck] = {}
+    for name, item in default_checks(drive_class).items():
+        enabled = item.enabled
+        thresholds = item.thresholds
+        global_override = config.checks.get(name)
+        drive_check = drive.checks.get(name) if drive is not None else None
+        for override in (global_override, drive_check):
+            if override is None:
+                continue
+            if override.enabled is not None:
+                enabled = override.enabled
+            if thresholds is not None:
+                thresholds = _merged(drive_class, thresholds, override)
+        result[name] = EffectiveCheck(check=item.check, enabled=enabled, thresholds=thresholds)
+    return result
+
+
+def effective_check(config: Config, check: Check, drive_class: DriveClass | None) -> EffectiveCheck:
+    """Return the settings of one check as the global configuration leaves them.
+
+    The per-drive overrides are left out: this answers for the configuration
+    as a whole, for one drive class. `drive_class` is `None` for a check
+    without thresholds.
+    """
+    item = (
+        default_checks(drive_class)[check.id]
+        if drive_class is not None
+        else EffectiveCheck(check, check.enabled, check.thresholds)
+    )
+    override = config.checks.get(check.id)
+    if override is None:
+        return item
+    enabled = item.enabled if override.enabled is None else override.enabled
+    thresholds = item.thresholds
+    if thresholds is not None and drive_class is not None:
+        thresholds = _merged(drive_class, thresholds, override)
+    return EffectiveCheck(check, enabled, thresholds)
+
+
+def _merged(drive_class: DriveClass, current: Thresholds, override: CheckOverride) -> Thresholds:
+    """Return the thresholds with one override applied to them."""
+    values: dict[str, int | None] = {
+        "notice": current.notice,
+        "warning": current.warning,
+        "critical": current.critical,
+    }
+    for severity, value in (
+        ("notice", override.notice),
+        ("warning", override.warning),
+        ("critical", override.critical),
+    ):
+        if value is None:
+            continue
+        if isinstance(value, Mapping):
+            # A table of the classes: the entry of this drive's class counts,
+            # a class the table leaves out keeps its default.
+            value = value.get(drive_class.value)
+            if value is None:
+                continue
+        values[severity] = value
+    return Thresholds(**values)
 
 
 def _read(path: Path) -> str | None:
@@ -232,6 +582,17 @@ def _parse(text: str, path: Path) -> dict[str, object]:
 def _check_known_keys(data: Mapping[str, object], text: str) -> None:
     """Reject every section and key this version does not know (ADR 0011)."""
     for name, value in data.items():
+        if name in _DYNAMIC_SECTIONS:
+            # `checks` and `drive` are validated by their own builders: the
+            # keys of `checks` are the identifiers of the catalog, and
+            # `drive` is a list of tables.
+            if not isinstance(value, (dict, list)):
+                raise ConfigError(
+                    f'"{name}" must be a table or a list of tables',
+                    key=name,
+                    line=_find_line(text, name),
+                )
+            continue
         known = _SCHEMA.get(name)
         if known is None:
             if not isinstance(value, dict):
@@ -258,8 +619,194 @@ def _build(data: Mapping[str, object], *, source: Path, text: str) -> Config:
         notify=_notify(_table(data.get("notify")), text),
         smartctl=_smartctl(_table(data.get("smartctl")), text),
         discovery=_discovery(_table(data.get("discovery")), text),
+        checks=_checks(_table(data.get("checks")), text),
+        drives=_drives(data.get("drive"), text),
         source=source,
     )
+
+
+def _checks(
+    section: Mapping[str, object], text: str, *, where: str = "checks"
+) -> dict[str, CheckOverride]:
+    """Return the check overrides of one table, validated and without no-op entries."""
+    result: dict[str, CheckOverride] = {}
+    for name, table in section.items():
+        check = CATALOG.get(name)
+        if check is None:
+            raise ConfigError(
+                f'unknown check "{name}" in [{where}]',
+                key=f'{where}."{name}"',
+                line=_find_line(text, name),
+            )
+        override = _check_override(_table_of(table), check, where=f'{where}."{name}"', text=text)
+        if override != CheckOverride():
+            result[name] = override
+    return result
+
+
+def _check_override(
+    table: Mapping[str, object], check: Check, *, where: str, text: str
+) -> CheckOverride:
+    """Return one table that overrides one check, validated and normalized."""
+    for key in table:
+        if key not in check.slots:
+            allowed = ", ".join(f'"{slot}"' for slot in sorted(check.slots))
+            raise ConfigError(
+                f'unknown key "{key}" in [{where}], this check accepts {allowed}',
+                key=f"{where}.{key}",
+                line=_find_line(text, key),
+            )
+    override = CheckOverride(
+        enabled=_boolean(table, "enabled", f"{where}.enabled", text),
+        notice=_threshold(table, "notice", check, where, text),
+        warning=_threshold(table, "warning", check, where, text),
+        critical=_threshold(table, "critical", check, where, text),
+    )
+    normalized = _normalized(override, check)
+    return normalized if normalized is not None else CheckOverride()
+
+
+def _normalized(override: CheckOverride, check: Check) -> CheckOverride | None:
+    """Return the override without the parts that repeat the default, or `None`.
+
+    The reference of the configuration lists every key with its default, and
+    loading it must change nothing (ADR 0011).
+    """
+    values: dict[str, object] = {
+        "enabled": override.enabled if override.enabled != check.enabled else None
+    }
+    for severity in ("notice", "warning", "critical"):
+        value = getattr(override, severity)
+        if value is None:
+            values[severity] = None
+        elif isinstance(value, Mapping):
+            kept = {
+                name: number
+                for name, number in value.items()
+                if number != _default_threshold(check, severity, name)
+            }
+            values[severity] = kept or None
+        else:
+            defaults = {_default_threshold(check, severity, name.value) for name in check.classes}
+            values[severity] = None if defaults == {value} else value
+    normalized = CheckOverride(**values)  # type: ignore[arg-type]
+    return normalized if normalized != CheckOverride() else None
+
+
+def _default_threshold(check: Check, severity: str, class_name: str | None) -> int | None:
+    """Return the built-in default of one threshold of a check, for one class."""
+    thresholds: Thresholds | None = None
+    if check.per_class is not None and class_name is not None:
+        thresholds = check.per_class.get(DriveClass(class_name))
+    elif check.per_class is None:
+        thresholds = check.thresholds
+    if thresholds is None:
+        return None
+    value: object = getattr(thresholds, severity, None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _threshold(
+    table: Mapping[str, object], severity: str, check: Check, where: str, text: str
+) -> int | Mapping[str, int] | None:
+    """Return one threshold of a check table, validated (FR-405)."""
+    value = table.get(severity)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        if isinstance(value, dict) and check.per_class is not None:
+            per_class: dict[str, int] = {}
+            for name, number in value.items():
+                if name not in _CLASS_NAMES or DriveClass(name) not in check.classes:
+                    raise ConfigError(
+                        f'"{where}.{severity}" names the class "{name}", which this check'
+                        " does not apply to",
+                        key=f"{where}.{severity}",
+                        line=_find_line(text, severity),
+                    )
+                if isinstance(number, bool) or not isinstance(number, int) or number < 0:
+                    raise ConfigError(
+                        f'"{where}.{severity}" must hold whole numbers of 0 or more',
+                        key=f"{where}.{severity}",
+                        line=_find_line(text, severity),
+                    )
+                per_class[name] = number
+            return per_class or None
+        raise ConfigError(
+            f'"{where}.{severity}" must be a whole number of 0 or more, found'
+            f" {type(value).__name__}",
+            key=f"{where}.{severity}",
+            line=_find_line(text, severity),
+        )
+    if value < 0:
+        raise ConfigError(
+            f'"{where}.{severity}" must be a whole number of 0 or more, found {value}',
+            key=f"{where}.{severity}",
+            line=_find_line(text, severity),
+        )
+    return value
+
+
+def _drives(entries: object, text: str) -> tuple[DriveOverride, ...]:
+    """Return the per-drive overrides of `[[drive]]`, validated."""
+    if entries is None:
+        return ()
+    if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
+        raise ConfigError(
+            '"drive" must be a list of tables, such as [[drive]]',
+            key="drive",
+            line=_find_line(text, "[[drive]]"),
+        )
+    return tuple(_drive_override(entry, number, text) for number, entry in enumerate(entries, 1))
+
+
+def _drive_override(entry: Mapping[str, object], number: int, text: str) -> DriveOverride:
+    """Return one `[[drive]]` entry; `number` counts the entries from 1."""
+    where = f"[[drive]] number {number}"
+    for key in entry:
+        if key not in _DRIVE_KEYS:
+            raise ConfigError(
+                f'unknown key "{key}" in {where}', key=f"drive.{key}", line=_find_line(text, key)
+            )
+    selectors = [key for key in _SELECTOR_KEYS if key in entry]
+    if len(selectors) != 1:
+        names = ", ".join(f'"{key}"' for key in _SELECTOR_KEYS)
+        raise ConfigError(
+            f"{where} needs exactly one of {names}, found {len(selectors)}",
+            key="drive",
+            line=_find_line(text, "[[drive]]"),
+        )
+    (key,) = selectors
+    value = _string(entry, key, f"drive.{key}", text)
+    if not value:
+        raise ConfigError(
+            f'"{key}" in {where} must not be empty', key=f"drive.{key}", line=_find_line(text, key)
+        )
+    if key == SelectorKind.WWN.value and not _WWN_VALUE.fullmatch(value):
+        raise ConfigError(
+            f'"wwn" in {where} must be hexadecimal digits, found "{value}"',
+            key="drive.wwn",
+            line=_find_line(text, "wwn"),
+        )
+
+    raw_detail = _string(entry, "detail", "drive.detail", text)
+    detail = (
+        Detail(_choice(raw_detail, _DETAIL_VALUES, "drive.detail", text))
+        if raw_detail is not None
+        else None
+    )
+    return DriveOverride(
+        selector=DriveSelector(SelectorKind(key), value),
+        comment=_string(entry, "comment", "drive.comment", text),
+        exclude=_boolean(entry, "exclude", "drive.exclude", text) is True,
+        detail=detail,
+        checks=_checks(_table_of(entry.get("checks")), text, where="drive.checks"),
+    )
+
+
+def _table_of(value: object) -> Mapping[str, object]:
+    """Return a TOML table, or an empty one when the value is of another type."""
+    return value if isinstance(value, dict) else {}
 
 
 def _notify(section: Mapping[str, object], text: str) -> NotifySettings:
@@ -406,6 +953,18 @@ def _string(section: Mapping[str, object], key: str, dotted: str, text: str) -> 
         return value
     raise ConfigError(
         f'"{dotted}" must be a string, found {type(value).__name__}',
+        key=dotted,
+        line=_find_line(text, key),
+    )
+
+
+def _boolean(section: Mapping[str, object], key: str, dotted: str, text: str) -> bool | None:
+    """Return a boolean value, `None` when it is absent, or raise `ConfigError`."""
+    value = section.get(key)
+    if value is None or isinstance(value, bool):
+        return value
+    raise ConfigError(
+        f'"{dotted}" must be true or false, found {type(value).__name__}',
         key=dotted,
         line=_find_line(text, key),
     )

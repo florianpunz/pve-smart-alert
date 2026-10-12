@@ -37,7 +37,7 @@ def dump(
 ) -> Dump:
     """Dump the host; `selected` names the devices, `discovery` is the configuration."""
     return dump_fixture(
-        host.config(**discovery),
+        host.config(**discovery),  # type: ignore[arg-type]
         devices=selected,
         output=tmp_path / "out",
         node="pve9",

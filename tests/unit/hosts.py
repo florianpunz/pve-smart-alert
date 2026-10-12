@@ -15,7 +15,12 @@ from typing import Final
 
 import pytest
 
-from pve_smart_alert.config import Config, DiscoverySettings, SmartctlSettings
+from pve_smart_alert.config import (
+    Config,
+    DiscoverySettings,
+    DriveOverride,
+    SmartctlSettings,
+)
 from pve_smart_alert.discovery import Discovery, HostPaths, discover
 from pve_smart_alert.process import ProcessResult, run_with_timeout
 
@@ -49,6 +54,11 @@ class Host:
         """A host made of the anonymized recording of one node; by default of the test cluster."""
         return cls(tmp_path, monkeypatch, RECORDINGS / f"{prefix}-{node}")
 
+    @classmethod
+    def of_recording(cls, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> Host:
+        """A host made of one named recording, such as the failing-hdd scenario."""
+        return cls(tmp_path, monkeypatch, RECORDINGS / name)
+
     def __call__(
         self, command: Sequence[str | Path], *, input_text: str | None = None, timeout: float
     ) -> ProcessResult:
@@ -59,14 +69,15 @@ class Host:
             return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
         return run_with_timeout(command, input_text=input_text, timeout=timeout)
 
-    def config(self, **discovery: object) -> Config:
+    def config(self, *, drives: tuple[DriveOverride, ...] = (), **discovery: object) -> Config:
         return Config(
             smartctl=SmartctlSettings(path=FAKE, timeout_seconds=10.0),
             discovery=DiscoverySettings(**discovery),  # type: ignore[arg-type]
+            drives=drives,
         )
 
-    def discover(self, **discovery: object) -> Discovery:
-        return discover(self.config(**discovery), runner=self, paths=self.paths)
+    def discover(self, *, drives: tuple[DriveOverride, ...] = (), **discovery: object) -> Discovery:
+        return discover(self.config(drives=drives, **discovery), runner=self, paths=self.paths)
 
     def read_devices(self) -> list[str]:
         """Return the devices smartctl was asked for, the scans left out."""
