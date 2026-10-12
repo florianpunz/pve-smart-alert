@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -34,6 +35,7 @@ from pve_smart_alert.paths import (
     REFERENCE_PATH,
     ROOT_FORWARD_PATH,
     SENDMAIL_PATH,
+    STATE_PATH,
     SUBJECT_TEMPLATE,
     TEMPLATE_DIR,
     TEMPLATE_OVERRIDE_DIR,
@@ -54,6 +56,7 @@ from pve_smart_alert.routing import (
     read_notification_config,
     tool_metadata,
 )
+from pve_smart_alert.state import format_time, read_state
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
 from pve_smart_alert.transports.pve_notify import reason_for_refusal
 
@@ -62,7 +65,7 @@ TEMPLATES: Final = (SUBJECT_TEMPLATE, BODY_TEMPLATE)
 
 # What FR-603 asks for and what arrives with its own milestone.
 PENDING: Final = (
-    "the Proxmox VE version, the timer, the state file, unsupported controllers and smartd"
+    "the Proxmox VE version, the timer, unsupported controllers and smartd"
     " are checked once their milestones are built"
 )
 
@@ -117,6 +120,7 @@ def run_doctor(
     override_dir: Path = TEMPLATE_OVERRIDE_DIR,
     pvesh_path: Path = PVESH_PATH,
     forward_path: Path = ROOT_FORWARD_PATH,
+    state_path: Path = STATE_PATH,
     node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
@@ -136,6 +140,7 @@ def run_doctor(
         check_mail(sendmail_path, settings=settings),
         check_routing(routes, settings=settings, node=node, forward_path=forward_path),
         check_fallback(routes, settings=settings, node=node, forward_path=forward_path),
+        check_state(state_path),
         CheckResult("pending", Status.SKIP, PENDING),
     ]
 
@@ -266,6 +271,43 @@ def check_bridge(path: Path, *, runner: ProcessRunner = run_with_timeout) -> Che
         )
 
     return CheckResult("bridge", Status.OK, "the notification system can be loaded")
+
+
+def check_state(path: Path) -> CheckResult:
+    """Check the state file and report the last run (FR-603, ADR 0007).
+
+    A file that cannot be used is a warning, not a failure: the next run
+    sets it aside and starts afresh with one summary (NFR-12).
+    """
+    state, error = read_state(path, now=datetime.now(UTC))
+    if error is not None:
+        return CheckResult(
+            "state",
+            Status.WARN,
+            f"{path}: {error}",
+            advice="the next run sets the file aside and sends one summary",
+        )
+    if state is None:
+        return CheckResult(
+            "state", Status.OK, f"no file at {path} yet; the next run is a first run"
+        )
+    run = state.last_run
+    if run is None:
+        return CheckResult("state", Status.OK, f"{path}: no run recorded yet")
+    conditions = sum(len(record.conditions) for record in state.drives.values())
+    conditions += len(state.tool.conditions)
+    detail = (
+        f"{path}: last run {format_time(run.started)}, {run.result}, {conditions} active"
+        f" condition{'' if conditions == 1 else 's'}"
+    )
+    if run.notifications_failed:
+        return CheckResult(
+            "state",
+            Status.WARN,
+            detail,
+            advice="the last run could not deliver every notification; it retries on the next",
+        )
+    return CheckResult("state", Status.OK, detail)
 
 
 def check_templates(template_dir: Path, *, override_dir: Path) -> CheckResult:

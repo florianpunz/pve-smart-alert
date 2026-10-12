@@ -185,7 +185,8 @@ State: in progress on the branch `feature/m4-state`.
 - Done: the notification planner of `planner.py` with every rule of ADR 0009 as a pure function of state, observation, configuration and time, each rule with a test that drives it run by run with an injected clock.
 - Done: the event checks against the baselines of the state, the checks `drive.missing` and `drive.unreadable` in the catalog, and the detection of the tool conditions in `tool_conditions.py`.
 - Done: the renderer of `render.py` with the layout of ARCHITECTURE.md section 10 for a message about one drive, the summary, the first-run summary and a message about the tool, each compared with a golden file.
-- Next: the commands `pve-smart-alert check` and `pve-smart-alert status`, which put the parts together and deliver through the transports, and the scenario tests of the ten acceptance steps.
+- Done: the commands `pve-smart-alert check`, which runs the sequence of ARCHITECTURE.md section 3 in `run.py` and delivers through the transports, the dry run that prints the planned notifications, and `pve-smart-alert status`; the line `state` of `doctor`; and the ten acceptance steps below as scenario tests with an injected clock (`tests/unit/test_acceptance_m4.py`).
+- Next: the acceptance run on a host with the package and the fake smartctl, then the real smartctl again.
 
 ## M5: Packaging, timer and installation (M)
 
@@ -193,7 +194,7 @@ Goal: one command, then no care.
 
 Deliverables:
 
-- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
+- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts. The service accepts exit status 3 of `pve-smart-alert check`, a run skipped because another one holds the lock, as success (`SuccessExitStatus=3`) ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
 - Release pipeline: build on tag, lintian, package test in a clean container, checksums, release assets under stable names, `install.sh`.
 - Decision on which systemd sandboxing options are safe.
 

@@ -16,9 +16,12 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from hosts import Host
+from hosts import FAKE, Host
 
-from pve_smart_alert.config import TransportName
+from pve_smart_alert import cli
+from pve_smart_alert import config as config_module
+from pve_smart_alert.config import Config, TransportName
+from pve_smart_alert.discovery import Discovery, discover
 from pve_smart_alert.model import Notification
 from pve_smart_alert.transports import TransportOutcome
 from scenarios import SCENARIOS, Scenario, build
@@ -82,9 +85,56 @@ class ScenarioHost(Host):
         self.state_dir = tmp_path / "state"
         self.clock = Clock()
         self.transport = RecordingTransport()
+        self.exit_status: int | None = None
         self.step(paths[0].name)
 
     def step(self, name: str) -> None:
         """Make the host look like one step of the scenario."""
         self.recording = self.steps[name]
         self._monkeypatch.setenv("FAKE_SMARTCTL_RECORDING", str(self.recording))
+
+    def install(self, config: str = "") -> None:
+        """Point the command-line interface at this host, and write its configuration.
+
+        The configuration reads the drives with the fake smartctl; `config`
+        is added to it. The notify bridge is a script that loads nothing and
+        answers that it works, so that the transport counts as healthy.
+        """
+        patch = self._monkeypatch
+        root = self.state_dir.parent
+        self.config_path = root / "config.toml"
+        self.config_path.write_text(f'[smartctl]\npath = "{FAKE}"\n{config}', encoding="utf-8")
+        self.state_path = self.state_dir / "state.json"
+        bridge = root / "notify-bridge"
+        bridge.write_text("#!/bin/sh\necho '{\"ok\": true}'\n", encoding="utf-8")
+        bridge.chmod(0o755)
+        patch.setattr(config_module, "CONFIG_PATH", self.config_path)
+        patch.setattr(cli, "CONFIG_PATH", self.config_path)
+        patch.setattr(cli, "LAST_GOOD_CONFIG_PATH", self.state_dir / "last-good-config.json")
+        patch.setattr(cli, "STATE_PATH", self.state_path)
+        self.lock_path = root / "run" / "lock"
+        patch.setattr(cli, "LOCK_PATH", self.lock_path)
+        patch.setattr(cli, "BRIDGE_PATH", bridge)
+        patch.setattr(cli, "COROSYNC_CONF_PATH", root / "corosync.conf")
+        patch.setattr(cli, "clock", self.clock)
+        patch.setattr(cli, "node_name", lambda: "pve1")
+        patch.setattr(cli, "build_transport", lambda _settings: self.transport)
+        patch.setattr(cli, "_reading", lambda _candidate: None)
+
+        host = self
+
+        def discover_on_host(config: Config, **kwargs: object) -> Discovery:
+            kwargs.update(runner=host, paths=host.paths)
+            return discover(config, **kwargs)  # type: ignore[arg-type]
+
+        patch.setattr(cli, "discover", discover_on_host)
+
+    def run(
+        self, step: str | None = None, *, advance: timedelta = RUN_INTERVAL
+    ) -> list[Notification]:
+        """Run `pve-smart-alert check` once, a timer interval later, and return what it sent."""
+        if step is not None:
+            self.step(step)
+        self.clock.advance(advance)
+        self.exit_status = cli.main(["check"])
+        return self.transport.take()

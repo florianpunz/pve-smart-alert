@@ -61,10 +61,12 @@ Dependencies point in one direction: command-line interface → run orchestratio
 
 ## 3. Sequence of a run
 
-1. **Lock.** Take the lock in `/run/pve-smart-alert/`. If it is held, exit with a message.
+`run.py` implements the sequence since milestone M4; every path, program, the clock and the transport it uses are fields of its `Environment`, which the scenario tests replace.
+
+1. **Lock.** Take the lock in `/run/pve-smart-alert/`, an advisory lock on the file `lock` that the kernel releases when the process ends. If it is held, exit with a message and exit status 3.
 2. **Configuration.** Load and validate. On error, use the last good configuration and record the tool condition `tool.config_invalid`.
 3. **State.** Load, migrate if needed. If unreadable, set it aside, start empty and record `tool.state_reset`.
-4. **Preflight.** Check that smartctl exists and is version 7.0 or later. If not, record `tool.smartctl_missing` or `tool.smartctl_too_old` and skip to step 9 with no drives.
+4. **Preflight.** Check that smartctl exists and can be executed. If not, record `tool.smartctl_missing` and skip to step 9 with no drives. After the device scan of step 5, a smartctl older than 7.0 records `tool.smartctl_too_old`, a scan without usable output `tool.scan_failed`. With `transport` `auto` or `pve-notify`, run the notify bridge with `--check`; if it fails, record `tool.transport_degraded`.
 5. **Discovery.** Run the scan, the probes and the manual entries; enrich, filter, de-duplicate. Result: a list of drives to query and a list of skipped devices with reasons.
 6. **Collection and parsing.** For each drive, one after the other: run smartctl with the timeout, parse the output into a snapshot. A drive that fails is recorded as unreadable for this run; a drive in standby is recorded as skipped.
 7. **Evaluation.** Run the applicable checks on each snapshot. Result: findings per drive.
@@ -72,7 +74,7 @@ Dependencies point in one direction: command-line interface → run orchestratio
 9. **Planning.** From findings, presence, tool conditions and state, compute the notifications that are due, each with the state changes that depend on its delivery, and the state changes that need no notification.
 10. **Delivery.** Render and send each notification. For each one that was handed over, apply its state changes.
 11. **Save.** Write the state file atomically.
-12. **Summary.** Log one line with the counts. Exit 0 if the run completed, non-zero if it could not.
+12. **Summary.** Log one line with the counts. Exit 0 if the run completed, 1 if a notification was not handed over or the state could not be saved.
 
 Steps 5 to 8 never abort the run because of a single drive. Steps 9 to 11 are the only ones that change anything outside the process.
 
@@ -146,7 +148,7 @@ Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from s
 - For threshold checks the highest severity whose threshold is met is reported.
 - Event checks compare the current counter with the baseline in state and return a finding only when it is above it; without a baseline they return nothing, and the planner records the current value as the baseline (FR-306). `counters` returns the current values of the enabled event checks for that.
 - `drive.missing` and `drive.unreadable` are checks of the catalog, so that they can be configured, but no snapshot answers them: the planner raises them from consecutive runs.
-- `pve-smart-alert check --dry-run` runs discovery and evaluation and prints the findings per drive; it changes no state and sends nothing. The findings of drives that are missing or unreadable in consecutive runs, and the conditions of the tool itself, arrive with milestone M4 and M5.
+- `pve-smart-alert check --dry-run` runs the whole sequence up to the planning with the state read but not changed: it prints the findings per drive and the subject of every notification a run would send now, and it sends nothing. A state file that cannot be used is reported, not set aside.
 
 ## 7. Notification planning
 
@@ -450,7 +452,7 @@ pve-smart-alert 1.0.0 on pve1
 | --- | --- |
 | smartctl is missing or not executable | No drive is evaluated. Tool condition `tool.smartctl_missing`, critical. Run exits 0 after reporting |
 | smartctl is older than 7.0 | Same, `tool.smartctl_too_old` |
-| Device scan fails or returns invalid JSON | Manual entries and drives known from state are still tried. `tool.scan_failed`, warning |
+| Device scan fails or returns invalid JSON | Manual entries are still read. Drives known from state that were not found are not counted as missing, because they were not looked for. `tool.scan_failed`, warning |
 | A drive cannot be opened or returns no identify data | Counted as unreadable for this run. After 2 runs: condition `drive.unreadable` |
 | smartctl exceeds the timeout | Process group is killed. Treated as unreadable. The run continues with the next drive |
 | smartctl returns invalid or truncated JSON | Treated as unreadable. Output is logged at debug level |
@@ -463,9 +465,9 @@ pve-smart-alert 1.0.0 on pve1
 | Configuration file is invalid | Last good configuration is used. `tool.config_invalid`, warning |
 | State file is unreadable or has an unknown schema | File is renamed, empty state is used, `tool.state_reset`. Next notification is one summary |
 | State directory is not writable | Run fails after delivering what it can. The failure unit reports it |
-| Another run holds the lock | Exit with a message and a distinct exit code. Not an error for the timer |
+| Another run holds the lock | Exit with a message and exit status 3. Not an error for the timer; the service unit of milestone M5 has to accept it |
 | pmxcfs is not available | The bridge fails. The mail fallback is used |
-| Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning |
+| Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning, when the bridge fails its `--check` at the start of a run |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
 | No matcher matches | Nothing is sent, and the call succeeds with an empty log. Not an error of the run. `pve-smart-alert doctor` reports the severity as not routed, and `pve-smart-alert test-notification` says that no matcher routes the test ([ADR 0020](docs/adr/0020-routing-check.md)) |

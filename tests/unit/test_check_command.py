@@ -49,6 +49,11 @@ def paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     monkeypatch.setattr(config_module, "CONFIG_PATH", config)
     monkeypatch.setattr(cli, "CONFIG_PATH", config)
     monkeypatch.setattr(cli, "LAST_GOOD_CONFIG_PATH", last_good)
+    # The state, the lock, the bridge and the cluster of the host stay out of it.
+    monkeypatch.setattr(cli, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock")
+    monkeypatch.setattr(cli, "BRIDGE_PATH", tmp_path / "notify-bridge")
+    monkeypatch.setattr(cli, "COROSYNC_CONF_PATH", tmp_path / "corosync.conf")
     return config, last_good
 
 
@@ -57,7 +62,8 @@ def with_host(monkeypatch: pytest.MonkeyPatch, host: Host) -> None:
     real_discover = discover
 
     def discover_on_host(config: Config, **kwargs: object) -> object:
-        return real_discover(config, **kwargs, runner=host, paths=host.paths)  # type: ignore[arg-type]
+        kwargs.update(runner=host, paths=host.paths)
+        return real_discover(config, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(cli, "discover", discover_on_host)
 
@@ -80,7 +86,8 @@ def test_the_dry_run_shows_the_findings_of_a_failing_drive(
 
     out = capsys.readouterr().out
     assert "/dev/sda [sat] Samsung HD502HI, serial ANON-SN-0001" in out
-    for line in out.splitlines():
+    report, _, planned = out.partition("Planned notifications")
+    for line in report.splitlines():
         if line.startswith("  "):
             check, severity = line.split()[0], line.split()[1]
             assert severity == FAILING_HDD_FINDINGS[check]
@@ -90,6 +97,9 @@ def test_the_dry_run_shows_the_findings_of_a_failing_drive(
     assert "ata.error_log" not in out
     assert "wear" not in out
     assert "11 findings" in out
+    # Without a state, a run would send the first-run summary, and nothing else.
+    assert "first-run" in planned
+    assert "Nothing was sent and no state was changed" in out
 
 
 @pytest.mark.parametrize("node", ["pve5", "pve6", "pve7"])
@@ -170,14 +180,20 @@ def test_the_dry_run_names_the_built_in_defaults_without_a_last_good_configurati
     assert "last good configuration" not in error
 
 
-def test_check_without_dry_run_is_not_built_yet(
+@pytest.mark.usefixtures("paths")
+def test_a_run_that_cannot_take_its_lock_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        cli.main(["check"])
+    # Run without the rights for the runtime directory: the run fails with a
+    # message instead of a traceback (FR-607).
+    blocker = tmp_path / "file"
+    blocker.write_text("", encoding="utf-8")
+    monkeypatch.setattr(cli, "LOCK_PATH", blocker / "lock")
 
-    assert exit_info.value.code == 2
-    assert "check needs --dry-run" in capsys.readouterr().err
+    assert cli.main(["check"]) == cli.EXIT_PROBLEM
+    assert "the run failed" in capsys.readouterr().err
 
 
 # config check

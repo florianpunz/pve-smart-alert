@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Command-line interface of PVE SMART Alert.
 
-The commands of later milestones (`check`, `status`, `config`) are added here
-as they arrive.
+The commands of later milestones are added here as they arrive. A run of
+`check` is put together by `run.py`; this module only builds its environment
+from the paths of the host, so that the tests can replace each of them.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tomllib
 from collections.abc import Sequence
@@ -18,29 +20,36 @@ from pathlib import Path
 from pve_smart_alert import __version__
 from pve_smart_alert.anonymize import AnonymizationError
 from pve_smart_alert.check_report import render as render_check_report
-from pve_smart_alert.checks import evaluate as evaluate_checks
 from pve_smart_alert.config import (
     Config,
     ConfigError,
     NotifySettings,
     TransportName,
-    effective_checks,
     load_config,
     load_effective,
     save_last_good,
 )
 from pve_smart_alert.config_report import render as render_config_report
-from pve_smart_alert.discovery import Candidate, discover
+from pve_smart_alert.discovery import Candidate, Found, discover
 from pve_smart_alert.doctor import CheckResult, Status, run_doctor
 from pve_smart_alert.dump import DumpError, dump_fixture
 from pve_smart_alert.model import (
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
+    Finding,
     Notification,
     PveSeverity,
     node_name,
 )
-from pve_smart_alert.paths import CONFIG_PATH, LAST_GOOD_CONFIG_PATH, ROOT_FORWARD_PATH
+from pve_smart_alert.paths import (
+    BRIDGE_PATH,
+    CONFIG_PATH,
+    COROSYNC_CONF_PATH,
+    LAST_GOOD_CONFIG_PATH,
+    LOCK_PATH,
+    ROOT_FORWARD_PATH,
+    STATE_PATH,
+)
 from pve_smart_alert.render import render_test_notification
 from pve_smart_alert.routing import (
     FORWARDED_MAIL_TYPE,
@@ -53,7 +62,11 @@ from pve_smart_alert.routing import (
     metadata_of,
     read_notification_config,
 )
+from pve_smart_alert.run import Environment, LockedError, RunResult, run_check
 from pve_smart_alert.scan_report import render
+from pve_smart_alert.state import read_state
+from pve_smart_alert.status_report import render as render_status
+from pve_smart_alert.status_report import render_json as render_status_json
 from pve_smart_alert.transports import TransportOutcome, build_transport
 
 PROGRAM = "pve-smart-alert"
@@ -68,6 +81,8 @@ EXIT_PROBLEM = 1
 # A usage error and an unusable configuration both end here, the same status
 # that the argument parser uses for its own errors.
 EXIT_USAGE = 2
+# Another run holds the lock. Not an error of the run that holds it (FR-605).
+EXIT_LOCKED = 3
 
 SEVERITY_CHOICES = [severity.value for severity in PveSeverity]
 TRANSPORT_CHOICES = [transport.value for transport in TransportName]
@@ -140,19 +155,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = commands.add_parser(
         "check",
-        help="evaluate the drives of this host and show what the checks found",
+        help="evaluate the drives of this host and send the notifications that are due",
         description=(
-            "Evaluate the drives of this host against the checks of the catalog."
-            " --dry-run prints the findings; no notification is sent and no state"
-            " is changed. The run that plans and sends notifications arrives with"
-            " the next milestone."
+            "Run one check: evaluate the drives of this host against the checks of the"
+            " catalog, compare the result with the state of earlier runs, send the"
+            " notifications that are due and save the state (FR-601)."
         ),
     )
     check.add_argument(
         "--dry-run",
         action="store_true",
-        help="print the findings instead of planning notifications",
+        help="print the findings and the planned notifications; send nothing, change nothing",
     )
+
+    status = commands.add_parser(
+        "status",
+        help="show the stored state: the last run and the active conditions",
+        description=(
+            "Show, from the stored state, the last run and every drive with its active"
+            " conditions (FR-602). Nothing is read from a drive."
+        ),
+    )
+    status.add_argument("--json", action="store_true", help="print the state as JSON")
 
     config = commands.add_parser(
         "config",
@@ -197,12 +221,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments.command == "scan":
         return _scan()
     if arguments.command == "check":
-        if not arguments.dry_run:
-            parser.error(
-                "check needs --dry-run; the run that plans and sends notifications arrives"
-                " with the next milestone"
-            )
-        return _check_dry_run()
+        return _check_dry_run() if arguments.dry_run else _check()
+    if arguments.command == "status":
+        return _status(as_json=arguments.json)
     if arguments.command == "config":
         if arguments.config_command == "check":
             return _config_check()
@@ -341,36 +362,127 @@ def _reading(candidate: Candidate) -> None:
     print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
 
 
+def clock() -> datetime:
+    """The time of a run. The scenario tests replace it (ADR 0016)."""
+    return datetime.now(UTC)
+
+
+def _environment() -> Environment:
+    """Return the environment of a run, from the paths of this host."""
+    return Environment(
+        config_path=CONFIG_PATH,
+        last_good=LAST_GOOD_CONFIG_PATH,
+        state_path=STATE_PATH,
+        lock_path=LOCK_PATH,
+        bridge_path=BRIDGE_PATH,
+        corosync_path=COROSYNC_CONF_PATH,
+        clock=clock,
+        node=node_name,
+        transport=build_transport,
+        discover=discover,
+        on_device=_reading,
+    )
+
+
+def _check() -> int:
+    """Run one check and send what is due (FR-601, FR-606, FR-607)."""
+    try:
+        result = run_check(_environment())
+    except LockedError as error:
+        print(f"{PROGRAM}: {error}; this run is skipped", file=sys.stderr)
+        return EXIT_LOCKED
+    except OSError as error:
+        # The lock or the state directory cannot be used, typically without
+        # the rights of root.
+        print(f"{PROGRAM}: the run failed: {error}", file=sys.stderr)
+        return EXIT_PROBLEM
+
+    _warn_about_config(result)
+    for delivery in result.deliveries:
+        outcome = delivery.outcome
+        if outcome is not None and outcome.delivered:
+            via = outcome.transport.value
+            if outcome.fallback_reason is not None:
+                via += f", because {outcome.fallback_reason}"
+            print(f"sent ({via}): {delivery.notification.subject}")
+        else:
+            reason = outcome.error if outcome is not None else "not sent"
+            print(f"not delivered ({reason}): {delivery.notification.subject}")
+    print(f"{PROGRAM}: {result.summary}")
+    return EXIT_OK if result.ok else EXIT_PROBLEM
+
+
 def _check_dry_run() -> int:
-    """Evaluate the drives of this host and print the findings (FR-601, FR-301)."""
-    config, error = load_effective(last_good=LAST_GOOD_CONFIG_PATH)
-    if error is not None:
-        # The run goes on with the last good configuration, or with the
-        # built-in defaults when there is none; this is the tool-level
-        # warning of FR-406, as lines on standard error.
-        print(f"{PROGRAM}: {error}", file=sys.stderr)
-        fallback = (
-            "the last good configuration"
-            if config.source == LAST_GOOD_CONFIG_PATH
-            else "the built-in defaults"
+    """Print the findings and the planned notifications; send and change nothing (FR-601)."""
+    result = run_check(_environment(), dry_run=True)
+    _warn_about_config(result)
+    if result.state_error is not None:
+        print(
+            f"{PROGRAM}: {result.state_error}; a run would set the file aside and start afresh",
+            file=sys.stderr,
         )
-        print(f"{PROGRAM}: runs continue with {fallback}", file=sys.stderr)
-    else:
-        _save_last_good(config)
 
-    discovery = discover(config, on_device=_reading)
-    evaluations = []
-    for found in discovery.monitored:
-        snapshot = found.snapshot
-        if snapshot is None:
-            continue
-        settings = effective_checks(config, snapshot.identity, snapshot.drive_class)
-        evaluations.append((found, evaluate_checks(snapshot, settings)))
-    for line in render_check_report(discovery, evaluations, smartctl_path=config.smartctl.path):
-        print(line)
+    findings: list[Finding] = []
+    if result.discovery is not None:
+        evaluations: list[tuple[Found, list[Finding]]] = [
+            (found, result.findings.get(found.candidate.name, []))
+            for found in result.discovery.monitored
+        ]
+        for line in render_check_report(
+            result.discovery, evaluations, smartctl_path=result.config.smartctl.path
+        ):
+            print(line)
+        findings = [finding for _, items in evaluations for finding in items]
 
-    findings = [finding for _, items in evaluations for finding in items]
+    print("")
+    _print_plan(result)
     return EXIT_PROBLEM if findings else EXIT_OK
+
+
+def _print_plan(result: RunResult) -> None:
+    """Print what a run would send now, and say that nothing was sent."""
+    if not result.deliveries:
+        print("Planned notifications: none")
+    else:
+        print("Planned notifications:")
+        for delivery in result.deliveries:
+            notification = delivery.notification
+            print(f"  {notification.event.value:<10} {notification.subject}")
+    print("Nothing was sent and no state was changed (dry run).")
+
+
+def _warn_about_config(result: RunResult) -> None:
+    """Name the error of an invalid configuration on standard error (FR-406)."""
+    if result.config_error is None:
+        return
+    print(f"{PROGRAM}: {result.config_error}", file=sys.stderr)
+    fallback = (
+        "the last good configuration"
+        if result.config.source == LAST_GOOD_CONFIG_PATH
+        else "the built-in defaults"
+    )
+    print(f"{PROGRAM}: runs continue with {fallback}", file=sys.stderr)
+
+
+def _status(*, as_json: bool) -> int:
+    """Show the stored state (FR-602)."""
+    state, error = read_state(STATE_PATH, now=clock())
+    if error is not None:
+        print(f"{PROGRAM}: {error}", file=sys.stderr)
+        return EXIT_PROBLEM
+    if state is None:
+        if as_json:
+            print(json.dumps({"state_file": str(STATE_PATH), "schema": None}))
+        else:
+            print(f"State:      {STATE_PATH} does not exist yet")
+            print("            the next run is a first run and sends one summary")
+        return EXIT_OK
+    if as_json:
+        print(render_status_json(state, path=STATE_PATH), end="")
+    else:
+        for line in render_status(state, path=STATE_PATH):
+            print(line)
+    return EXIT_OK
 
 
 def _config_check() -> int:
