@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current milestone: **M2**, discovery and collection for SATA and NVMe drives; `ROADMAP.md` says what of it is done. Next step: steps 1 to 4 of its acceptance on the test cluster, then M3.
+Current milestone: **M3**, evaluation and configuration; `ROADMAP.md` says what of it is done. Next step: the check catalog with its default thresholds and the configuration commands.
 
 ### Where things are
 

@@ -166,6 +166,11 @@ Checked on 2026-10-07 in the source of smartmontools, `master` and the tag `RELE
 - `--version` writes no JSON of its own. The version is in the object `smartctl` of every JSON output, the device scan among them.
 - In 7.4 the device statistics are written as `ata_device_statistics` with `pages`, the NVMe health log with the same keys as in 7.5 and the NVMe self-test log as `nvme_self_test_log`; `endurance_used` and `spare_available` do not exist yet.
 
+Checked on 2026-10-12 in the same way, for the temperature data (**Verified**):
+
+- The SCT status is written as `ata_sct_status` in 7.4 and 7.5 alike, with the temperature in it (`ataPrintSCTStatus` in `ataprint.cpp`).
+- The NVMe temperature limits exist in the JSON only from 7.5 on: `temperature.op_limit_max` and `temperature.critical_limit_max`, next to `nvme_composite_temperature_threshold` with `warning` and `critical` (`nvmeprint.cpp`). In 7.4 the composite temperature thresholds are printed only in the human-readable output, not written to the JSON; `temperature.current` exists in both versions. A temperature check that reads the limits of the drive itself therefore finds none on hosts with smartmontools 7.4 and has to fall back to the fixed limits per class.
+
 ## Version notes
 
 | Version | Relevant change | Source |

@@ -9,8 +9,9 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | --- | --- |
 | M0: Repository bootstrap | Done, except that the repository is still private |
 | M1: Walking skeleton with notifications | Done |
-| M2: Discovery and collection for SATA and NVMe | In progress |
-| M3 to M7 | Planned |
+| M2: Discovery and collection for SATA and NVMe | Done |
+| M3: Evaluation and configuration | In progress |
+| M4 to M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -109,7 +110,7 @@ Deliverables:
 Result you can test, on every cluster node:
 
 1. `pve-smart-alert scan` lists every physical drive exactly once, with the right model, serial number, class, and pool or volume group, and lists skipped devices with a reason.
-2. The wear value shown for each SSD equals the "Wearout" column of the web interface, or `scan` names the vendor-neutral source that gives a different value ([ADR 0021](docs/adr/0021-wear-value-source.md)). On the test cluster this applies to the Fanxiang S301 on `pve5`: 44 % from the device statistics against 0 % in the web interface.
+2. The wear value shown for each SSD equals the "Wearout" column of the web interface, or `scan` names the vendor-neutral source that gives a different value ([ADR 0021](docs/adr/0021-wear-value-source.md)). On the test cluster this applies to the Fanxiang S301 on `pve5`: 44 % from `endurance_used` against 0 % in the web interface.
 3. `pve-smart-alert dump-fixture --all` writes an archive that contains no real serial number.
 4. With a drive name that does not exist as a manual entry, the scan still completes and reports that device as unreadable.
 5. With the default matcher restricted so that it no longer matches the type `pve-smart-alert`, `pve-smart-alert doctor` reports `routing` as `warn`, names the severities that are not routed and says how to add a matcher. `pve-smart-alert test-notification` says that no matcher matched. With the matcher of M1 in place, which routes only `warning` and `error`, `doctor` reports `routing` as `warn` and names `info` and `notice`. With that matcher extended to `info,notice,warning,error`, both report the matching matcher and `doctor` reports `ok`. A severity of the tool that no matcher routes always means `warn`; this is how the rules for `ok` and `warn` in [ADR 0020](docs/adr/0020-routing-check.md) are read.
@@ -118,10 +119,7 @@ How to run it: install the new package on each node, run [`scripts/collect-node-
 
 Open questions this milestone answers: Q-S1 to Q-S4 and Q-N8.
 
-State: built, waiting for steps 1 to 4 on the test cluster `pve5`, `pve6` and `pve7`; they ran on `pve1` only.
-
-- Done: the preparation on 2026-10-05, that is the recordings of all three nodes and of three matcher configurations ([Research 06](docs/research/06-test-cluster-recordings.md)), the collection script and the decision on the wear source; the routing check, which passed step 5 on 2026-10-07 on `pve7` ([ARCHITECTURE.md](ARCHITECTURE.md) section 10); the line `fallback`, built after that run and not yet run on the cluster; steps 1, 3 and 4 and the three cases of step 5 on the standalone host `pve1` on 2026-10-08, with the `fallback` line in its ok and warn cases and with the bridge made unusable, and step 2 by its second clause ([Research 07](docs/research/07-standalone-host-pve1.md)); all other deliverables: the snapshot model, the configuration keys, the anonymizer and the fixtures of the three nodes, the collector, the parsers, discovery with the selectors of [ADR 0024](docs/adr/0024-drive-selectors.md), the wear value, the line `smartctl` in `doctor`, and the commands `scan` and `dump-fixture`. The package is version 0.2.0.
-- Next: steps 1 to 4 on every node of the test cluster. `pve1` has no NVMe drive and is not a node of the cluster, so its results do not close the milestone.
+State: done. The acceptance run of steps 1 to 4 passed on all three nodes of the test cluster on 2026-10-12, with the package 0.2.0 ([Research 06](docs/research/06-test-cluster-recordings.md)): every drive appeared exactly once with the right identity and volume group; every wear value equaled the web interface except on the Fanxiang S301 on `pve5`, where `scan` names both values; the fixture archives of all three nodes contain no real serial number or WWN, checked against the raw recordings; and a manual entry for the nonexistent device `/dev/sdz` was reported as unreadable while the scan completed. Step 5 had already passed on `pve7` on 2026-10-07 ([ARCHITECTURE.md](ARCHITECTURE.md) section 10), and `doctor` reported the `fallback` line as `ok` on all three nodes in this run. Steps 1, 3 and 4 and the three cases of step 5 had also run on the standalone host `pve1` on 2026-10-08, together with the bridge made unusable ([Research 07](docs/research/07-standalone-host-pve1.md)).
 
 ## M3: Evaluation and configuration (M)
 

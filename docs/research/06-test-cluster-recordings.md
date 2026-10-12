@@ -91,3 +91,13 @@ Three matcher configurations were recorded. They are the fixtures of the routing
 | C: in use since 2026-10-05 | All three nodes, by the script | As in A | As in A, with the severities `info,notice,warning,error` |
 
 All matchers have the mode `all` and the same single target, an SMTP target that is enabled. The two disabled targets, `mail-to-root` and a second SMTP target, are used by no matcher, so no recording shows a matcher whose only target is disabled.
+
+## Addition 2026-10-12: the acceptance run
+
+The recordings of the acceptance run of milestone M2, taken on 2026-10-12 on all three nodes with PVE SMART Alert 0.2.0, confirm the picture above (**Verified** on these recordings):
+
+- The collection script recorded all three nodes completely, with exit status 0 everywhere and an empty `errors.txt`; `pve-smart-alert doctor` reported `routing` and `fallback` as `ok` on every node.
+- Every drive appeared exactly once in `pve-smart-alert scan`, with the same identity and the same volume group as on 2026-10-05. The USB device on `pve5` is again not in the scan.
+- The wear values are unchanged, except for the PM961 in `pm961-a` on `pve7`, now 22 % against 19 %. The Fanxiang S301 still reports 44 % through `endurance_used` and the device statistics against 0 % in the web interface, and `scan` names both values. With `--xall` every drive answered within 0.05 s, so the detail level causes no delay; this settles Q-S4.
+- `pve-smart-alert dump-fixture --all` wrote an anonymized archive on every node. Checked against the raw recordings: no real serial number or WWN of any drive appears in any archive; serials are `ANON-SN-nnnn` and the WWN fields carry counters, as [ADR 0023](../adr/0023-anonymization-of-recordings.md) describes.
+- A manual entry for the nonexistent device `/dev/sdz` is reported as `unreadable` with the smartctl error message, and the scan completes and still reads the real drives.
