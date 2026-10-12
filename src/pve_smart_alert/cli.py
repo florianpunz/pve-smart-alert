@@ -344,10 +344,16 @@ def _check_dry_run() -> int:
     """Evaluate the drives of this host and print the findings (FR-601, FR-301)."""
     config, error = load_effective(last_good=LAST_GOOD_CONFIG_PATH)
     if error is not None:
-        # The run goes on with the last good configuration; this is the
-        # tool-level warning of FR-406, as a line on standard error.
+        # The run goes on with the last good configuration, or with the
+        # built-in defaults when there is none; this is the tool-level
+        # warning of FR-406, as lines on standard error.
         print(f"{PROGRAM}: {error}", file=sys.stderr)
-        print(f"{PROGRAM}: the last good configuration is in use", file=sys.stderr)
+        fallback = (
+            "the last good configuration"
+            if config.source == LAST_GOOD_CONFIG_PATH
+            else "the built-in defaults"
+        )
+        print(f"{PROGRAM}: runs continue with {fallback}", file=sys.stderr)
     else:
         _save_last_good(config)
 

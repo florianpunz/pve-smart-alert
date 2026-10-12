@@ -141,7 +141,33 @@ def test_the_dry_run_uses_the_last_good_configuration(
     assert code == cli.EXIT_PROBLEM
     error = capsys.readouterr().err
     assert 'unknown check "no_such_check"' in error
-    assert "the last good configuration is in use" in error
+    assert "runs continue with the last good configuration" in error
+
+
+def test_the_dry_run_names_the_built_in_defaults_without_a_last_good_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    paths: tuple[Path, Path],
+) -> None:
+    # An invalid file without a last good configuration falls back to the
+    # built-in defaults, and the warning says so (FR-406). The defaults name
+    # the real smartctl, so the fake plays no part in this run.
+    config_path, last_good = paths
+    host = Host.of_recording(tmp_path, monkeypatch, "failing-hdd")
+    with_host(monkeypatch, host)
+    config_path.write_text(
+        fake_smartctl_config('[checks."no_such_check"]\nenabled = false\n'),
+        encoding="utf-8",
+    )
+    assert not last_good.exists()
+
+    cli.main(["check", "--dry-run"])
+
+    error = capsys.readouterr().err
+    assert 'unknown check "no_such_check"' in error
+    assert "runs continue with the built-in defaults" in error
+    assert "last good configuration" not in error
 
 
 def test_check_without_dry_run_is_not_built_yet(
