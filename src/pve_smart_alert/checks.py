@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Final
 
 from pve_smart_alert.model import (
@@ -46,6 +47,7 @@ __all__ = [
     "Check",
     "EffectiveCheck",
     "Thresholds",
+    "Worsening",
     "default_checks",
     "evaluate",
 ]
@@ -73,6 +75,18 @@ _RANK: Final[Mapping[Severity, int]] = {
     Severity.WARNING: 2,
     Severity.CRITICAL: 3,
 }
+
+
+class Worsening(StrEnum):
+    """What counts as worse for a condition that stays at its severity (ADR 0009).
+
+    For defect and error counters every increase, reported subject to the
+    cool-down; for gauges such as temperature and wear only a rise to a
+    higher severity, which is an escalation.
+    """
+
+    INCREASE = "increase"
+    ESCALATION = "escalation"
 
 
 @dataclass(frozen=True)
@@ -116,6 +130,8 @@ class Check:
     # In how many runs in a row a condition has to be seen before it is
     # notified (ADR 0009). Temperature needs two (FR-308).
     confirm_runs: int = 1
+    # What counts as worse at the same severity (docs/check-catalog.md).
+    worsening: Worsening | None = None
 
     @property
     def settable(self) -> frozenset[str]:
@@ -187,6 +203,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             metric="temperature.current",
             unit="°C",
             confirm_runs=2,
+            worsening=Worsening.ESCALATION,
         ),
         Check(
             "wear",
@@ -197,6 +214,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="wear.percent_used",
             unit="%",
+            worsening=Worsening.ESCALATION,
         ),
         Check(
             "smart.disabled",
@@ -225,6 +243,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.5.raw",
             unit="sectors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.reported_uncorrectable",
@@ -235,6 +254,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.187.raw",
             unit="errors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.command_timeouts",
@@ -246,6 +266,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             metric="ata.command_timeouts",
             unit="timeouts",
             strictly_above=True,
+            worsening=Worsening.ESCALATION,
         ),
         Check(
             "ata.pending_sectors",
@@ -256,6 +277,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.197.raw",
             unit="sectors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.offline_uncorrectable",
@@ -266,6 +288,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.198.raw",
             unit="sectors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.spin_retries",
@@ -276,6 +299,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.10.raw",
             unit="retries",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.end_to_end_errors",
@@ -286,6 +310,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="ata.attr.184.raw",
             unit="errors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "ata.crc_errors",
@@ -311,6 +336,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=frozenset({"enabled", "warning"}),
             metric="nvme.available_spare",
             unit="%",
+            worsening=Worsening.ESCALATION,
         ),
         Check(
             "nvme.reliability_degraded",
@@ -349,6 +375,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="nvme.media_errors",
             unit="errors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "nvme.thermal_excursion",
@@ -380,6 +407,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="scsi.grown_defects",
             unit="defects",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "scsi.uncorrected_errors",
@@ -390,6 +418,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="scsi.uncorrected_errors",
             unit="errors",
+            worsening=Worsening.INCREASE,
         ),
         Check(
             "scsi.pending_defects",
@@ -400,6 +429,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             slots=_THREE_SLOTS,
             metric="scsi.pending_defects",
             unit="defects",
+            worsening=Worsening.INCREASE,
         ),
     )
 }

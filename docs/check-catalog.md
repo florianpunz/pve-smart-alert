@@ -14,7 +14,7 @@ The checks are implemented since milestone M3 (`src/pve_smart_alert/checks.py`),
   - *condition*: a state that is active until it clears. Reminders and recovery apply.
   - *event*: an increase of a cumulative counter since the stored baseline. Reported, then the baseline moves. Until the state file of milestone M4 exists, an event check returns nothing (FR-306).
 - **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used by default; it can still be set in the configuration, except where a note says otherwise.
-- **Worsening**: *increase* means every further increase is reported, subject to the cool-down. *escalation* means only a change to a higher severity is reported. Both need the state of milestone M4.
+- **Worsening**: *increase* means every further increase at the same severity is reported, subject to the cool-down of the drive. *escalation* means only a change to a higher severity is reported. The notification planner applies it ([ARCHITECTURE.md](../ARCHITECTURE.md) section 7), and a test keeps this column and the catalog of the code in step.
 - A check whose source value is missing is not applicable and produces nothing.
 
 Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treated as `hdd`), `nvme`.

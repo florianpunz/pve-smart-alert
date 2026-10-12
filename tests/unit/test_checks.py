@@ -9,10 +9,12 @@ host is tested in test_check_command.py.
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 from pve_smart_alert.checks import (
     CATALOG,
     Thresholds,
+    Worsening,
     default_checks,
     evaluate,
 )
@@ -448,3 +450,22 @@ def test_the_defaults_are_the_catalog() -> None:
     assert settings["health.failed"].enabled
     assert settings["nvme.error_log"].enabled is False
     assert settings["wear"].check.classes == frozenset({DriveClass.SSD, DriveClass.NVME})
+
+
+def test_the_worsening_rule_of_each_check_is_the_one_of_the_docs() -> None:
+    # The column "Worsening" of docs/check-catalog.md decides which checks
+    # report every increase and which only an escalation (ADR 0009).
+    catalog = (Path(__file__).resolve().parents[2] / "docs" / "check-catalog.md").read_text(
+        encoding="utf-8"
+    )
+    documented = {}
+    for line in catalog.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 2 or not cells[0].startswith("`"):
+            continue
+        name = cells[0].strip("`")
+        if name in CATALOG:
+            documented[name] = cells[-1]
+    words = {Worsening.INCREASE: "increase", Worsening.ESCALATION: "escalation", None: "\u2013"}
+
+    assert documented == {check.id: words[check.worsening] for check in CATALOG.values()}

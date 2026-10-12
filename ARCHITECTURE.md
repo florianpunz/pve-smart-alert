@@ -169,6 +169,17 @@ Grouping: one notification per drive per run. More drives than the grouping limi
 
 Time is passed in, never read from the system clock inside the planner. This is what makes every rule testable.
 
+`planner.py` implements it since milestone M4. Its input is the state, an `Observation` of the run (each device as read, in standby or unreadable, with its findings and the current values of its event counters; the skipped devices; the tool conditions that hold now; whether the state was reset; whether the device scan worked), the configuration and the time. Its output is a `Plan`: the state with every change that needs no notification, and the notifications that are due, each with the changes that are applied only after it was handed over. How the rules are read where ADR 0009 leaves room:
+
+- A condition that is active but was never notified, because its notification failed, is planned as `problem` again. A condition that clears before it was ever notified goes silently.
+- A falling severity lowers the notified severity and value, so that a later rise is an `escalated` and the reminder follows the lower severity.
+- `worsened` applies to the checks whose worsening is *increase* in [docs/check-catalog.md](docs/check-catalog.md), and waits for the cool-down since the last notification about the drive, whatever that notification was.
+- An event counter without a baseline starts at its value; one below its baseline lowers it; one above it is notified after the event cool-down of the drive and check, and only then does the baseline move.
+- A device that answers without usable data is matched to the drive last read through the same name and type. A device that never answered with an identity gets a record of its own, keyed by name and type, that only holds `drive.unreadable`. While a drive is missing, unreadable or in standby, its other conditions are frozen.
+- When the device scan failed, drives that were not found were not looked for, and their absence is not counted.
+- A drive that is skipped as `excluded` or `no-smart` is no longer monitored, and its record is removed without a message. A condition of a check that was switched off is removed without a recovery.
+- The first run records every condition as notified and every counter as a baseline. Without the summary handed over, nothing of it is stored, and the next run is a first run again.
+
 ## 8. Configuration
 
 File: `/etc/pve-smart-alert/config.toml` ([ADR 0011](docs/adr/0011-configuration.md)). Everything is optional. Example with typical overrides:
