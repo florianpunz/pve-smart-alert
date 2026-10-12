@@ -7,13 +7,13 @@
 > **Status: early development.** The tool finds, reads and evaluates the drives of a host and can show the findings of a dry run, but it sends no alert yet.
 >
 > <details>
-> <summary>In progress: M3, evaluation and configuration</summary>
+> <summary>In progress: M4, state and notification policy</summary>
 >
 > - **M0 (done):** development tooling
 > - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
-> - **M3 (in progress):** evaluation and configuration
-> - **M4 (planned):** state and notification policy
+> - **M3 (done):** evaluation and configuration
+> - **M4 (in progress):** state and notification policy
 > - **M5 (planned):** packaging, timer and installation
 > - **M6 (planned):** SAS and hardware RAID on recorded data
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
