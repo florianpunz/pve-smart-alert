@@ -31,10 +31,13 @@ from pve_smart_alert.doctor import (
     check_config,
     check_fallback,
     check_mail,
+    check_pve,
     check_routing,
     check_smartctl,
+    check_smartd,
     check_state,
     check_templates,
+    check_timer,
     read_routes,
     run_doctor,
 )
@@ -757,6 +760,9 @@ def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) ->
         pvesh_path=tmp_path / "pvesh",
         forward_path=tmp_path / "forward",
         state_path=tmp_path / "state.json",
+        systemctl_path=tmp_path / "systemctl",
+        pveversion_path=tmp_path / "pveversion",
+        smartd_conf_path=tmp_path / "smartd.conf",
         node="pve1",
         runner=HostRunner(),
     )
@@ -777,6 +783,9 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "routing",
         "fallback",
         "state",
+        "timer",
+        "pve",
+        "smartd",
         "pending",
     ]
     assert all(result.status is not Status.FAIL for result in results)
@@ -788,8 +797,8 @@ def test_what_is_not_checked_yet_is_named(tmp_path: Path, bridge: Path, vendor_d
 
     pending = results[-1]
     assert pending.status is Status.SKIP
-    assert "smartd" in pending.detail
-    assert "smartctl" not in pending.detail
+    assert "unsupported controllers" in pending.detail
+    assert "smartd" not in pending.detail
 
 
 # The command
@@ -889,3 +898,153 @@ def test_a_corrupt_state_file_warns_and_is_left_alone(tmp_path: Path) -> None:
     assert result.advice is not None
     assert "sets the file aside" in result.advice
     assert path.read_text(encoding="utf-8") == "{broken"
+
+
+# The timer, Proxmox VE and smartd (FR-603, ADR 0006, ADR 0012)
+
+NOW = datetime(2026, 10, 13, 8, 0, tzinfo=UTC)
+
+
+class SystemRunner:
+    """Answers systemctl and pveversion as a host would, from what the test sets."""
+
+    def __init__(self, units: Mapping[str, str], timers: str = "[]", pve: str = "") -> None:
+        self.units = units
+        self.timers = timers
+        self.pve = pve
+
+    def __call__(
+        self,
+        command: Sequence[str | Path],
+        *,
+        input_text: str | None = None,  # noqa: ARG002
+        timeout: float,  # noqa: ARG002
+    ) -> ProcessResult:
+        arguments = [str(argument) for argument in command]
+        if "show" in arguments:
+            stdout = self.units.get(arguments[-1], "LoadState=not-found\nActiveState=inactive\n")
+        elif "list-timers" in arguments:
+            stdout = self.timers
+        else:
+            stdout = self.pve
+        return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
+
+
+ACTIVE_TIMER = (
+    "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n"
+    "TimersMonotonic={ OnBootUSec=3min ; next_elapse=0 } ;"
+    " { OnUnitActiveUSec=30min ; next_elapse=1h }\n"
+)
+
+
+@pytest.fixture
+def systemctl(tmp_path: Path) -> Path:
+    path = tmp_path / "systemctl"
+    path.write_text("#!/bin/sh\n", encoding="utf-8")
+    return path
+
+
+def test_an_active_timer_names_its_interval_and_next_run(systemctl: Path) -> None:
+    following = int((NOW.timestamp() + 12 * 60) * 1_000_000)
+    runner = SystemRunner(
+        {"pve-smart-alert.timer": ACTIVE_TIMER},
+        timers=f'[{{"next":{following},"unit":"pve-smart-alert.timer"}}]',
+    )
+
+    result = check_timer(systemctl, runner=runner, now=NOW)
+
+    assert result.status is Status.OK
+    assert result.detail == (
+        "pve-smart-alert.timer: every 30min, next run in 12 min (2026-10-13T08:12:00Z)"
+    )
+
+
+def test_a_disabled_timer_warns(systemctl: Path) -> None:
+    disabled = "LoadState=loaded\nActiveState=inactive\nUnitFileState=disabled\n"
+    runner = SystemRunner({"pve-smart-alert.timer": disabled})
+
+    result = check_timer(systemctl, runner=runner)
+
+    assert result.status is Status.WARN
+    assert "not enabled and not active" in result.detail
+    assert result.advice == "systemctl enable --now pve-smart-alert.timer"
+
+
+def test_a_missing_timer_warns(systemctl: Path) -> None:
+    result = check_timer(systemctl, runner=SystemRunner({}))
+
+    assert result.status is Status.WARN
+    assert "not installed" in result.detail
+
+
+def test_without_systemctl_the_timer_is_skipped(tmp_path: Path) -> None:
+    assert check_timer(tmp_path / "systemctl", runner=SystemRunner({})).status is Status.SKIP
+
+
+@pytest.mark.parametrize(
+    ("output", "status", "detail"),
+    [
+        ("pve-manager/9.2.3/d0fde103346cf89a (running kernel: 7.0.6-2-pve)\n", Status.OK, "9.2.3"),
+        ("pve-manager/10.0.1/abc (running kernel: 7.2)\n", Status.WARN, "10.0.1"),
+        ("something else\n", Status.SKIP, "no version"),
+    ],
+)
+def test_the_version_of_proxmox_ve(
+    tmp_path: Path, output: str, status: Status, detail: str
+) -> None:
+    pveversion = tmp_path / "pveversion"
+    pveversion.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    result = check_pve(pveversion, runner=SystemRunner({}, pve=output))
+
+    assert result.status is status
+    assert detail in result.detail
+
+
+def test_without_pveversion_the_version_is_skipped(tmp_path: Path) -> None:
+    assert check_pve(tmp_path / "pveversion", runner=SystemRunner({})).status is Status.SKIP
+
+
+SMARTD_ACTIVE = {"smartmontools.service": "LoadState=loaded\nActiveState=active\n"}
+
+
+def test_smartd_with_the_debian_default_mails_root(systemctl: Path, tmp_path: Path) -> None:
+    # Research 02: the default line of Proxmox VE mails root every day.
+    config = tmp_path / "smartd.conf"
+    config.write_text(
+        "# comment\nDEVICESCAN -d removable -n standby -m root -M exec"
+        " /usr/share/smartmontools/smartd-runner\n",
+        encoding="utf-8",
+    )
+
+    result = check_smartd(systemctl, config, runner=SystemRunner(SMARTD_ACTIVE))
+
+    assert result.status is Status.OK
+    assert "mails root (DEVICESCAN -d removable -n standby -m root" in result.detail
+    assert result.advice is not None
+
+
+def test_smartd_that_only_logs(systemctl: Path, tmp_path: Path) -> None:
+    config = tmp_path / "smartd.conf"
+    config.write_text("DEVICESCAN -d removable -n standby\n#-m root\n", encoding="utf-8")
+
+    result = check_smartd(systemctl, config, runner=SystemRunner(SMARTD_ACTIVE))
+
+    assert result.detail.endswith("sends no mail")
+    assert result.advice is None
+
+
+def test_smartd_with_the_no_mailer_address_sends_no_mail(systemctl: Path, tmp_path: Path) -> None:
+    config = tmp_path / "smartd.conf"
+    config.write_text("DEVICESCAN -m <nomailer> -M exec /usr/local/bin/log\n", encoding="utf-8")
+
+    result = check_smartd(systemctl, config, runner=SystemRunner(SMARTD_ACTIVE))
+
+    assert result.detail.endswith("sends no mail")
+
+
+def test_smartd_that_is_not_active(systemctl: Path, tmp_path: Path) -> None:
+    result = check_smartd(systemctl, tmp_path / "smartd.conf", runner=SystemRunner({}))
+
+    assert result.status is Status.OK
+    assert result.detail.startswith("not active")

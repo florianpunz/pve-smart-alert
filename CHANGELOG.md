@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The package installs a systemd timer that runs `pve-smart-alert check` 3 minutes after boot and then every 30 minutes, and enables it; installing the package starts the first check ([ADR 0006](docs/adr/0006-scheduling.md)). A run that fails sends a short mail to root, at most once per day, through a script that does not use the code of the tool (FR-519).
 
+- `pve-smart-alert doctor` reports the timer with its interval and next run, the version of Proxmox VE, and whether smartd is active and mails root, which reports some problems twice; the README says how to quiet smartd by hand (FR-603, [ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
+
 ### Changed
 
 - `pve-smart-alert doctor` reports a configuration file that does not validate as a warning that says which configuration a run continues with, instead of failing: monitoring does not stop (FR-406).

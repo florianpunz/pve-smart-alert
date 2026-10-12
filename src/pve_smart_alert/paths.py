@@ -66,6 +66,17 @@ SYSFS_DIR: Final = Path("/sys")
 # routing check reads the matchers and targets through it (ADR 0020).
 PVESH_PATH: Final = Path("/usr/bin/pvesh")
 
+# systemd, which runs the timer of the tool (ADR 0006), and the version
+# command of Proxmox VE, part of `pve-manager` (ADR 0002). The self-diagnosis
+# only asks them.
+SYSTEMCTL_PATH: Final = Path("/usr/bin/systemctl")
+PVEVERSION_PATH: Final = Path("/usr/bin/pveversion")
+
+# The configuration of smartd, owned by `smartmontools`. The self-diagnosis
+# reads it to say whether smartd mails root; the tool never changes it
+# (ADR 0012).
+SMARTD_CONF_PATH: Final = Path("/etc/smartd.conf")
+
 # Where the mail system looks for the forwarding of mail to root. The package
 # `proxmox-mail-forward` pipes it to its program from here; the tool only
 # reads the file (ADR 0012, ADR 0022).

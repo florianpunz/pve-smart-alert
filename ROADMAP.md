@@ -216,7 +216,8 @@ From here on the tool runs permanently on the maintainer's cluster. Version tag:
 State: in progress on the branch `feature/m5-packaging`.
 
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package; only the timer is enabled.
-- Next: the lines `timer`, `pve` and `smartd` of `doctor`, then `install.sh`, the release pipeline with the package test in a container, and the sandboxing decision.
+- Done: the lines `timer`, `pve` and `smartd` of `doctor`, which complete FR-603 except the unsupported controllers of M6.
+- Next: `install.sh`, the release pipeline with the package test in a container, and the sandboxing decision.
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 

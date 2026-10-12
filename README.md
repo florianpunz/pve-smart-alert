@@ -47,7 +47,7 @@ The installed tool has these commands:
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, and the state file with the last run (FR-603). A last line names what it does not check yet |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, the timer with its next run, the Proxmox VE version, and whether smartd mails root (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108) |
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
@@ -74,6 +74,15 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
 A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock.
+
+## Coexistence with smartd
+
+Proxmox VE runs smartd, and its default configuration mails root about some of the problems this tool reports, every day while they last. PVE SMART Alert leaves smartd alone ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)), so some problems arrive twice; `pve-smart-alert doctor` says in the line `smartd` whether smartd mails. To quiet smartd by hand, edit the `DEVICESCAN` line in `/etc/smartd.conf` and restart it with `systemctl restart smartmontools`:
+
+- remove `-m root -M exec /usr/share/smartmontools/smartd-runner`, so that smartd only logs to the journal, or
+- add `-M once` after `-m root`, so that it mails each problem only once.
+
+The Proxmox VE web interface does not depend on smartd.
 
 ## Notification routing
 
