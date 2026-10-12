@@ -124,6 +124,17 @@ warning = 95
 [checks."smart.disabled"]
 enabled = true
 
+[checks."drive.unreadable"]
+# A drive that answers without usable SMART data in notify.unreadable_runs
+# runs in a row (FR-310).
+enabled = true
+
+[checks."drive.missing"]
+# A known drive that is absent in notify.missing_runs runs in a row; never
+# for removable and USB drives and drives without a serial number or WWN
+# (FR-309).
+enabled = true
+
 [checks."ata.attribute_failing"]
 enabled = true
 

@@ -15,6 +15,7 @@ from pve_smart_alert.checks import (
     CATALOG,
     Thresholds,
     Worsening,
+    counters,
     default_checks,
     evaluate,
 )
@@ -255,11 +256,68 @@ def test_the_defect_counters_use_their_thresholds() -> None:
 
 def test_an_event_without_a_baseline_produces_nothing() -> None:
     # FR-306: a counter that was never zero stays silent until it increases
-    # against the baseline of the state file, which arrives with milestone M4.
+    # against the baseline of the state file.
     snapshot = drive(metrics={"ata.attr.199.raw": 3, "ata.error_log.count": 4})
 
     assert "ata.crc_errors" not in checks_of(snapshot)
     assert "ata.error_log" not in checks_of(snapshot)
+
+
+def test_an_event_is_a_rise_above_its_baseline() -> None:
+    snapshot = drive(metrics={"ata.attr.199.raw": 19, "ata.error_log.count": 4})
+
+    findings = evaluate(snapshot, baselines={"ata.crc_errors": 12, "ata.error_log": 4})
+
+    assert [(f.check, f.kind, f.severity, f.value) for f in findings] == [
+        ("ata.crc_errors", CheckKind.EVENT, Severity.NOTICE, 19)
+    ]
+    assert "rose from 12 to 19" in findings[0].text
+
+
+def test_an_event_at_or_below_its_baseline_produces_nothing() -> None:
+    snapshot = drive(metrics={"ata.attr.199.raw": 12})
+
+    assert evaluate(snapshot, baselines={"ata.crc_errors": 12}) == []
+    assert evaluate(snapshot, baselines={"ata.crc_errors": 20}) == []
+
+
+def test_the_nvme_events_read_their_counters() -> None:
+    snapshot = drive(
+        DriveClass.NVME,
+        metrics={"nvme.critical_temperature_minutes": 3, "nvme.error_log_entries": 9},
+    )
+    baselines = {"nvme.thermal_excursion": 0, "nvme.error_log": 1}
+
+    # The error log is off by default (docs/check-catalog.md).
+    assert {f.check: f.severity for f in evaluate(snapshot, baselines=baselines)} == {
+        "nvme.thermal_excursion": Severity.WARNING
+    }
+    settings = default_checks(DriveClass.NVME)
+    settings["nvme.error_log"] = replace(settings["nvme.error_log"], enabled=True)
+    assert {f.check for f in evaluate(snapshot, settings, baselines)} == {
+        "nvme.thermal_excursion",
+        "nvme.error_log",
+    }
+
+
+def test_the_counters_are_the_enabled_events_a_drive_reports() -> None:
+    # The planner records them as baselines (ADR 0009).
+    ata = drive(metrics={"ata.attr.199.raw": 3, "ata.error_log.count": 4, "ata.attr.5.raw": 1})
+    nvme = drive(
+        DriveClass.NVME,
+        metrics={"nvme.critical_temperature_minutes": 0, "nvme.error_log_entries": 9},
+    )
+
+    assert counters(ata) == {"ata.crc_errors": 3, "ata.error_log": 4}
+    assert counters(nvme) == {"nvme.thermal_excursion": 0}
+    assert counters(drive(metrics={})) == {}
+
+
+def test_the_presence_checks_have_no_snapshot_to_answer_them() -> None:
+    # FR-309, FR-310: the planner raises them from consecutive runs.
+    assert "drive.missing" not in checks_of(drive())
+    assert "drive.unreadable" not in checks_of(drive())
+    assert "confirm_runs" not in CATALOG["drive.unreadable"].settable
 
 
 # NVMe (docs/check-catalog.md)
@@ -336,6 +394,8 @@ def test_the_catalog_holds_the_identifiers_of_the_docs() -> None:
         "temperature",
         "wear",
         "smart.disabled",
+        "drive.unreadable",
+        "drive.missing",
         "ata.attribute_failing",
         "ata.reallocated_sectors",
         "ata.reported_uncorrectable",

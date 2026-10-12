@@ -63,6 +63,7 @@ from pve_smart_alert.state import (
     format_time,
     identity_key,
 )
+from pve_smart_alert.tool_conditions import TOOL_CONDITIONS
 
 __all__ = [
     "DRIVE_MISSING",
@@ -475,7 +476,7 @@ class _Planner:
             present[DRIVE_UNREADABLE] = Finding(
                 check=DRIVE_UNREADABLE,
                 kind=CheckKind.CONDITION,
-                severity=Severity.WARNING,
+                severity=CATALOG[DRIVE_UNREADABLE].severity or Severity.WARNING,
                 text=(
                     f"no usable SMART data in {record.unreadable_runs} runs in a row: "
                     f"{seen.reason or 'no reason known'}"
@@ -508,11 +509,8 @@ class _Planner:
             for finding in seen.findings
             if finding.kind is CheckKind.CONDITION
         }
-        # A condition of a check that is switched off goes silently. The
-        # condition of an unreadable drive is not raised from a snapshot, so
-        # it clears like any other once the drive answers again.
+        # A condition of a check that is switched off goes silently.
         enabled = {name for name, item in settings.items() if item.enabled}
-        enabled.add(DRIVE_UNREADABLE)
         outcome = self._conditions(
             record,
             present,
@@ -580,7 +578,7 @@ class _Planner:
         item = Item(
             event=EventType.MISSING,
             check=DRIVE_MISSING,
-            severity=Severity.WARNING,
+            severity=CATALOG[DRIVE_MISSING].severity or Severity.WARNING,
             text=(
                 f"the drive was not found in {record.missing_runs} runs in a row;"
                 f" last seen {format_time(record.last_seen)} as {record.last_access.name}"
@@ -918,7 +916,7 @@ def _state_reset_item(reason: str) -> Item:
     return Item(
         event=EventType.PROBLEM,
         check="tool.state_reset",
-        severity=Severity.NOTICE,
+        severity=TOOL_CONDITIONS["tool.state_reset"].severity,
         text=f"the state file was set aside and the tool started afresh: {reason}",
     )
 

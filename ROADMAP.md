@@ -183,7 +183,8 @@ State: in progress on the branch `feature/m4-state`.
 - Done: the scenario test frame: the scenarios of `tests/scenarios.py`, whose steps the fake smartctl replays and which can be written out for a real host, and a clock, a state directory and a recording transport in `tests/unit/frame.py`.
 - Done: the configuration keys of the notification policy in `[notify]` and `[notify.reminder]`, and the confirmation count `confirm_runs` of a condition check, with the defaults of ADR 0009 (FR-404); `config show` lists them.
 - Done: the notification planner of `planner.py` with every rule of ADR 0009 as a pure function of state, observation, configuration and time, each rule with a test that drives it run by run with an injected clock.
-- Next: the event checks with their baselines, the missing and unreadable drive checks in the catalog, and the detection of the tool conditions.
+- Done: the event checks against the baselines of the state, the checks `drive.missing` and `drive.unreadable` in the catalog, and the detection of the tool conditions in `tool_conditions.py`.
+- Next: the renderer with the message layout of ARCHITECTURE.md section 10.
 
 ## M5: Packaging, timer and installation (M)
 

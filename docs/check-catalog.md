@@ -12,7 +12,7 @@ The checks are implemented since milestone M3 (`src/pve_smart_alert/checks.py`),
 - **ID**: stable identifier, used in the configuration (`[checks."<id>"]`) and shown in notifications. Renaming an ID is a breaking change.
 - **Kind**:
   - *condition*: a state that is active until it clears. Reminders and recovery apply.
-  - *event*: an increase of a cumulative counter since the stored baseline. Reported, then the baseline moves. Until the state file of milestone M4 exists, an event check returns nothing (FR-306).
+  - *event*: an increase of a cumulative counter since the baseline stored for the drive. Reported, then the baseline moves. A drive seen for the first time starts from its current values, so an old non-zero counter never alerts, and a counter below its baseline lowers it (FR-306).
 - **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used by default; it can still be set in the configuration, except where a note says otherwise.
 - **Worsening**: *increase* means every further increase at the same severity is reported, subject to the cool-down of the drive. *escalation* means only a change to a higher severity is reported. The notification planner applies it ([ARCHITECTURE.md](../ARCHITECTURE.md) section 7), and a test keeps this column and the catalog of the code in step.
 - A check whose source value is missing is not applicable and produces nothing.
@@ -37,7 +37,7 @@ Notes:
 - `temperature`: the limits of the drive itself are not read; the fixed limits per class apply until [Q-T4](../OPEN-QUESTIONS.md) is answered. For NVMe, Critical Warning bit 1 raises at least a warning. On hosts with smartmontools 7.4 the NVMe limits do not exist in the JSON at all ([Research 03](research/03-smart-indicators.md)).
 - `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface, and last the same kind of guess made by smartmontools. The source used is shown with the value. For ATA, `endurance_used` counts as the first source only when the device statistics were read: without them smartmontools guesses it from a vendor attribute, and the guess is named for what it is ([Research 03](research/03-smart-indicators.md)); with `smartctl.detail = "basic"` the wear of an SSD therefore comes from a vendor attribute.
 - `selftest.failed` only reads logs. The tool never starts a self-test.
-- `drive.unreadable` and `drive.missing` need the state file of milestone M4 and are not built yet; a dry run of milestone M3 shows an unreadable device in its summary and a missing drive not at all.
+- `drive.unreadable` and `drive.missing` are raised by the notification planner from consecutive runs, not from the data of a drive, and their counts are `notify.unreadable_runs` and `notify.missing_runs` (default 2). They accept only `enabled`. A device that never answered with a model and serial number is unreadable under its device name and type. While a drive is missing or unreadable, its other conditions are frozen: no reminders, no recovery.
 
 ## SATA (ATA attributes)
 
@@ -71,7 +71,7 @@ Notes:
 | `nvme.backup_failed` | Critical Warning bit 4 | condition | – | – | flag | – |
 | `nvme.pmr_unreliable` | Critical Warning bit 5 | condition | – | flag | – | – |
 | `nvme.media_errors` | Media and data integrity errors | condition | – | 1 | – | increase |
-| `nvme.thermal_excursion` | Time above the critical temperature increased | event | – | flag | – | – |
+| `nvme.thermal_excursion` | Time above the critical temperature (`critical_comp_time`, minutes) increased | event | – | flag | – | – |
 | `nvme.error_log` | Number of error log entries increased | event, **disabled by default** | flag | – | – | – |
 
 Notes:
@@ -112,7 +112,7 @@ Notes:
 
 - `tool.state_reset` is a one-time event. It is mentioned in the summary that follows the reset and has no recovery message.
 - All others are conditions. They clear, with a recovery message, when the cause is gone.
-- The conditions of the tool itself arrive with milestone M4 and M5, when there are state and timer to watch. `tool.config_invalid` exists since milestone M3 as the warning that names the error of the configuration file while the run continues with the last good one.
+- `tool_conditions.py` detects them at the start of a run since milestone M4, except `tool.unsupported_controller`, which arrives with milestone M6. `tool.smartctl_too_old` is read from the version of the device scan, or, when the scan writes no JSON, from the first line of `smartctl --version`. `tool.transport_degraded` holds when the notify bridge, asked to load the notification system without sending, fails; with `transport = mail` there is no bridge to fail.
 
 ## Deliberately not checked
 

@@ -15,11 +15,17 @@ resolved by `pve_smart_alert.config`: built-in default, overridden by the
 global configuration, overridden by the first matching per-drive override
 (ARCHITECTURE.md section 6).
 
-Event checks compare a cumulative counter with the baseline of the state
-file, which arrives with milestone M4; until then they return nothing
-(FR-306). The same holds for drives that are missing or unreadable in
-consecutive runs and for the conditions of the tool itself: their checks are
-not in this catalog until state exists to answer them.
+Event checks compare a cumulative counter with the baseline that the state
+file keeps for the drive: a finding only when the counter is above it, and
+nothing without a baseline, so that a non-zero value of a drive seen for the
+first time never alerts (FR-306). The planner keeps the baselines; `counters`
+tells it the current values.
+
+The checks `drive.missing` and `drive.unreadable` are in the catalog so that
+they can be configured like any other, but no snapshot answers them: the
+planner raises them from the presence of a drive over consecutive runs
+(FR-309, FR-310). The conditions of the tool itself are not checks of a
+drive; they are in `tool_conditions.py`.
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ __all__ = [
     "EffectiveCheck",
     "Thresholds",
     "Worsening",
+    "counters",
     "default_checks",
     "evaluate",
 ]
@@ -132,6 +139,10 @@ class Check:
     confirm_runs: int = 1
     # What counts as worse at the same severity (docs/check-catalog.md).
     worsening: Worsening | None = None
+    # Whether the configuration may set a confirmation count. The checks
+    # that the planner raises from presence count runs of their own
+    # (`notify.missing_runs`, `notify.unreadable_runs`).
+    confirmable: bool = True
 
     @property
     def settable(self) -> frozenset[str]:
@@ -140,7 +151,7 @@ class Check:
         A condition takes its confirmation count as well; an event has none,
         because an increase is reported when it is seen (ADR 0009).
         """
-        if self.kind is CheckKind.CONDITION:
+        if self.kind is CheckKind.CONDITION and self.confirmable:
             return self.slots | {"confirm_runs"}
         return self.slots
 
@@ -176,9 +187,7 @@ _THREE_SLOTS: Final = frozenset({"enabled", "notice", "warning", "critical"})
 CATALOG: Final[Mapping[str, Check]] = {
     check.id: check
     for check in (
-        # All drives (docs/check-catalog.md, "All drives"). The checks for
-        # drives that are missing or unreadable in consecutive runs need the
-        # state of milestone M4 and are not here yet.
+        # All drives (docs/check-catalog.md, "All drives").
         Check(
             "health.failed",
             ATA_CLASSES,
@@ -222,6 +231,23 @@ CATALOG: Final[Mapping[str, Check]] = {
             CheckKind.CONDITION,
             "SMART available but switched off",
             severity=Severity.NOTICE,
+        ),
+        # Raised by the planner from the presence of a drive, not from a
+        # snapshot (FR-309, FR-310).
+        Check(
+            "drive.unreadable",
+            ALL_CLASSES,
+            CheckKind.CONDITION,
+            "no usable SMART data in consecutive runs",
+            severity=Severity.WARNING,
+            confirmable=False,
+        ),
+        Check(
+            "drive.missing",
+            ALL_CLASSES,
+            CheckKind.EVENT,
+            "a known drive absent in consecutive runs",
+            severity=Severity.WARNING,
         ),
         # SATA (docs/check-catalog.md, "SATA (ATA attributes)").
         Check(
@@ -318,6 +344,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             CheckKind.EVENT,
             "attribute 199, raw, against the baseline",
             severity=Severity.NOTICE,
+            metric="ata.attr.199.raw",
         ),
         Check(
             "ata.error_log",
@@ -325,6 +352,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             CheckKind.EVENT,
             "the number of entries in the ATA error log, against the baseline",
             severity=Severity.NOTICE,
+            metric="ata.error_log.count",
         ),
         # NVMe (docs/check-catalog.md, "NVMe").
         Check(
@@ -383,6 +411,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             CheckKind.EVENT,
             "the time above the critical temperature, against the baseline",
             severity=Severity.WARNING,
+            metric="nvme.critical_temperature_minutes",
         ),
         Check(
             "nvme.error_log",
@@ -394,6 +423,7 @@ CATALOG: Final[Mapping[str, Check]] = {
             # entries on some drives with smartmontools 7.4
             # (docs/check-catalog.md).
             enabled=False,
+            metric="nvme.error_log_entries",
         ),
         # SAS (docs/check-catalog.md, "SAS (SCSI log pages)"). No parser
         # produces these metrics until milestone M6; the checks exist so
@@ -449,7 +479,9 @@ def default_checks(drive_class: DriveClass) -> dict[str, EffectiveCheck]:
 
 
 def evaluate(
-    snapshot: Snapshot, settings: Mapping[str, EffectiveCheck] | None = None
+    snapshot: Snapshot,
+    settings: Mapping[str, EffectiveCheck] | None = None,
+    baselines: Mapping[str, int] | None = None,
 ) -> list[Finding]:
     """Evaluate one snapshot and return what the checks found (FR-301).
 
@@ -457,20 +489,51 @@ def evaluate(
     `pve_smart_alert.config.effective_checks` resolves them; without them the
     built-in defaults apply. A check that is disabled, that does not apply
     to the class of the drive, or whose input is missing, returns nothing.
-    The findings are in the order of the catalog.
+    `baselines` are the baselines of the event counters of this drive from
+    the state; an event without one returns nothing (FR-306). The findings
+    are in the order of the catalog.
     """
-    effective = settings if settings is not None else default_checks(snapshot.drive_class)
     findings: list[Finding] = []
-    for name, item in effective.items():
-        check = CATALOG.get(name)
-        if check is None or not item.enabled:
-            continue
-        if snapshot.drive_class not in check.classes:
-            continue
-        finding = _EVALUATORS[check.id](snapshot, item)
+    for item in _applicable(snapshot, settings):
+        check = item.check
+        if check.kind is CheckKind.EVENT:
+            finding = _event(snapshot, item, baselines or {})
+        else:
+            evaluator = _EVALUATORS.get(check.id)
+            finding = evaluator(snapshot, item) if evaluator is not None else None
         if finding is not None:
             findings.append(finding)
     return findings
+
+
+def counters(
+    snapshot: Snapshot, settings: Mapping[str, EffectiveCheck] | None = None
+) -> dict[str, int]:
+    """Return the current value of every enabled event counter the drive reports.
+
+    The planner records them as baselines when a drive is first seen, and
+    lowers a baseline that a counter has fallen below (ADR 0009).
+    """
+    result = {}
+    for item in _applicable(snapshot, settings):
+        if item.check.kind is not CheckKind.EVENT or not item.check.metric:
+            continue
+        value = snapshot.metrics.get(item.check.metric)
+        if value is not None:
+            result[item.check.id] = value
+    return result
+
+
+def _applicable(
+    snapshot: Snapshot, settings: Mapping[str, EffectiveCheck] | None
+) -> list[EffectiveCheck]:
+    """Return the enabled checks that apply to the class of the drive, in catalog order."""
+    effective = settings if settings is not None else default_checks(snapshot.drive_class)
+    return [
+        item
+        for name, item in effective.items()
+        if name in CATALOG and item.enabled and snapshot.drive_class in item.check.classes
+    ]
 
 
 # What one check returns for one snapshot: one finding, or nothing.
@@ -686,9 +749,30 @@ def _critical_warning_bit(bit: int, text: str) -> _Evaluator:
     return evaluator
 
 
-def _event(_snapshot: Snapshot, _item: EffectiveCheck) -> Finding | None:
-    """Return nothing: an event needs the baseline of the state file (FR-306)."""
-    return None
+def _event(
+    snapshot: Snapshot, item: EffectiveCheck, baselines: Mapping[str, int]
+) -> Finding | None:
+    """Return the rise of a cumulative counter above its baseline (FR-306).
+
+    Without a baseline there is nothing to compare: the planner records the
+    current value as the baseline, and a counter that was already high when
+    the drive was first seen never alerts.
+    """
+    check = item.check
+    value = snapshot.metrics.get(check.metric) if check.metric else None
+    baseline = baselines.get(check.id)
+    if value is None or baseline is None or value <= baseline:
+        return None
+    return _flag(item, f"{_EVENT_NAMES[check.id]} rose from {baseline} to {value}", value=value)
+
+
+# How an event names its counter in a finding.
+_EVENT_NAMES: Final[Mapping[str, str]] = {
+    "ata.crc_errors": "the interface CRC errors (attribute 199)",
+    "ata.error_log": "the entries of the ATA error log",
+    "nvme.thermal_excursion": "the minutes above the critical temperature",
+    "nvme.error_log": "the entries of the NVMe error log",
+}
 
 
 _EVALUATORS: Final[Mapping[str, _Evaluator]] = {
@@ -705,8 +789,6 @@ _EVALUATORS: Final[Mapping[str, _Evaluator]] = {
     "ata.offline_uncorrectable": _counter,
     "ata.spin_retries": _counter,
     "ata.end_to_end_errors": _counter,
-    "ata.crc_errors": _event,
-    "ata.error_log": _event,
     "nvme.spare": _spare,
     "nvme.reliability_degraded": _critical_warning_bit(
         _RELIABILITY_DEGRADED, "the drive reports its reliability as degraded"
@@ -719,8 +801,6 @@ _EVALUATORS: Final[Mapping[str, _Evaluator]] = {
         _PMR_UNRELIABLE, "the drive reports its persistent memory region as unreliable"
     ),
     "nvme.media_errors": _counter,
-    "nvme.thermal_excursion": _event,
-    "nvme.error_log": _event,
     "scsi.grown_defects": _counter,
     "scsi.uncorrected_errors": _counter,
     "scsi.pending_defects": _counter,

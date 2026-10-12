@@ -144,7 +144,8 @@ Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from s
 - The effective thresholds for a drive are: built-in default, overridden by the global configuration, overridden by the first matching per-drive override. `config.py` resolves them in `effective_checks`.
 - A check returns no finding if it is disabled, not applicable to the class, or its input is missing.
 - For threshold checks the highest severity whose threshold is met is reported.
-- Event checks compare the current counter with the baseline in state and return the difference. The state file arrives with milestone M4; until then an event check returns nothing (FR-306).
+- Event checks compare the current counter with the baseline in state and return a finding only when it is above it; without a baseline they return nothing, and the planner records the current value as the baseline (FR-306). `counters` returns the current values of the enabled event checks for that.
+- `drive.missing` and `drive.unreadable` are checks of the catalog, so that they can be configured, but no snapshot answers them: the planner raises them from consecutive runs.
 - `pve-smart-alert check --dry-run` runs discovery and evaluation and prints the findings per drive; it changes no state and sends nothing. The findings of drives that are missing or unreadable in consecutive runs, and the conditions of the tool itself, arrive with milestone M4 and M5.
 
 ## 7. Notification planning
