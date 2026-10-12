@@ -3,16 +3,18 @@
 This is the living list of checks and their default thresholds.
 The model and the reasoning are in [ADR 0010](adr/0010-health-evaluation-and-default-thresholds.md); the notification behavior of conditions and events is in [ADR 0009](adr/0009-notification-policy.md).
 
-The numbers are **provisional**. They are reviewed in milestone M3 of the [roadmap](../ROADMAP.md), which also says how far the checks are built.
+The numbers are **provisional**. They were reviewed in milestone M3 of the [roadmap](../ROADMAP.md) against the recordings of the test cluster: the healthy drives of all three nodes stay below every threshold. The review is repeated as new recordings arrive; feedback that shows a default as too noisy or too quiet changes it without a new decision record, as long as the model and the principles hold.
+
+The checks are implemented since milestone M3 (`src/pve_smart_alert/checks.py`), except where a note says otherwise.
 
 ## How to read the tables
 
 - **ID**: stable identifier, used in the configuration (`[checks."<id>"]`) and shown in notifications. Renaming an ID is a breaking change.
 - **Kind**:
   - *condition*: a state that is active until it clears. Reminders and recovery apply.
-  - *event*: an increase of a cumulative counter since the stored baseline. Reported, then the baseline moves.
-- **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used.
-- **Worsening**: *increase* means every further increase is reported, subject to the cool-down. *escalation* means only a change to a higher severity is reported.
+  - *event*: an increase of a cumulative counter since the stored baseline. Reported, then the baseline moves. Until the state file of milestone M4 exists, an event check returns nothing (FR-306).
+- **N / W / C**: default thresholds for notice, warning and critical. "flag" means the check has one fixed severity and no number. "–" means the severity is not used by default; it can still be set in the configuration, except where a note says otherwise.
+- **Worsening**: *increase* means every further increase is reported, subject to the cool-down. *escalation* means only a change to a higher severity is reported. Both need the state of milestone M4.
 - A check whose source value is missing is not applicable and produces nothing.
 
 Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treated as `hdd`), `nvme`.
@@ -32,9 +34,10 @@ Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treate
 Notes:
 
 - `health.failed` is not used for NVMe. The NVMe verdict is the Critical Warning byte, which is evaluated bit by bit below.
-- `temperature`: for SAS drives, critical is also raised at the drive's own trip temperature if it reports one. For NVMe, Critical Warning bit 1 raises at least a warning.
+- `temperature`: the limits of the drive itself are not read; the fixed limits per class apply until [Q-T4](../OPEN-QUESTIONS.md) is answered. For NVMe, Critical Warning bit 1 raises at least a warning. On hosts with smartmontools 7.4 the NVMe limits do not exist in the JSON at all ([Research 03](research/03-smart-indicators.md)).
 - `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface. The source used is shown with the value.
 - `selftest.failed` only reads logs. The tool never starts a self-test.
+- `drive.unreadable` and `drive.missing` need the state file of milestone M4 and are not built yet; a dry run of milestone M3 shows an unreadable device in its summary and a missing drive not at all.
 
 ## SATA (ATA attributes)
 
@@ -54,7 +57,7 @@ Notes:
 Notes:
 
 - Raw values of attributes 1 (read error rate) and 7 (seek error rate) are never evaluated. They are packed on some vendors' drives.
-- `ata.command_timeouts`: the raw value is packed on some drives. The decoding rule is an open question.
+- `ata.command_timeouts`: the raw value is packed on some drives; where the string form has several parts, the decoded first number counts (Q-T1). The threshold is met strictly above its value: up to 100 timeouts are what clean drives show.
 - The thresholds were derived from hard disk data. They apply to SATA SSDs for lack of better data.
 - The recordings of the test cluster show values a check must not misread: a worst value of 0 with a threshold of 0 on attribute 187, a packed raw value of the temperature attribute 194, and the placeholder temperature limits -127 and 127 ([Research 06](research/06-test-cluster-recordings.md#quirks-seen)).
 
@@ -74,6 +77,7 @@ Notes:
 Notes:
 
 - If the drive reports no spare threshold, 10 % is assumed.
+- `nvme.spare` accepts only `enabled` and `warning` in the configuration, and `warning` is the margin in points above the threshold of the drive, 15 by default. The critical verdict is the threshold of the drive itself, which the tool does not set.
 - `nvme.error_log` is off because many drives log harmless entries, and reading logs can itself add entries on some drives with smartmontools 7.4.
 
 ## SAS (SCSI log pages)
@@ -88,6 +92,7 @@ Notes:
 
 - Corrected errors are normal on SAS drives and are not evaluated.
 - No public failure-rate data was found for these values. The defaults are the weakest in the catalog.
+- No parser produces these metrics until milestone M6; the checks exist so that their identifiers are stable from now on, and they are never applicable until then.
 
 ## Conditions of the tool itself
 
@@ -107,6 +112,7 @@ Notes:
 
 - `tool.state_reset` is a one-time event. It is mentioned in the summary that follows the reset and has no recovery message.
 - All others are conditions. They clear, with a recovery message, when the cause is gone.
+- The conditions of the tool itself arrive with milestone M4 and M5, when there are state and timer to watch. `tool.config_invalid` exists since milestone M3 as the warning that names the error of the configuration file while the run continues with the last good one.
 
 ## Deliberately not checked
 

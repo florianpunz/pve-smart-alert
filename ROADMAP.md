@@ -142,6 +142,11 @@ Result you can test:
 
 Open questions this milestone answers: Q-T1 to Q-T4.
 
+State: built, waiting for the acceptance on the test cluster.
+
+- Done: the catalog of `checks.py` with the evaluation of one snapshot, the severities and the model of ADR 0010; the configuration sections `[checks."<id>"]` and `[[drive]]` with strict validation, the normalization of overrides that repeat the default, and the last-good fallback of FR-406 as `last-good-config.json` in the state directory; the commands `check --dry-run`, `config check` and `config show` with the origin of each value; the per-drive `exclude` and `detail` of FR-403 in discovery; the decoding of attribute 188 (Q-T1); the derived fixture `failing-hdd` ([tests/fixtures/SOURCES.md](tests/fixtures/SOURCES.md)), which fails several checks at once; and the review of the provisional thresholds against the recordings of all three nodes: the healthy drives stay below every threshold, as a test shows. The events and the missing and unreadable drive checks wait for the state of M4, and Q-T2 to Q-T4 keep their recorded answers until feedback from the fleet arrives.
+- Next: the acceptance steps 1 to 4 on every node of the test cluster, after a package with the new commands is built and installed.
+
 ## M4: State and notification policy (L)
 
 Goal: the behavior that distinguishes the tool: once, on worsening, on reminder.

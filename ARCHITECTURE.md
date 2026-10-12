@@ -140,11 +140,12 @@ Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from s
 
 ## 6. Evaluation
 
-- The catalog is a list of check definitions: ID, applicable classes and protocols, the metric or flag it reads, kind, default thresholds, worsening rule, confirmation count, message texts. The list is in [docs/check-catalog.md](docs/check-catalog.md).
-- The effective thresholds for a drive are: built-in default, overridden by the global configuration, overridden by the first matching per-drive override.
+- The catalog is a list of check definitions: ID, applicable classes and protocols, the metric or flag it reads, kind, default thresholds, worsening rule, confirmation count, message texts. The list is in [docs/check-catalog.md](docs/check-catalog.md). The package `checks.py` implements it since milestone M3, together with `evaluate`, which turns one snapshot into findings.
+- The effective thresholds for a drive are: built-in default, overridden by the global configuration, overridden by the first matching per-drive override. `config.py` resolves them in `effective_checks`.
 - A check returns no finding if it is disabled, not applicable to the class, or its input is missing.
 - For threshold checks the highest severity whose threshold is met is reported.
-- Event checks compare the current counter with the baseline in state and return the difference.
+- Event checks compare the current counter with the baseline in state and return the difference. The state file arrives with milestone M4; until then an event check returns nothing (FR-306).
+- `pve-smart-alert check --dry-run` runs discovery and evaluation and prints the findings per drive; it changes no state and sends nothing. The findings of drives that are missing or unreadable in consecutive runs, and the conditions of the tool itself, arrive with milestone M4 and M5.
 
 ## 7. Notification planning
 
@@ -224,7 +225,9 @@ enabled = false
 
 Validation is strict: an unknown key is an error. An invalid file never stops monitoring; the last good configuration is used and the problem is reported.
 
-The loader accepts these keys: `transport` in `[notify]`; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; and the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)). Every other key in the example above is rejected as unknown until the milestone that implements it. Until the last-good configuration of FR-406 is built, an invalid file is an error for the interactive commands and one failing line in `pve-smart-alert doctor`.
+The loader of `config.py` accepts these keys since milestone M3: `transport` in `[notify]`; `path`, `timeout` (from `"1s"` to `"15m"`) and `detail` in `[smartctl]`; the manual devices of `[[discovery.device]]`, whose name must lie below `/dev` and whose type must have the form of a smartctl device type; the exclude rules of `[discovery]` with exactly one selector each ([ADR 0024](docs/adr/0024-drive-selectors.md)); the global overrides of `[checks."<check-id>"]`, which accept `enabled` and the thresholds `notice`, `warning` and `critical` that the check has, one number or, for the one check that differs per class, a table of the classes; and the per-drive overrides of `[[drive]]`, each with exactly one selector, an optional `comment`, `exclude`, `detail` and the same check overrides in a table `checks` (FR-403). Every other key in the example above is rejected as unknown until the milestone that implements it.
+
+After every successful validation the effective configuration is saved as `last-good-config.json` in the state directory (ADR 0011). A file that does not validate at run time leads to the last good one, or to the built-in defaults when there is none, together with a tool-level warning (FR-406); `pve-smart-alert doctor` reports the situation as a warning, and `pve-smart-alert config check` and `config show` answer from the same mechanism. An override that repeats the built-in default is dropped when the file is loaded, so that the reference, which lists every key with its default, changes nothing.
 
 ## 9. State
 

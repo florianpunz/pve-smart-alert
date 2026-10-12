@@ -4,7 +4,7 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds and reads the drives of a host and shows them, but it does not evaluate them yet and sends no alert.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host and can show the findings of a dry run, but it sends no alert yet.
 >
 > <details>
 > <summary>In progress: M3, evaluation and configuration</summary>
@@ -39,7 +39,7 @@ apt install ./pve-smart-alert_*_all.deb
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
-- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, and the exclude rules of `[discovery]`.
+- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, the thresholds and the enabled state of every check in `[checks."<check-id>"]`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
 
 ## Commands
 
@@ -49,6 +49,9 @@ The installed tool has these commands:
 | --- | --- |
 | `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, and the routing of notifications and of the fallback mail to root (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108) |
+| `pve-smart-alert check --dry-run` | Evaluates every drive against the checks of the [check catalog](docs/check-catalog.md) and prints the findings, without sending anything (FR-601). The run that sends notifications arrives with the next milestone |
+| `pve-smart-alert config check` | Validates the whole configuration file; errors name the key and the line, and the exit status is non-zero (FR-405) |
+| `pve-smart-alert config show` | Prints every key with its effective value and where the value comes from, the file or the built-in default (FR-407); `--defaults` prints the built-in ones |
 | `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604) |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
 
@@ -89,7 +92,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [PROJECT.md](PROJECT.md): purpose, audience, comparison with existing solutions, scope of version 1
 - [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
-- [docs/check-catalog.md](docs/check-catalog.md): planned checks and default thresholds
+- [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
 - [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
