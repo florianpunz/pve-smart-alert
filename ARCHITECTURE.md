@@ -398,6 +398,8 @@ A plain-text message to `root` through `/usr/sbin/sendmail`. The subject starts 
 
 ### Example message
 
+`render.py` renders the messages since milestone M4. The golden files of the tests in `tests/fixtures/golden/` show every kind: a message about one drive for each event, the summary above the grouping limit, the first-run summary, and a message about the tool. A message about one drive:
+
 Subject:
 
 ```text
@@ -421,12 +423,13 @@ Used by:    ZFS pool "tank"
 Powered on: 14210 hours
 
 Findings:
-  WARNING  ata.reallocated_sectors
-           Reallocated sectors: 8 (previous: 0)
-           Thresholds: notice 1, warning 5, critical 70
+  WARNING   ata.reallocated_sectors  new
+            Reallocated sectors: 8
+            Thresholds: notice 1, warning 5, critical 70
 
 What to do:
-  Plan a replacement. Reallocated sectors that keep increasing indicate a failing drive.
+  A counter that keeps increasing indicates a failing drive. Plan a
+  replacement of the drive and make sure its data is backed up.
 
 This is the first notification for this problem. Without a change, the next
 reminder follows in 7 days. To adjust or silence this check for this drive,
@@ -434,6 +437,12 @@ see /etc/pve-smart-alert/config.toml.
 
 pve-smart-alert 1.0.0 on pve1
 ```
+
+- The status after the check is `new`, `escalated from <severity>`, `worse` or `reminder`; a later notification names the previous value as `(previous: 3)` and the time the condition became active. A recovery is listed as `RECOVERED` with the value it had, and the message has severity info. Conditions of the drive that are active but not due are listed under "Also active, nothing new".
+- The thresholds are the effective ones of the drive. "What to do" is the advice of the most severe open finding; the texts of every check and tool condition are in `TEXTS` of `render.py`, and a test keeps them complete.
+- The cluster name comes from `cluster_name` in `/etc/pve/corosync.conf`, the corosync configuration Proxmox VE keeps on pmxcfs for a cluster (corosync.conf(5), section `totem`); a node without that file is shown without a cluster.
+- A summary above the grouping limit lists each drive with its findings and carries only the field `event` = `summary`. The first-run summary lists the monitored drives with their findings, the devices without usable data, the skipped devices and the problems of the tool, and says when the state was reset. A message about the tool has the fields `event` with the event of its finding and `device` = `pve-smart-alert`.
+- Model, serial number, firmware and the other strings of a drive are stripped of control characters and cut to 200 characters before they are written.
 
 ## 11. Error handling
 

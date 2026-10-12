@@ -1,0 +1,38 @@
+Subject: [pve-smart-alert] WARNING pve1: 5 drives need attention
+
+5 drives in pve1 have notifications in the same run. They are sent
+as one summary instead of one message per drive (limit: 3).
+
+Host:       pve1 (cluster: lab)
+
+/dev/sda [sat] Intenso SSD (ANON-SN-0001)
+  WARNING   temperature  new
+            Temperature: 65 °C
+            Thresholds: warning 60 °C, critical 70 °C
+
+/dev/sdb [sat] Intenso SSD (ANON-SN-0002)
+  WARNING   temperature  new
+            Temperature: 65 °C
+            Thresholds: warning 60 °C, critical 70 °C
+
+/dev/sdc [sat] Intenso SSD (ANON-SN-0003)
+  WARNING   temperature  new
+            Temperature: 65 °C
+            Thresholds: warning 60 °C, critical 70 °C
+
+/dev/sdd [sat] Intenso SSD (ANON-SN-0004)
+  WARNING   temperature  new
+            Temperature: 65 °C
+            Thresholds: warning 60 °C, critical 70 °C
+
+/dev/sde [sat] Intenso SSD (ANON-SN-0005)
+  WARNING   temperature  new
+            Temperature: 65 °C
+            Thresholds: warning 60 °C, critical 70 °C
+
+What to do:
+  Check the cooling: fans, air flow and the temperature of the room.
+
+To adjust the checks or the policy, see /etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1

@@ -1,0 +1,19 @@
+Subject: [pve-smart-alert] NOTICE pve1: monitoring 1 drive, no findings
+
+PVE SMART Alert now monitors the drives of pve1. This summary lists what it
+found. From now on a problem is reported once, again when it gets worse, and
+as a reminder after a while.
+
+The state file could not be used and was set aside, so the tool started afresh:
+  the state file is not valid JSON
+
+Host:       pve1
+
+Monitored drives:
+  /dev/sdb [sat] Samsung SSD 870 EVO 1TB (ANON-SN-0001)  no findings
+
+This message also shows that notifications reach you. It is sent once; it can
+be switched off with first_run_summary = false in [notify] of
+/etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1

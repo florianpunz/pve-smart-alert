@@ -51,6 +51,7 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - **No real serial number or WWN is committed.** Fixtures are anonymized before they are added ([ADR 0016](docs/adr/0016-test-strategy.md)), and a test checks every fixture for it.
 - Recorded fixtures are written by `scripts/make_fixtures.py` from an archive of `scripts/collect-node-data.sh`, never by hand. It replaces serial numbers, WWNs and EUI-64s with placeholders and writes nothing if a real value is left ([ADR 0023](docs/adr/0023-anonymization-of-recordings.md)). Keep the archives themselves out of the repository.
 - Every fixture gets an entry in `tests/fixtures/SOURCES.md` with its origin and its license.
+- A change to the text of a notification updates its golden file in `tests/fixtures/golden/`: `PVE_SMART_ALERT_UPDATE_GOLDEN=1 make test` rewrites them, and the diff belongs to the change.
 - A host whose drives change from run to run is a scenario in `tests/scenarios.py`: a base recording and the edits of each step. The scenario tests run the program once per step with the clock, the state directory and the transport of `tests/unit/frame.py`.
 - Recordings contributed by users are welcome. Attach them to an issue; they are anonymized on the way in.
 - Data taken from another project is marked in the file that contains it, and the notice of that project is kept in `THIRD-PARTY-NOTICES.md`, which the first such data creates.

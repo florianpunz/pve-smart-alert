@@ -41,6 +41,10 @@ LAST_GOOD_CONFIG_PATH: Final = STATE_DIR / "last-good-config.json"
 # What the tool remembers between runs (ADR 0007).
 STATE_PATH: Final = STATE_DIR / "state.json"
 
+# The corosync configuration of a cluster, on pmxcfs. A notification names
+# the cluster from it; the tool only reads it (ADR 0012).
+COROSYNC_CONF_PATH: Final = Path("/etc/pve/corosync.conf")
+
 # The runtime directory, and in it the lock that keeps two runs from
 # overlapping (ADR 0007, FR-605).
 RUN_DIR: Final = Path("/run/pve-smart-alert")

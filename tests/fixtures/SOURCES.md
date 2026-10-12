@@ -25,6 +25,10 @@ The scenario tests of the notification policy replay a host whose drives change 
 | `pending-sectors` | `direct/standalone-pve1` | The raw value of attribute 197 set to 3 and to 20, an attribute 197 entry with made-up flags added where the drive has none, and the drive removed from the scan and the recording |
 | `five-hot` | `direct/standalone-pve1` | Four copies of the drive as `/dev/sdb` to `/dev/sde` with the serial numbers `ANON-SN-0002` to `ANON-SN-0005` and without WWN, and the temperature of all five set to 65 °C |
 
+## Rendered notifications: `golden/`
+
+The subject and body of every kind of notification, written by the renderer from plans that the tests in `tests/unit/test_render.py` build by hand ([ADR 0016](../../docs/adr/0016-test-strategy.md): rendering is compared with golden files). The drives in them are made up, with the placeholder serial numbers of the anonymization. A change to the text of a notification updates these files: `PVE_SMART_ALERT_UPDATE_GOLDEN=1 make test` writes them, and the diff is reviewed with the change. License AGPL-3.0-or-later.
+
 ## Notification configuration: `pvesh/`
 
 The answers of `pvesh get /cluster/notifications/matchers --output-format json` and `pvesh get /cluster/notifications/targets --output-format json`, one directory per configuration, as `matchers.json` and `targets.json`.

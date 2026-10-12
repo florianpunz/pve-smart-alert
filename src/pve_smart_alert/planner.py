@@ -185,6 +185,7 @@ class Item:
     previous: int | None = None
     threshold: int | None = None
     since: datetime | None = None
+    previous_severity: Severity | None = None
 
     @property
     def message_severity(self) -> Severity:
@@ -715,6 +716,7 @@ class _Planner:
                     previous=condition.notified_value,
                     threshold=condition.threshold,
                     since=condition.first_detected,
+                    previous_severity=condition.notified_severity,
                 )
             )
             outcome.changes.append(

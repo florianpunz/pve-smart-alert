@@ -1,0 +1,28 @@
+Subject: [pve-smart-alert] WARNING pve1: monitoring 2 drives, 1 finding
+
+PVE SMART Alert now monitors the drives of pve1. This summary lists what it
+found. From now on a problem is reported once, again when it gets worse, and
+as a reminder after a while.
+
+Host:       pve1 (cluster: lab)
+
+Monitored drives:
+  /dev/sdb [sat] Samsung SSD 870 EVO 1TB (ANON-SN-0001)
+    WARNING   ata.reallocated_sectors: 8
+  /dev/nvme0 [nvme] WDC PC SN720 SDAPNTW-512G (ANON-SN-0002)  no findings
+
+Devices without usable data:
+  /dev/sdz [sat]: No such device
+
+Skipped devices:
+  /dev/sdc [sat]: excluded (model = "QEMU*")
+
+What to do:
+  A counter that keeps increasing indicates a failing drive. Plan a
+  replacement of the drive and make sure its data is backed up.
+
+This message also shows that notifications reach you. It is sent once; it can
+be switched off with first_run_summary = false in [notify] of
+/etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1
