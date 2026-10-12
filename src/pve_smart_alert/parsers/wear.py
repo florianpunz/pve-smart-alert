@@ -4,11 +4,14 @@
 The first of these sources that a drive reports is used:
 
 1. `endurance_used.current_percent`, which smartmontools 7.5 and later
-   computes itself, for every protocol.
+   computes itself, for every protocol. For ATA it is the vendor-neutral
+   value only when the device statistics were read: without them
+   smartmontools guesses it from a vendor attribute, and the guess counts
+   as the vendor attribute it is ([Research 03](../research/03-smart-indicators.md)).
 2. ATA: the "Percentage Used Endurance Indicator" of the device statistics.
    NVMe: `percentage_used` of the SMART health log.
 3. ATA only: the vendor attribute that the web interface of Proxmox VE reads,
-   as `100 - normalized value`.
+   as `100 - normalized value`, and the same kind of guess of smartmontools.
 
 Next to it, the value the web interface shows is kept, so that
 `pve-smart-alert scan` can name both when they differ (ADR 0021).
@@ -65,14 +68,23 @@ class Wear:
 def ata_wear(document: Mapping[str, object]) -> Wear:
     """Return the wear of an ATA drive."""
     web_interface = vendor_attribute_wear(document)
-    endurance = _endurance_used(document)
-    if endurance is not None:
-        return Wear(endurance, WearSource.ENDURANCE_USED, web_interface)
     statistics = device_statistics_wear(document)
+    endurance = _endurance_used(document)
+    if endurance is not None and statistics is not None:
+        # With the device statistics read, smartmontools overrides its own
+        # attribute guess with their standard value ([Research 03]), so
+        # `endurance_used` is the vendor-neutral source of ADR 0021.
+        return Wear(endurance, WearSource.ENDURANCE_USED, web_interface)
     if statistics is not None:
         return Wear(statistics, WearSource.DEVICE_STATISTICS, web_interface)
     if web_interface is not None:
         return Wear(web_interface, WearSource.VENDOR_ATTRIBUTE, web_interface)
+    if endurance is not None:
+        # Without the device statistics, for example with `detail = "basic"`,
+        # smartmontools guesses `endurance_used` from a vendor attribute. It
+        # is a vendor attribute, not the vendor-neutral value of the first
+        # source, but it counts rather than nothing.
+        return Wear(endurance, WearSource.VENDOR_ATTRIBUTE, web_interface)
     return Wear()
 
 

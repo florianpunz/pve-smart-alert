@@ -45,7 +45,7 @@ def test_a_drive_is_shown_with_what_the_tool_knows(
         "  Capacity:  250.06 GB",
         "  Class:     ssd, transport sata",
         "  Used by:   LVM volume group pve",
-        "  Wear:      12 % (endurance_used)",
+        "  Wear:      12 % (vendor attribute)",
     ]
     assert lines[9].startswith("  Read in:   ")
     assert text.endswith("\n3 monitored, 0 in standby, 0 unreadable, 0 skipped\n")
@@ -85,15 +85,24 @@ def test_the_intenso_ssd_names_its_source_without_the_web_interface_value(
 def test_a_small_difference_names_only_the_value_of_the_tool(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    host = Host.of_node(tmp_path, monkeypatch, "pve1", prefix="standalone")
     drive = host.drive("sda.json")
-    drive["endurance_used"] = {"current_percent": 21}
+    drive["endurance_used"] = {"current_percent": 7}
+    statistics = drive["ata_device_statistics"]
+    assert isinstance(statistics, dict)
+    for page in statistics["pages"]:
+        assert isinstance(page, dict)
+        for entry in page["table"]:
+            assert isinstance(entry, dict)
+            if entry["name"] == "Percentage Used Endurance Indicator":
+                entry["value"] = 7
     host.behave("sda.json", stdout=json.dumps(drive), exit_status=0)
 
     text = report(host.discover())
 
-    # 21 against 12 in the web interface: less than 10 points apart.
-    assert "  Wear:      21 % (endurance_used)\n" in text
+    # 7 against 0 in the web interface: less than 10 points apart.
+    assert "  Wear:      7 % (endurance_used)\n" in text
+    assert "the web interface shows" not in text
 
 
 def test_an_unreadable_manual_device_is_reported(
