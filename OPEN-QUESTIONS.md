@@ -40,11 +40,7 @@ Answered or narrowed in milestone M3, some only with feedback from users.
 
 ## Packaging and operation
 
-Answered in milestone M5. Q-P1 is answered by [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md), Q-P2 in [ARCHITECTURE.md](ARCHITECTURE.md) section 13, both on `pve1` on 2026-10-13. Q-P3 is answered once the package test in a container passes in CI.
-
-| ID | Question | Why it matters | Assumed until answered |
-| --- | --- | --- | --- |
-| Q-P3 | Can the package be installed and tested in a clean container with the Proxmox VE package repository in CI? | Needed for the automated package test ([ADR 0016](docs/adr/0016-test-strategy.md)) | Yes, with the public no-subscription repository |
+None at the moment. Milestone M5 answered Q-P1 in [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) and Q-P2 in [ARCHITECTURE.md](ARCHITECTURE.md) section 13, both on `pve1` on 2026-10-13, and Q-P3 with the package test in CI, also in section 13.
 
 ## Hardware RAID
 

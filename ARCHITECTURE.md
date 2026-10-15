@@ -534,7 +534,7 @@ The service and its limits:
 - Compat 13 defaults to `--restart-after-upgrade`: no stop in `preinst`; `postinst` runs `deb-systemd-invoke start` on installation and `restart` on an upgrade. `prerm` stops the timer on removal. `postrm` lets `deb-systemd-helper purge` forget the timer on purge. The options `--no-stop-on-upgrade` (alias `-r`; `--no-restart-on-upgrade` is deprecated and goes with compat 14) and `--no-restart-after-upgrade` are not used: the service has no snippet, so a run that is in progress during an upgrade is not stopped, and the restart of the timer is wanted.
 - The `postrm` of the package removes, on purge, `/etc/pve-smart-alert/`, `/var/lib/pve-smart-alert/` and `/run/pve-smart-alert/`.
 
-The package job in CI checks the generated snippets and runs `systemd-analyze verify` on the installed units.
+The package job in CI checks the generated snippets and runs `systemd-analyze verify` on the installed units. Last, `scripts/package-test.sh` installs the package in a clean `debian:trixie` container with the public no-subscription repository of Proxmox VE, checks the installed files and that the timer is enabled, runs the tool, purges the package and checks that nothing is left. It passed in CI on 2026-10-15 (answers Q-P3); a container has no running systemd, so the timer is checked as enabled, not as running.
 
 ### The first run and upgrades
 
