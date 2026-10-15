@@ -8,7 +8,9 @@ output never looks more complete than it is.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -37,8 +39,10 @@ from pve_smart_alert.paths import (
     SENDMAIL_PATH,
     STATE_PATH,
     SUBJECT_TEMPLATE,
+    SYSTEMCTL_PATH,
     TEMPLATE_DIR,
     TEMPLATE_OVERRIDE_DIR,
+    TIMER_UNIT,
 )
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 from pve_smart_alert.routing import (
@@ -65,12 +69,28 @@ TEMPLATES: Final = (SUBJECT_TEMPLATE, BODY_TEMPLATE)
 
 # What FR-603 asks for and what arrives with its own milestone.
 PENDING: Final = (
-    "the Proxmox VE version, the timer, unsupported controllers and smartd"
+    "the Proxmox VE version, unsupported controllers and smartd"
     " are checked once their milestones are built"
 )
 
 # The oldest smartctl that writes JSON (ADR 0002, ADR 0004).
 MINIMUM_SMARTCTL: Final = (7, 0)
+
+# How long systemctl may take to answer about one unit. It reads what systemd
+# holds in memory, so anything longer means that systemd is not answering.
+SYSTEMCTL_TIMEOUT_SECONDS: Final = 10.0
+
+# The schedule entries of a timer as `systemctl show` writes them, one entry
+# per line, such as "TimersMonotonic={ OnUnitActiveUSec=30min ; next_elapse=... }".
+TIMER_ENTRY: Final = re.compile(r"^Timers(?:Monotonic|Calendar)=\{ (\w+)=(.*?) ; next_elapse=")
+
+# How the timer entries are described. The others, such as OnBootSec, only
+# matter once and are left out.
+SCHEDULE_WORDS: Final = {
+    "OnUnitActiveUSec": "every {} after the start of the last run",
+    "OnUnitInactiveUSec": "every {} after the end of the last run",
+    "OnCalendar": "on {}",
+}
 
 # How severities that no matcher routes get a route (ADR 0020). The README
 # has the complete command.
@@ -121,6 +141,7 @@ def run_doctor(
     pvesh_path: Path = PVESH_PATH,
     forward_path: Path = ROOT_FORWARD_PATH,
     state_path: Path = STATE_PATH,
+    systemctl_path: Path = SYSTEMCTL_PATH,
     node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
@@ -141,6 +162,7 @@ def run_doctor(
         check_routing(routes, settings=settings, node=node, forward_path=forward_path),
         check_fallback(routes, settings=settings, node=node, forward_path=forward_path),
         check_state(state_path),
+        check_timer(systemctl_path, runner=runner),
         CheckResult("pending", Status.SKIP, PENDING),
     ]
 
@@ -308,6 +330,120 @@ def check_state(path: Path) -> CheckResult:
             advice="the last run could not deliver every notification; it retries on the next",
         )
     return CheckResult("state", Status.OK, detail)
+
+
+def check_timer(path: Path, *, runner: ProcessRunner = run_with_timeout) -> CheckResult:
+    """Check that the timer starts the runs, and report its schedule (FR-603).
+
+    The timer is only asked, never changed (ADR 0012). A timer that is not
+    active fails, because then no check runs by itself (FR-702). One that is
+    active but not enabled warns: the runs go on until the next reboot
+    (FR-703). The schedule is the one systemd uses, drop-ins included, which
+    is where an administrator changes the interval (ADR 0006).
+    """
+    if not path.is_file():
+        return CheckResult(
+            "timer", Status.SKIP, f"systemctl is missing at {path}, the timer cannot be asked"
+        )
+    properties = "LoadState,ActiveState,UnitFileState,TimersMonotonic,TimersCalendar"
+    try:
+        result = runner(
+            [path, "show", TIMER_UNIT, f"--property={properties}"],
+            timeout=SYSTEMCTL_TIMEOUT_SECONDS,
+        )
+    except OSError as failure:
+        return CheckResult(
+            "timer",
+            Status.SKIP,
+            f"{path} could not be started: {failure.strerror or failure}",
+        )
+    if not result.ok:
+        # Typically a container or a chroot without a running systemd.
+        reason = result.lines[-1] if result.lines else "no answer"
+        return CheckResult("timer", Status.SKIP, f"systemd cannot be asked: {reason}")
+
+    shown = _properties(result.stdout)
+    if shown.get("LoadState") != "loaded":
+        return CheckResult(
+            "timer",
+            Status.FAIL,
+            f"{TIMER_UNIT} is not installed",
+            advice="it comes with the pve-smart-alert package",
+        )
+
+    active = shown.get("ActiveState", "unknown")
+    if active != "active":
+        return CheckResult(
+            "timer",
+            Status.FAIL,
+            f"{TIMER_UNIT} is {active}, no check runs by itself",
+            advice=f"systemctl enable --now {TIMER_UNIT}",
+        )
+
+    detail = ", ".join([f"{TIMER_UNIT} is active", *_schedule(result.stdout)])
+    next_run = _next_run(path, runner=runner)
+    if next_run is not None:
+        detail += f", next run {format_time(next_run)}"
+
+    enabled = shown.get("UnitFileState", "unknown")
+    if enabled != "enabled":
+        return CheckResult(
+            "timer",
+            Status.WARN,
+            f"{detail}; but it is {enabled}, so the runs stop with the next reboot",
+            advice=f"systemctl enable {TIMER_UNIT}",
+        )
+    return CheckResult("timer", Status.OK, detail)
+
+
+def _properties(text: str) -> dict[str, str]:
+    """Return the properties of `systemctl show`, the first value of each."""
+    properties: dict[str, str] = {}
+    for line in text.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            properties.setdefault(key, value)
+    return properties
+
+
+def _schedule(text: str) -> list[str]:
+    """Return the repeating entries of the timer in words, in their order."""
+    described = []
+    for line in text.splitlines():
+        match = TIMER_ENTRY.match(line)
+        if match is None or match.group(1) not in SCHEDULE_WORDS:
+            continue
+        described.append(SCHEDULE_WORDS[match.group(1)].format(match.group(2)))
+    return described
+
+
+def _next_run(path: Path, *, runner: ProcessRunner) -> datetime | None:
+    """Return when systemd starts the next run, or `None` when it does not say.
+
+    `systemctl show` writes the next start of a monotonic timer as a time
+    since boot; the JSON of `list-timers` converts it to a timestamp, in
+    microseconds since the epoch.
+    """
+    try:
+        result = runner(
+            [path, "list-timers", "--all", "--output=json", TIMER_UNIT],
+            timeout=SYSTEMCTL_TIMEOUT_SECONDS,
+        )
+    except OSError:
+        return None
+    if not result.ok:
+        return None
+    try:
+        timers = json.loads(result.stdout)
+    except ValueError:
+        return None
+    for timer in timers if isinstance(timers, list) else []:
+        if not isinstance(timer, dict) or timer.get("unit") != TIMER_UNIT:
+            continue
+        micros = timer.get("next")
+        if isinstance(micros, int) and not isinstance(micros, bool) and micros > 0:
+            return datetime.fromtimestamp(micros / 1_000_000, UTC)
+    return None
 
 
 def check_templates(template_dir: Path, *, override_dir: Path) -> CheckResult:

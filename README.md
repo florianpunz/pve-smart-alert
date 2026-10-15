@@ -4,7 +4,7 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. It does not run by itself yet: a timer arrives with M5, until then `pve-smart-alert check` is run by hand.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package now brings a systemd timer that runs the check every 30 minutes. This is work in progress of M5: it has not been accepted on a real Proxmox VE host yet, and there is no release.
 >
 > <details>
 > <summary>Next: M5, packaging, timer and installation</summary>
@@ -14,7 +14,7 @@
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
 > - **M3 (done):** evaluation and configuration
 > - **M4 (done):** state and notification policy
-> - **M5 (planned):** packaging, timer and installation
+> - **M5 (in progress):** packaging, timer and installation
 > - **M6 (planned):** SAS and hardware RAID on recorded data
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
 >
@@ -38,6 +38,9 @@ apt install ./pve-smart-alert_*_all.deb
 ```
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
+- The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
+- The interval is changed with a drop-in, `systemctl edit pve-smart-alert.timer`, not in the configuration file of the tool. A drop-in survives upgrades of the package.
+- When a run fails, a short mail to root says so, at most once a day and once more after a reboot. It is sent without the code of the tool, so it also arrives when that code is broken.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
 - These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, the thresholds, the enabled state and the confirmation count of every check in `[checks."<check-id>"]`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
 
@@ -47,7 +50,7 @@ The installed tool has these commands:
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, and the state file with the last run (FR-603). A last line names what it does not check yet |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, and the timer with its schedule and next run (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108) |
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
@@ -73,7 +76,7 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
-A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock.
+A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The timer treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
 
 ## Notification routing
 

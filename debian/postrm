@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Runs after the package was removed. Only `purge` does anything, and it
-# removes nothing but the two directories that belong to the tool: the
-# configuration and the state (ADR 0012, ADR 0013). Everything under /usr,
-# /etc/pve and /usr/share/pve-manager belongs to dpkg and is already gone.
+# removes nothing but the directories that belong to the tool: the
+# configuration, the state, and the runtime directory with the lock and the
+# stamp of the failure reporter, which the services keep until a reboot
+# (ADR 0012, ADR 0013). Everything under /usr, /etc/pve and
+# /usr/share/pve-manager belongs to dpkg and is already gone.
 set -e
 
 case "$1" in
 	purge)
-		rm -rf /etc/pve-smart-alert /var/lib/pve-smart-alert
+		rm -rf /etc/pve-smart-alert /var/lib/pve-smart-alert /run/pve-smart-alert
 		;;
 esac
 

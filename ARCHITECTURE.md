@@ -465,18 +465,18 @@ pve-smart-alert 1.0.0 on pve1
 | Configuration file is invalid | Last good configuration is used. `tool.config_invalid`, warning |
 | State file is unreadable or has an unknown schema | File is renamed, empty state is used, `tool.state_reset`. Next notification is one summary |
 | State directory is not writable | Run fails after delivering what it can. The failure unit reports it |
-| Another run holds the lock | Exit with a message and exit status 3. Not an error for the timer; the service unit of milestone M5 has to accept it |
+| Another run holds the lock | Exit with a message and exit status 3. Not an error: the service accepts it with `SuccessExitStatus=3` (section 13) |
 | pmxcfs is not available | The bridge fails. The mail fallback is used |
 | Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning, when the bridge fails its `--check` at the start of a run |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
 | No matcher matches | Nothing is sent, and the call succeeds with an empty log. Not an error of the run. `pve-smart-alert doctor` reports the severity as not routed, and `pve-smart-alert test-notification` says that no matcher routes the test ([ADR 0020](docs/adr/0020-routing-check.md)) |
 | No matcher routes mail to root | The fallback is dropped as well. `pve-smart-alert doctor` reports the line `fallback` as `warn` ([ADR 0022](docs/adr/0022-fallback-routing-check.md)) |
-| Mail command fails as well | The notification is not delivered. State is not advanced. The run exits non-zero and the failure unit tries a minimal mail |
+| Mail command fails as well | The notification is not delivered. State is not advanced. The run exits with status 1, the service fails, and the failure unit tries a minimal mail, at most once a day (section 13) |
 | Unhandled error in the program | The service fails. `pve-smart-alert-failure.service` sends a short mail to root, at most once per day |
 | System clock jumps | Timestamps in the future are treated as "now" |
 
-Principle: a problem with one drive is a finding about that drive; a problem with the tool is a tool condition; only a problem that prevents the run from finishing is a failed run.
+Principle: a problem with one drive is a finding about that drive; a problem with the tool is a tool condition; only a problem that prevents the run from finishing, or from handing over a notification, is a failed run.
 
 ## 12. Files on the host
 
@@ -499,40 +499,48 @@ Nothing else is created or changed ([ADR 0012](docs/adr/0012-read-only-and-coexi
 
 ## 13. systemd units
 
-Sketch of the intended units ([ADR 0006](docs/adr/0006-scheduling.md)):
+The units are in [`systemd/`](systemd/) and are installed to `/usr/lib/systemd/system/` ([ADR 0006](docs/adr/0006-scheduling.md)).
 
-```ini
-# pve-smart-alert.timer
-[Timer]
-OnBootSec=3min
-OnUnitActiveSec=30min
-AccuracySec=1min
+| Unit | What it does |
+| --- | --- |
+| `pve-smart-alert.timer` | `OnBootSec=3min`, `OnUnitActiveSec=30min`, `AccuracySec=1min`, wanted by `timers.target`. The only unit that is enabled |
+| `pve-smart-alert.service` | `Type=oneshot`, runs `pve-smart-alert check`. Ordered after `pve-cluster.service` without requiring it. `OnFailure=pve-smart-alert-failure.service`. No `[Install]` section: it is started by the timer or by hand |
+| `pve-smart-alert-failure.service` | `Type=oneshot`, runs `/usr/libexec/pve-smart-alert/report-failure`. No `[Install]` section, no `OnFailure=` of its own |
 
-[Install]
-WantedBy=timers.target
-```
+The service and its limits:
 
-```ini
-# pve-smart-alert.service
-[Unit]
-Description=PVE SMART Alert drive health check
-After=pve-cluster.service
-OnFailure=pve-smart-alert-failure.service
+- `SuccessExitStatus=3`: a run skipped because another one holds the lock is a success (FR-605).
+- Every other exit status but 0 is a failure and starts the failure reporter, exit status 1 included: a notification could not be handed over, through either transport. The maintainer decided this on 2026-10-15: the failure reporter is then the only path left that does not use the code of the tool. A drive that is unhealthy is never a failure (FR-607).
+- `RuntimeDirectory=pve-smart-alert` with `RuntimeDirectoryPreserve=yes`, in both services, so that the lock and the stamp of the failure reporter stay until a reboot, whichever of the two ran last. `StateDirectory=pve-smart-alert` with mode `0700`.
+- Priority and run time only: `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `TimeoutStartSec=15min` for the check and `2min` for the failure report. No sandboxing option is set. Which ones leave mail submission and the notification targets of the bridge working is open (Q-P1 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)), and a unit test keeps them out until it is answered.
 
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/pve-smart-alert check
-RuntimeDirectory=pve-smart-alert
-RuntimeDirectoryPreserve=yes
-StateDirectory=pve-smart-alert
-StateDirectoryMode=0700
-TimeoutStartSec=15min
-Nice=10
-IOSchedulingClass=best-effort
-IOSchedulingPriority=7
-```
+### The failure reporter
 
-Sandboxing options of systemd are applied only where they are known not to interfere with mail submission or with the notification targets, which run inside the bridge process. Which options are safe is an open question to be settled in the packaging milestone.
+`report-failure` is a POSIX shell script that uses nothing of the tool, because a failed run may have failed in that code ([ADR 0009](docs/adr/0009-notification-policy.md)).
+
+- It sends one plain mail to `root` through `/usr/sbin/sendmail -i -t`, the same command and arguments as the mail transport. The mail names the host, the unit, the result and the exit status of the failed run from the variables `MONITOR_SERVICE_RESULT`, `MONITOR_EXIT_CODE`, `MONITOR_EXIT_STATUS`, `MONITOR_UNIT` and `MONITOR_INVOCATION_ID`, which systemd 251 and later set for a unit started through `OnFailure=` ([systemd.exec(5)](https://manpages.debian.org/trixie/systemd/systemd.exec.5.en.html), section "Environment variables in spawned processes"; Debian 13 ships systemd 257). With the invocation ID it reads the last 30 lines of the failed run from the journal. Without these variables it sends the mail all the same, with less detail.
+- At most one mail a day: after the mail was handed over, it writes the stamp `/run/pve-smart-alert/failure-reported-<day>` and removes the stamps of earlier days. A mail command that fails leaves no stamp, so the next failure tries again.
+- `/run` is emptied by a reboot, and the stamp with it. So one more failure mail per boot is possible, also on a day that already had one.
+- Mail to root reaches the notification system as `system-mail` through `proxmox-mail-forward`, the same route as the fallback transport ([ADR 0022](docs/adr/0022-fallback-routing-check.md)).
+
+### Maintainer scripts
+
+`dh_installsystemd` writes the snippets of the maintainer scripts ([ADR 0013](docs/adr/0013-packaging-and-installation.md)), and [`debian/rules`](debian/rules) names only the timer. Read in the source of debhelper 13.24.2, the version of Debian 13 ([dh_installsystemd(1)](https://manpages.debian.org/trixie/debhelper/dh_installsystemd.1.en.html), [source](https://salsa.debian.org/debian/debhelper/-/blob/debian/13.24.2/dh_installsystemd)):
+
+- With no unit on its command line it acts on every installed unit, and it writes a start snippet for each, also for a unit without an `[Install]` section; only enabling needs that section. Unnamed, the installation would start a check and a failure report by itself. Named on the command line, only the timer gets snippets; the services are installed by [`debian/pve-smart-alert.install`](debian/pve-smart-alert.install).
+- Compat 13 defaults to `--restart-after-upgrade`: no stop in `preinst`; `postinst` runs `deb-systemd-invoke start` on installation and `restart` on an upgrade. `prerm` stops the timer on removal. `postrm` lets `deb-systemd-helper purge` forget the timer on purge. The options `--no-stop-on-upgrade` (alias `-r`; `--no-restart-on-upgrade` is deprecated and goes with compat 14) and `--no-restart-after-upgrade` are not used: the service has no snippet, so a run that is in progress during an upgrade is not stopped, and the restart of the timer is wanted.
+- The `postrm` of the package removes, on purge, `/etc/pve-smart-alert/`, `/var/lib/pve-smart-alert/` and `/run/pve-smart-alert/`.
+
+The package job in CI checks the generated snippets and runs `systemd-analyze verify` on the installed units.
+
+### The first run and upgrades
+
+These follow from the documentation of systemd and are assumptions until they are watched on `pve1` (Q-P2 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md), checklist in [ROADMAP.md](ROADMAP.md)):
+
+- **First run after installation.** "If a timer configured with OnBootSec= or OnStartupSec= is already in the past when the timer unit is activated, it will immediately elapse and the configured unit is started" ([systemd.timer(5)](https://manpages.debian.org/trixie/systemd/systemd.timer.5.en.html)). On a host that has been up for more than 3 minutes, the start of the timer by `postinst` therefore starts the first run at once. No package script starts a check.
+- **Run on an upgrade.** The restart of the timer by `postinst` activates it again, so by the same sentence `OnBootSec` elapses at once and one ordinary run starts. The manual page does not say this for a restart; it is read from the sentence above. Configuration and state are kept, so the run is not a first run and sends no first-run summary.
+
+`pve-smart-alert doctor` reports the timer in its line `timer`: `fail` when the timer is not installed or not active, `warn` when it is active but not enabled, because then the runs stop with the next reboot, and otherwise the schedule systemd uses, drop-ins included, and the next run. It only asks systemd (`systemctl show`, `systemctl list-timers`) and changes nothing.
 
 ## 14. Security
 

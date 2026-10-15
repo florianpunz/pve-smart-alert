@@ -80,6 +80,10 @@ jobs:
           for path in \
             ./usr/sbin/pve-smart-alert \
             ./usr/libexec/pve-smart-alert/notify-bridge \
+            ./usr/libexec/pve-smart-alert/report-failure \
+            ./usr/lib/systemd/system/pve-smart-alert.service \
+            ./usr/lib/systemd/system/pve-smart-alert.timer \
+            ./usr/lib/systemd/system/pve-smart-alert-failure.service \
             ./usr/share/pve-smart-alert/pve_smart_alert/__init__.py \
             ./usr/share/pve-smart-alert/pve_smart_alert/cli.py \
             ./usr/share/pve-smart-alert/pve_smart_alert/transports/pve_notify.py \
@@ -146,7 +150,10 @@ jobs:
           root=$(mktemp -d)
           dpkg-deb --extract dist/*.deb "$root"
 
-          for program in usr/sbin/pve-smart-alert usr/libexec/pve-smart-alert/notify-bridge
+          for program in \
+            usr/sbin/pve-smart-alert \
+            usr/libexec/pve-smart-alert/notify-bridge \
+            usr/libexec/pve-smart-alert/report-failure
           do
             if [ ! -x "$root/$program" ]; then
               echo "not executable: /$program"
@@ -161,6 +168,47 @@ jobs:
           # The tool never writes byte code, and this is where that would show.
           if find "$root/usr/share/pve-smart-alert" -name '__pycache__' | grep -q .; then
             echo "byte code was created in the installed tree"
+            exit 1
+          fi
+
+      # Only the timer is enabled, started, restarted after an upgrade and
+      # stopped on removal. A start snippet for one of the services would make
+      # the installation run a check, or send a failure report, by itself
+      # (ADR 0006, ADR 0013). debian/rules says why the snippets are limited.
+      - name: The maintainer scripts handle the timer and nothing else
+        run: |
+          control=$(mktemp -d)
+          dpkg-deb --ctrl-tarfile dist/*.deb | tar -x -C "$control"
+          for script in postinst prerm postrm; do
+            echo "--- $script"; cat "$control/$script"
+          done
+          grep -q 'deb-systemd-helper enable .pve-smart-alert.timer' "$control/postinst"
+          grep -q 'deb-systemd-invoke $_dh_action .pve-smart-alert.timer' "$control/postinst"
+          grep -q 'deb-systemd-invoke stop .pve-smart-alert.timer' "$control/prerm"
+          grep -q 'deb-systemd-helper purge .pve-smart-alert.timer' "$control/postrm"
+          if grep -E 'pve-smart-alert(-failure)?\.service' "$control"/postinst "$control"/prerm "$control"/postrm; then
+            echo "a maintainer script acts on a service, not only on the timer"
+            exit 1
+          fi
+          if [ -e "$control/preinst" ] && grep -q 'deb-systemd-invoke' "$control/preinst"; then
+            echo "preinst stops a unit before an upgrade"
+            exit 1
+          fi
+
+      # systemd-analyze reads the units of the package together with the units
+      # of the runner, with the programs of the package in place. A unit that
+      # systemd reads with a complaint fails the job, even where systemd only
+      # warns and ignores the line.
+      - name: systemd accepts the units
+        run: |
+          root=$(mktemp -d)
+          dpkg-deb --extract dist/*.deb "$root"
+          cp -an /usr/lib/systemd/system/. "$root/usr/lib/systemd/system/"
+          output=$(systemd-analyze verify --root="$root" \
+            pve-smart-alert.service pve-smart-alert.timer pve-smart-alert-failure.service 2>&1) \
+            || { echo "$output"; exit 1; }
+          if [ -n "$output" ]; then
+            echo "$output"
             exit 1
           fi
 

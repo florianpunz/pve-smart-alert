@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The configuration accepts the settings of the notification policy in `[notify]` and `[notify.reminder]`, and the confirmation count `confirm_runs` of a condition check (FR-404).
 - `pve-smart-alert status` shows the last run and every drive with its active conditions from the state, and `--json` prints the state (FR-602).
 - `pve-smart-alert doctor` reports the state file and the last run in a line `state`.
+- The package installs a systemd timer that runs `pve-smart-alert check` 3 minutes after boot and every 30 minutes after that, and enables and starts it on installation ([ADR 0006](docs/adr/0006-scheduling.md)). A run skipped because another one holds the lock counts as a success.
+- A failed run, including one that could not hand over a notification, is reported by a short mail to root that does not use the code of the tool, at most once a day and once more after a reboot ([ADR 0009](docs/adr/0009-notification-policy.md)).
+- `pve-smart-alert doctor` reports the timer in a line `timer`: whether it is installed, active and enabled, its schedule with drop-ins, and the next run (FR-603).
+- Purging the package also removes `/run/pve-smart-alert/`.
 
 ### Changed
 

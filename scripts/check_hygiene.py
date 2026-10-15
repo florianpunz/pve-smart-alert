@@ -92,11 +92,21 @@ EXPECTED_LICENSE: Final = "AGPL-3.0-or-later"
 # THIRD-PARTY-NOTICES.md (ADR 0015). Empty on purpose.
 LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 
-SOURCE_SUFFIXES: Final = frozenset({".pl", ".pm", ".py", ".sh", ".toml", ".yaml", ".yml"})
+SOURCE_SUFFIXES: Final = frozenset(
+    {".pl", ".pm", ".py", ".service", ".sh", ".timer", ".toml", ".yaml", ".yml"}
+)
 # Scripts without a suffix: the ones whose installed path keeps the name, and
 # the two maintainer scripts of the Debian package.
 SOURCE_NAMES: Final = frozenset(
-    {"Makefile", "fake-smartctl", "notify-bridge", "postrm", "pve-smart-alert", "rules"}
+    {
+        "Makefile",
+        "fake-smartctl",
+        "notify-bridge",
+        "postrm",
+        "pve-smart-alert",
+        "report-failure",
+        "rules",
+    }
 )
 
 # The Handlebars templates (`.hbs`) are left out on purpose even though NFR-20
