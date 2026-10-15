@@ -94,7 +94,9 @@ for path in \
 	/usr/share/pve-manager/templates/default/pve-smart-alert-body.txt.hbs \
 	/usr/lib/systemd/system/pve-smart-alert.timer \
 	/etc/systemd/system/timers.target.wants/pve-smart-alert.timer; do
-	[ ! -e "$path" ] && [ ! -L "$path" ] || fail "left after purge: $path"
+	if [ -e "$path" ] || [ -L "$path" ]; then
+		fail "left after purge: $path"
+	fi
 done
 if dpkg -l pve-smart-alert 2>/dev/null | grep -q '^[ir]'; then
 	fail "the package is still known to dpkg"
