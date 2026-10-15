@@ -31,11 +31,20 @@
 
 ## Installation
 
-There is no release yet. `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper. Copy it to each node and install it there as root:
+There is no public release yet: the repository is still private, and the download URLs below work once it is public. Until then, `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper; copy it to each node and install it there as root with `apt install ./pve-smart-alert_*_all.deb`.
+
+Once a release is published, either command installs the newest one on a node, as root ([ADR 0013](docs/adr/0013-packaging-and-installation.md)); on a cluster, run it on each node:
 
 ```sh
-apt install ./pve-smart-alert_*_all.deb
+# Download the package and install it with apt
+wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert/releases/latest/download/pve-smart-alert.deb \
+  && apt install -y /tmp/pve-smart-alert.deb
+
+# The same, with the checksum verified; PVE_SMART_ALERT_VERSION=0.5.0 pins a version
+wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
+
+The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` one line per run. `systemctl edit pve-smart-alert.timer` changes the interval with a drop-in.
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
@@ -50,7 +59,7 @@ The installed tool has these commands:
 
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, and the timer with its schedule and next run (FR-603). A last line names what it does not check yet |
+| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, the timer with its schedule and next run, the Proxmox VE version, and whether smartd mails root (FR-603). A last line names what it does not check yet |
 | `pve-smart-alert scan` | Finds the drives of the host, reads each once and shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it and its wear value with the source (FR-108) |
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
@@ -77,6 +86,15 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
 A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The timer treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
+
+## Coexistence with smartd
+
+Proxmox VE runs smartd, and its default configuration mails root about some of the problems this tool reports, every day while they last. PVE SMART Alert leaves smartd alone ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)), so some problems arrive twice; `pve-smart-alert doctor` says in the line `smartd` whether smartd mails. To quiet smartd by hand, edit the `DEVICESCAN` line in `/etc/smartd.conf` and restart it with `systemctl restart smartmontools`:
+
+- remove `-m root -M exec /usr/share/smartmontools/smartd-runner`, so that smartd only logs to the journal, or
+- add `-M once` after `-m root`, so that it mails each problem only once.
+
+The Proxmox VE web interface does not depend on smartd.
 
 ## Notification routing
 

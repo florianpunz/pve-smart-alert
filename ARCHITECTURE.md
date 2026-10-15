@@ -353,6 +353,8 @@ The bridge loads `PVE::Notify`, checks that the expected function exists, adds t
 It answers on standard output with `{"ok": true}` or `{"ok": false, "error": "..."}` and exits with 0 or non-zero accordingly. What the notification library logs to standard error is passed through and captured by the Python side.
 With the single argument `--check`, the bridge only loads the module and looks for the function, reads no request and sends nothing; `pve-smart-alert doctor` runs it this way.
 
+Checked on `pve1` (Proxmox VE 9.2.3, 2026-10-13, answers Q-N4): the notification library works through the matched targets one after the other, and the call returns after the last. An SMTP target at an address that does not answer gave up after about 5 seconds with `Connection error: timed out`, a webhook target after about 10 seconds with `timeout: global`; with both and a working target the call took 16 seconds and the notification counted as handed over, because one target succeeded. The timeout of 120 seconds of the transport therefore covers about a dozen targets that do not answer.
+
 Checked on Proxmox VE 9.2 (2026-10-04, [Research 01](docs/research/01-notification-integration.md#route-b-pvenotify)): the call works from a separate root process with these four arguments and no configuration argument. The library writes one line per target to standard error and to the journal, as `` notified via target `NAME` `` or `` could not notify via target `NAME`: REASON ``. A missing template makes the call return success and logs `failed to render notification template, all template candidates are erroneous or missing`, which the Python side turns into the mail fallback. When no matcher matches, the call returns success and logs nothing.
 
 ### Routing check
@@ -512,7 +514,8 @@ The service and its limits:
 - `SuccessExitStatus=3`: a run skipped because another one holds the lock is a success (FR-605).
 - Every other exit status but 0 is a failure and starts the failure reporter, exit status 1 included: a notification could not be handed over, through either transport. The maintainer decided this on 2026-10-15: the failure reporter is then the only path left that does not use the code of the tool. A drive that is unhealthy is never a failure (FR-607).
 - `RuntimeDirectory=pve-smart-alert` with `RuntimeDirectoryPreserve=yes`, in both services, so that the lock and the stamp of the failure reporter stay until a reboot, whichever of the two ran last. `StateDirectory=pve-smart-alert` with mode `0700`.
-- Priority and run time only: `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `TimeoutStartSec=15min` for the check and `2min` for the failure report. No sandboxing option is set. Which ones leave mail submission and the notification targets of the bridge working is open (Q-P1 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)), and a unit test keeps them out until it is answered.
+- Priority and run time: `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `TimeoutStartSec=15min` for the check and `2min` for the failure report.
+- The check service is sandboxed with the options of [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md), which were tested on a real host with both transports and a check; the drives under `/dev` and the mail queue stay reachable. The failure service is not sandboxed, and a unit test holds both.
 
 ### The failure reporter
 
@@ -535,10 +538,11 @@ The package job in CI checks the generated snippets and runs `systemd-analyze ve
 
 ### The first run and upgrades
 
-These follow from the documentation of systemd and are assumptions until they are watched on `pve1` (Q-P2 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md), checklist in [ROADMAP.md](ROADMAP.md)):
+Checked on `pve1` (Proxmox VE 9.2.3, systemd 257, 2026-10-13, answers Q-P2):
 
-- **First run after installation.** "If a timer configured with OnBootSec= or OnStartupSec= is already in the past when the timer unit is activated, it will immediately elapse and the configured unit is started" ([systemd.timer(5)](https://manpages.debian.org/trixie/systemd/systemd.timer.5.en.html)). On a host that has been up for more than 3 minutes, the start of the timer by `postinst` therefore starts the first run at once. No package script starts a check.
-- **Run on an upgrade.** The restart of the timer by `postinst` activates it again, so by the same sentence `OnBootSec` elapses at once and one ordinary run starts. The manual page does not say this for a restart; it is read from the sentence above. Configuration and state are kept, so the run is not a first run and sends no first-run summary.
+- **First run after installation.** "If a timer configured with OnBootSec= or OnStartupSec= is already in the past when the timer unit is activated, it will immediately elapse and the configured unit is started" ([systemd.timer(5)](https://manpages.debian.org/trixie/systemd/systemd.timer.5.en.html)). On `pve1` the first check started six seconds after the installation and sent the first-run summary, and the next run followed 30 minutes later. No package script starts a check.
+- **Upgrade.** The restart of the timer by `postinst` does not start a run, although the sentence above could be read that way. Configuration and state are kept, and no first-run summary is sent.
+- **A run started by hand** counts as the last activation of the service, so the next timer run follows 30 minutes after it.
 
 `pve-smart-alert doctor` reports the timer in its line `timer`: `fail` when the timer is not installed or not active, `warn` when it is active but not enabled, because then the runs stop with the next reboot, and otherwise the schedule systemd uses, drop-ins included, and the next run. It only asks systemd (`systemctl show`, `systemctl list-timers`) and changes nothing.
 

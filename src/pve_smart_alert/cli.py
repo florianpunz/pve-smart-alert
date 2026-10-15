@@ -358,8 +358,13 @@ def _scan() -> int:
 
 
 def _reading(candidate: Candidate) -> None:
-    """Show on standard error which device is read, since a read can take long."""
-    print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
+    """Show on standard error which device is read, since a read can take long.
+
+    Only on a terminal: a run of the timer logs one summary line to the
+    journal, not one line per drive (FR-606).
+    """
+    if sys.stderr.isatty():
+        print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
 
 
 def clock() -> datetime:

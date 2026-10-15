@@ -34,9 +34,11 @@ from pve_smart_alert.paths import (
     CONFIG_PATH,
     LAST_GOOD_CONFIG_PATH,
     PVESH_PATH,
+    PVEVERSION_PATH,
     REFERENCE_PATH,
     ROOT_FORWARD_PATH,
     SENDMAIL_PATH,
+    SMARTD_CONF_PATH,
     STATE_PATH,
     SUBJECT_TEMPLATE,
     SYSTEMCTL_PATH,
@@ -68,10 +70,20 @@ from pve_smart_alert.transports.pve_notify import reason_for_refusal
 TEMPLATES: Final = (SUBJECT_TEMPLATE, BODY_TEMPLATE)
 
 # What FR-603 asks for and what arrives with its own milestone.
-PENDING: Final = (
-    "the Proxmox VE version, unsupported controllers and smartd"
-    " are checked once their milestones are built"
-)
+PENDING: Final = "unsupported controllers are checked once milestone M6 is built"
+
+# The unit of smartd, which the self-diagnosis only asks about (ADR 0012).
+SMARTD_UNIT: Final = "smartmontools.service"
+
+# The major version of Proxmox VE the tool is made for (ADR 0002).
+SUPPORTED_PVE_MAJOR: Final = 9
+
+# How long pveversion may take. It reads the installed packages, which is
+# slower than a question to systemd.
+PVEVERSION_TIMEOUT_SECONDS: Final = 30.0
+
+# "pve-manager/9.2.3/d0fde103346cf89a (running kernel: 7.0.6-2-pve)"
+PVE_VERSION: Final = re.compile(r"pve-manager/([0-9][0-9.]*)")
 
 # The oldest smartctl that writes JSON (ADR 0002, ADR 0004).
 MINIMUM_SMARTCTL: Final = (7, 0)
@@ -142,6 +154,8 @@ def run_doctor(
     forward_path: Path = ROOT_FORWARD_PATH,
     state_path: Path = STATE_PATH,
     systemctl_path: Path = SYSTEMCTL_PATH,
+    pveversion_path: Path = PVEVERSION_PATH,
+    smartd_conf_path: Path = SMARTD_CONF_PATH,
     node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
@@ -163,6 +177,8 @@ def run_doctor(
         check_fallback(routes, settings=settings, node=node, forward_path=forward_path),
         check_state(state_path),
         check_timer(systemctl_path, runner=runner),
+        check_pve(pveversion_path, runner=runner),
+        check_smartd(systemctl_path, smartd_conf_path, runner=runner),
         CheckResult("pending", Status.SKIP, PENDING),
     ]
 
@@ -444,6 +460,92 @@ def _next_run(path: Path, *, runner: ProcessRunner) -> datetime | None:
         if isinstance(micros, int) and not isinstance(micros, bool) and micros > 0:
             return datetime.fromtimestamp(micros / 1_000_000, UTC)
     return None
+
+
+def check_pve(pveversion: Path, *, runner: ProcessRunner = run_with_timeout) -> CheckResult:
+    """Report the version of Proxmox VE; the tool is made for 9.x (ADR 0002)."""
+    if not pveversion.is_file():
+        return CheckResult("pve", Status.SKIP, f"no pveversion at {pveversion}")
+    try:
+        result = runner([pveversion], timeout=PVEVERSION_TIMEOUT_SECONDS)
+    except OSError as failure:
+        return CheckResult("pve", Status.SKIP, f"{pveversion} could not be started: {failure}")
+    match = PVE_VERSION.search(result.stdout)
+    if not result.ok or match is None:
+        return CheckResult("pve", Status.SKIP, f"{pveversion} gave no version")
+    version = match.group(1)
+    if not version.startswith(f"{SUPPORTED_PVE_MAJOR}."):
+        return CheckResult(
+            "pve",
+            Status.WARN,
+            f"Proxmox VE {version}",
+            advice=f"the tool is made for Proxmox VE {SUPPORTED_PVE_MAJOR}.x (ADR 0002)",
+        )
+    return CheckResult("pve", Status.OK, f"Proxmox VE {version}")
+
+
+def check_smartd(
+    systemctl: Path, config: Path, *, runner: ProcessRunner = run_with_timeout
+) -> CheckResult:
+    """Say whether smartd runs and mails root, which reports some problems twice (ADR 0012).
+
+    Both tools working side by side is the accepted default, so this is never
+    more than information; the tool does not touch smartd.
+    """
+    active = _active_state(systemctl, SMARTD_UNIT, runner=runner)
+    if active is None:
+        return CheckResult("smartd", Status.SKIP, f"systemd cannot be asked at {systemctl}")
+    if active != "active":
+        return CheckResult("smartd", Status.OK, "not active; only this tool reports drive problems")
+    try:
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return CheckResult("smartd", Status.OK, f"active; {config} cannot be read")
+    mailing = [line for line in _directives(text) if _mails(line)]
+    if not mailing:
+        return CheckResult("smartd", Status.OK, f"active, and {config} sends no mail")
+    return CheckResult(
+        "smartd",
+        Status.OK,
+        f"active and mails root ({mailing[0]}); some drive problems arrive twice",
+        advice='see "Coexistence with smartd" in the README to quiet smartd by hand',
+    )
+
+
+def _active_state(systemctl: Path, unit: str, *, runner: ProcessRunner) -> str | None:
+    """Return the active state of a unit, or `None` when systemd cannot be asked."""
+    if not systemctl.is_file():
+        return None
+    try:
+        result = runner(
+            [systemctl, "show", "--property=ActiveState", unit],
+            timeout=SYSTEMCTL_TIMEOUT_SECONDS,
+        )
+    except OSError:
+        return None
+    if not result.ok:
+        return None
+    return _properties(result.stdout).get("ActiveState", "unknown")
+
+
+def _directives(text: str) -> list[str]:
+    """Return the lines of smartd.conf that are not comments, with continuations joined."""
+    joined = text.replace("\\\n", " ")
+    lines = []
+    for line in joined.splitlines():
+        content = line.split("#", 1)[0].strip()
+        if content:
+            lines.append(" ".join(content.split()))
+    return lines
+
+
+def _mails(directive: str) -> bool:
+    """Whether a smartd directive sends mail: `-m` with an address, not `<nomailer>`."""
+    words = directive.split()
+    for index, word in enumerate(words[:-1]):
+        if word == "-m" and words[index + 1] != "<nomailer>":
+            return True
+    return False
 
 
 def check_templates(template_dir: Path, *, override_dir: Path) -> CheckResult:

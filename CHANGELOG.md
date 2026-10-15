@@ -44,9 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed run, including one that could not hand over a notification, is reported by a short mail to root that does not use the code of the tool, at most once a day and once more after a reboot ([ADR 0009](docs/adr/0009-notification-policy.md)).
 - `pve-smart-alert doctor` reports the timer in a line `timer`: whether it is installed, active and enabled, its schedule with drop-ins, and the next run (FR-603).
 - Purging the package also removes `/run/pve-smart-alert/`.
+- The check service runs with the systemd sandboxing options of [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md); the drives and the mail queue stay reachable.
+- `pve-smart-alert doctor` also reports the version of Proxmox VE, and whether smartd is active and mails root, which reports some problems twice; the README says how to quiet smartd by hand (FR-603, [ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
+- `install.sh` installs the newest release, or a pinned one, after verifying the checksum of the package ([ADR 0013](docs/adr/0013-packaging-and-installation.md)).
 
 ### Changed
 
+- `pve-smart-alert check` shows which drive it reads only on a terminal; a run of the timer logs its summary line and no line per drive (FR-606).
 - `pve-smart-alert doctor` reports a configuration file that does not validate as a warning that says which configuration a run continues with, instead of failing: monitoring does not stop (FR-406).
 
 ### Fixed
