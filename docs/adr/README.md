@@ -29,6 +29,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0022](0022-fallback-routing-check.md) | Check the route of the fallback, mail to root, as well | Accepted | How the tool detects that its fallback mail would be dropped |
 | [0023](0023-anonymization-of-recordings.md) | Anonymize recordings with counters per archive | Accepted | Which values of a recording identify a drive and what replaces them |
 | [0024](0024-drive-selectors.md) | Select drives by model pattern, serial number and WWN | Accepted | What the selectors of exclude rules and per-drive overrides mean |
+| [0025](0025-sandboxing-of-the-check-service.md) | Sandboxing options of the check service | Accepted | Which systemd options restrict the check without breaking drives, mail or notification targets |
 
 ## Confirmed by the maintainer
 

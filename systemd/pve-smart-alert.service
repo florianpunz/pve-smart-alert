@@ -8,9 +8,6 @@
 # of this one (FR-605). Every other status but 0 is a failure, status 1
 # included, a notification that could not be handed over: the failure unit
 # then reports it through a path that does not use the code of the tool.
-#
-# Only the priority and the run time are limited. Which sandboxing options are
-# safe with mail submission and the notification targets is open (Q-P1).
 
 [Unit]
 Description=PVE SMART Alert drive health check
@@ -28,7 +25,27 @@ RuntimeDirectory=pve-smart-alert
 RuntimeDirectoryPreserve=yes
 StateDirectory=pve-smart-alert
 StateDirectoryMode=0700
+# Runs cannot pile up on a host with many unresponsive drives (NFR-08).
 TimeoutStartSec=15min
+# Reduced CPU and I/O priority (NFR-09).
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
+# Sandboxing that was tested on a real host with both transports and a check
+# (ADR 0025). The drives under /dev and the mail queue stay reachable.
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+NoNewPrivileges=yes

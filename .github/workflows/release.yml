@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Publishes a release when a tag v<version> is pushed (ADR 0013): the checks
+# and the package test of CI, then the package built from the tag, tested in
+# a clean container, with SHA256SUMS, under its versioned name and under the
+# stable name that the one-command installation downloads, and install.sh.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Publish the release
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+
+      - name: Install the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential debhelper dpkg-dev lintian
+
+      - name: The tag is the version of the program and of the package
+        run: |
+          python3 scripts/check_version_sync.py
+          version=$(python3 -c 'import sys; sys.path.insert(0, "src"); import pve_smart_alert; print(pve_smart_alert.__version__)')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "the tag $GITHUB_REF_NAME is not the version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: The changelog has a section for the version
+        run: |
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no section ## [$VERSION]"
+            exit 1
+          fi
+
+      - name: Build and check the package
+        run: |
+          make deb
+          lintian --fail-on error dist/*.deb
+          docker run --rm -v "$PWD:/work" -w /work debian:trixie \
+            sh scripts/package-test.sh "dist/pve-smart-alert_${VERSION}_all.deb"
+
+      - name: Collect the release assets
+        run: |
+          mkdir assets
+          cp "dist/pve-smart-alert_${VERSION}_all.deb" assets/
+          cp "dist/pve-smart-alert_${VERSION}_all.deb" assets/pve-smart-alert.deb
+          cp scripts/install.sh assets/install.sh
+          (cd assets && sha256sum -- *.deb install.sh > SHA256SUMS)
+          cat assets/SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --title "PVE SMART Alert $VERSION" \
+            --notes-file release-notes.md \
+            --verify-tag

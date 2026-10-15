@@ -12,7 +12,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
-| M5: Packaging, timer and installation | In progress, waits for the acceptance on a real Proxmox VE host |
+| M5: Packaging, timer and installation | In progress, waits for the acceptance on the test cluster |
 | M6 and M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
@@ -215,28 +215,28 @@ From here on the tool runs permanently on the maintainer's cluster. Version tag:
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 
-State: in progress. The work is built without access to `pve1` or the test cluster, on the integration branch `feature/m5`, one slice per branch `feature/m5-<slice>`: units, container package test, release pipeline. `feature/m5` is merged into `main` and tagged 0.5.0 only after the acceptance on a real host below has passed.
+State: in progress. The units, the failure reporter and the line `timer` of `doctor` are on `main` (pull request #3). The branch `feature/m5-packaging` was built in parallel and tested on `pve1`; `feature/m5-merge-units` merges it onto `main`.
 
-- Done, slice units: the timer, the service and the failure unit with the failure reporter `report-failure` ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well; the line `timer` of `doctor`. Sandboxing is limited to priority and run time, as Q-P1 assumes; there is no decision record on hardening until the options were tried on `pve1`.
-- Next: the package test in a Debian 13 container (Q-P3), then the release pipeline with pre-releases for rc tags and `install.sh`.
+- Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well.
+- Done: the sandboxing of the check service, [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) (Q-P1).
+- Done: the lines `timer`, `pve` and `smartd` of `doctor`, which complete FR-603 except the unsupported controllers of M6.
+- Done: `scripts/install.sh`; the package test of ADR 0016 in a clean container in CI (`scripts/package-test.sh`), which passed on 2026-10-15 (Q-P3); the release workflow `.github/workflows/release.yml`.
+- Done on `pve1` with test builds of 0.5.0 from `feature/m5-packaging` (2026-10-13): the installation starts the timer and the first check at once, which sent the first-run summary; an upgrade restarts the timer without a run, keeps the state and sends no summary (Q-P2); a run made to fail on purpose with a drop-in sent one failure mail, which reached `proxmox-mail-forward`, and a second failure on the same day sent none; a run skipped because of the lock exited 3 and counted as success; `systemd-analyze verify` accepts the units; an unreachable SMTP target blocks the bridge for about 5 seconds and a webhook target for about 10 (Q-N4). The sandboxing options of ADR 0025 were tested with both transports and a check (Q-P1).
+- The tests on `pve1` found that a run logged one progress line per drive to the journal besides its summary line (FR-606); the progress now goes to a terminal only.
 
-Verified only by static checks so far, without systemd running the units:
+Verified only by static checks, without systemd running the units:
 
-- The values of the units, the absence of sandboxing options and of an `[Install]` section in the services, and the install paths: unit tests (`tests/unit/test_units.py`).
+- The values of the units, the sandboxing of ADR 0025, the absence of an `[Install]` section in the services, and the install paths: unit tests (`tests/unit/test_units.py`).
 - What systemd makes of the units: `systemd-analyze verify` in the package job of CI.
 - The maintainer scripts handle the timer and no service: a check of the generated snippets in the package job of CI.
-- The failure reporter: integration tests with a stand-in mail command and journal (`tests/integration/test_report_failure.py`); one mail, none on the same day, a new one when the stamp is gone, no stamp when the mail command fails.
-- The line `timer` of `doctor`: unit tests against recorded answers of systemctl.
+- The failure reporter: integration tests with a stand-in mail command and journal (`tests/integration/test_report_failure.py`). The reporter on `main` replaced the one tested on `pve1`; it reads the journal of the failed run through `MONITOR_INVOCATION_ID`.
 
 ### Still needs a real Proxmox VE host
 
-- [ ] Q-P1: which sandboxing options leave mail submission through the local mail system and the notification targets of the bridge working.
-- [ ] The first run right after installation on a host that has been up for longer than 3 minutes, because `OnBootSec` has already elapsed (an assumption, [ARCHITECTURE.md](ARCHITECTURE.md) section 13).
-- [ ] One ordinary run on a package upgrade, from the restart of the timer, without a second first-run summary (an assumption, [ARCHITECTURE.md](ARCHITECTURE.md) section 13).
-- [ ] The rest of the timer behavior of Q-P2: on a host that has been up for a while and on a package upgrade, the next runs every 30 minutes as `systemctl list-timers` shows them.
+- [ ] The failure reporter of `main` with real mail: a run made to fail on purpose sends one mail with the lines of that run, a second failure on the same day none.
 - [ ] Reboot: runs resume by themselves, and the stamp of the failure reporter is gone.
-- [ ] Quorum loss: a node without quorum still runs its check and sends through the fallback if needed (Q-N4, Q-N5).
-- [ ] The failure reporter with real mail: a run made to crash on purpose sends one mail, a second crash on the same day none.
+- [ ] Purge on `pve1`: nothing of the tool is left.
+- [ ] Quorum loss: a node without quorum still runs its check and sends through the fallback if needed (Q-N5).
 - [ ] Acceptance steps 1 to 8 above on `pve1`, then on the cluster nodes `pve5`, `pve6` and `pve7`.
 
 ## M6: SAS and hardware RAID on recorded data (L)
