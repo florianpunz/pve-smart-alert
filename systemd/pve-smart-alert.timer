@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Starts the drive health check: 3 minutes after boot, then 30 minutes after
+# each start of the previous run (ADR 0006). Both are monotonic, so a timer
+# started on a host that has been up for longer than 3 minutes is already due
+# and starts the first run at once; this is how the first check follows the
+# installation. Change the interval with a drop-in, not in this file:
+# `systemctl edit pve-smart-alert.timer`.
+
+[Unit]
+Description=PVE SMART Alert drive health check every 30 minutes
+Documentation=https://github.com/florianpunz/pve-smart-alert
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

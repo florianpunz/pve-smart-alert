@@ -22,3 +22,17 @@ override_dh_install:
 	# They never belong in the package, whatever the checkout looked like: the
 	# exclusion is what keeps the source tree installable as it is (ADR 0013).
 	dh_install --exclude=__pycache__
+
+# Only the timer gets maintainer script snippets: it is enabled and started on
+# installation, restarted after an upgrade and stopped on removal, and
+# deb-systemd-helper forgets it on purge. A unit named on the command line is
+# the only one dh_installsystemd writes snippets for; the two services are
+# installed all the same, by debian/pve-smart-alert.install.
+#
+# Named because dh_installsystemd would otherwise write a start snippet for
+# every unit without an [Install] section as well: postinst would then start
+# a check, and a failure report, by itself. The first check is started by the
+# timer instead (ADR 0006, ADR 0013). Read in dh_installsystemd of debhelper
+# 13.24.2, see ARCHITECTURE.md section 13.
+override_dh_installsystemd:
+	dh_installsystemd pve-smart-alert.timer

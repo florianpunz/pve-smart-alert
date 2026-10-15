@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# One run of the drive health check, started by pve-smart-alert.timer
+# (ADR 0006). It has no [Install] section: it is never enabled, only started
+# by the timer or by hand with `systemctl start pve-smart-alert.service`.
+#
+# Exit status 3 means that another run holds the lock, which is not a failure
+# of this one (FR-605). Every other status but 0 is a failure, status 1
+# included, a notification that could not be handed over: the failure unit
+# then reports it through a path that does not use the code of the tool.
+#
+# Only the priority and the run time are limited. Which sandboxing options are
+# safe with mail submission and the notification targets is open (Q-P1).
+
+[Unit]
+Description=PVE SMART Alert drive health check
+Documentation=https://github.com/florianpunz/pve-smart-alert
+# The notification configuration lives on pmxcfs. Ordered after it, but not
+# requiring it: without pmxcfs the check runs and the fallback is used.
+After=pve-cluster.service
+OnFailure=pve-smart-alert-failure.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/pve-smart-alert check
+SuccessExitStatus=3
+RuntimeDirectory=pve-smart-alert
+RuntimeDirectoryPreserve=yes
+StateDirectory=pve-smart-alert
+StateDirectoryMode=0700
+TimeoutStartSec=15min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

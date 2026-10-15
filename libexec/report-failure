@@ -1,0 +1,102 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The failure reporter, installed as /usr/libexec/pve-smart-alert/report-failure
+# and started by pve-smart-alert-failure.service when a run of
+# pve-smart-alert.service failed (ADR 0006, ADR 0009).
+#
+# It uses nothing of the tool, because a run that failed may have failed in
+# exactly that code: it sends one plain mail to root through the mail command
+# of the host, the same command and arguments the mail transport uses. It
+# sends at most one mail a day. The stamp of that limit lives in the runtime
+# directory, which a reboot empties, so one more mail per boot is possible.
+#
+# systemd 251 and later describe the failed run in the MONITOR_* variables of
+# a unit started through OnFailure= (systemd.exec(5)). Without them the mail
+# is sent all the same, with less detail.
+#
+# PVE_SMART_ALERT_RUN_DIR, PVE_SMART_ALERT_SENDMAIL and
+# PVE_SMART_ALERT_JOURNALCTL exist for the tests. The unit sets none of them.
+set -u
+
+run_dir=${PVE_SMART_ALERT_RUN_DIR:-/run/pve-smart-alert}
+sendmail=${PVE_SMART_ALERT_SENDMAIL:-/usr/sbin/sendmail}
+journalctl=${PVE_SMART_ALERT_JOURNALCTL:-journalctl}
+
+unit=${MONITOR_UNIT:-pve-smart-alert.service}
+today=$(date +%Y-%m-%d)
+stamp="$run_dir/failure-reported-$today"
+
+if [ -e "$stamp" ]; then
+	echo "a failure was already reported today, no mail sent"
+	exit 0
+fi
+
+host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo unknown)
+
+# What the failed run wrote to the journal. Only read, and only when systemd
+# named the run.
+last_lines() {
+	if [ -n "${MONITOR_INVOCATION_ID:-}" ] && command -v "$journalctl" >/dev/null 2>&1; then
+		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
+			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null
+	fi
+}
+
+message() {
+	cat <<-EOF
+		To: root
+		Subject: PVE SMART Alert: a run failed on $host
+		Auto-Submitted: auto-generated
+		MIME-Version: 1.0
+		Content-Type: text/plain; charset=UTF-8
+		Content-Transfer-Encoding: 8bit
+
+		A run of the drive health check of PVE SMART Alert failed on $host.
+		Until a run succeeds again, notifications about the drives of this
+		host may not arrive.
+
+		Unit:    $unit
+		Result:  ${MONITOR_SERVICE_RESULT:-unknown}
+		Exit:    ${MONITOR_EXIT_CODE:-unknown} ${MONITOR_EXIT_STATUS:-}
+
+		The last lines of the run:
+
+	EOF
+	lines=$(last_lines)
+	if [ -n "$lines" ]; then
+		printf '%s\n' "$lines"
+	else
+		echo "(not available)"
+	fi
+	cat <<-EOF
+
+		The whole log: journalctl -u $unit
+		A check of the host: pve-smart-alert doctor
+
+		This mail is sent at most once a day, and once more after a reboot.
+	EOF
+}
+
+if [ ! -x "$sendmail" ]; then
+	echo "the mail command is missing at $sendmail, the failure cannot be reported" >&2
+	exit 1
+fi
+
+# "-i" keeps a line with a single dot from ending the message, "-t" takes the
+# recipient from the headers.
+if ! message | "$sendmail" -i -t; then
+	echo "the mail command refused the failure report" >&2
+	exit 1
+fi
+echo "the failure was reported to root"
+
+# The stamp is written only after the mail was handed over, so that a mail
+# command that failed is tried again on the next failure. Stamps of earlier
+# days are removed: the directory holds only the tool's own files (ADR 0012).
+mkdir -p "$run_dir" &&
+	rm -f "$run_dir"/failure-reported-* &&
+	: >"$stamp" ||
+	echo "the stamp $stamp could not be written, the next failure is reported again" >&2
+
+exit 0

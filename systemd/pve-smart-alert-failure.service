@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Started through OnFailure= when a run of pve-smart-alert.service failed. It
+# sends a plain mail to root with a shell script that does not use the code of
+# the tool, at most once a day (ADR 0009). The stamp of that limit is kept in
+# the runtime directory, which a reboot empties.
+
+[Unit]
+Description=PVE SMART Alert failure report
+Documentation=https://github.com/florianpunz/pve-smart-alert
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pve-smart-alert/report-failure
+RuntimeDirectory=pve-smart-alert
+RuntimeDirectoryPreserve=yes
+TimeoutStartSec=2min

@@ -70,3 +70,9 @@ PVESH_PATH: Final = Path("/usr/bin/pvesh")
 # `proxmox-mail-forward` pipes it to its program from here; the tool only
 # reads the file (ADR 0012, ADR 0022).
 ROOT_FORWARD_PATH: Final = Path("/root/.forward")
+
+# The control program of systemd. The self-diagnosis asks it about the timer
+# and changes nothing with it (ADR 0006, ADR 0012).
+SYSTEMCTL_PATH: Final = Path("/usr/bin/systemctl")
+# The unit that starts every run (ADR 0006).
+TIMER_UNIT: Final = "pve-smart-alert.timer"

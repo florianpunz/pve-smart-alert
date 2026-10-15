@@ -12,7 +12,8 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
-| M5 to M7 | Planned |
+| M5: Packaging, timer and installation | In progress, waits for the acceptance on a real Proxmox VE host |
+| M6 and M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -213,6 +214,30 @@ Result you can test:
 From here on the tool runs permanently on the maintainer's cluster. Version tag: 0.5.0.
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
+
+State: in progress. The work is built without access to `pve1` or the test cluster, on the integration branch `feature/m5`, one slice per branch `feature/m5-<slice>`: units, container package test, release pipeline. `feature/m5` is merged into `main` and tagged 0.5.0 only after the acceptance on a real host below has passed.
+
+- Done, slice units: the timer, the service and the failure unit with the failure reporter `report-failure` ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well; the line `timer` of `doctor`. Sandboxing is limited to priority and run time, as Q-P1 assumes; there is no decision record on hardening until the options were tried on `pve1`.
+- Next: the package test in a Debian 13 container (Q-P3), then the release pipeline with pre-releases for rc tags and `install.sh`.
+
+Verified only by static checks so far, without systemd running the units:
+
+- The values of the units, the absence of sandboxing options and of an `[Install]` section in the services, and the install paths: unit tests (`tests/unit/test_units.py`).
+- What systemd makes of the units: `systemd-analyze verify` in the package job of CI.
+- The maintainer scripts handle the timer and no service: a check of the generated snippets in the package job of CI.
+- The failure reporter: integration tests with a stand-in mail command and journal (`tests/integration/test_report_failure.py`); one mail, none on the same day, a new one when the stamp is gone, no stamp when the mail command fails.
+- The line `timer` of `doctor`: unit tests against recorded answers of systemctl.
+
+### Still needs a real Proxmox VE host
+
+- [ ] Q-P1: which sandboxing options leave mail submission through the local mail system and the notification targets of the bridge working.
+- [ ] The first run right after installation on a host that has been up for longer than 3 minutes, because `OnBootSec` has already elapsed (an assumption, [ARCHITECTURE.md](ARCHITECTURE.md) section 13).
+- [ ] One ordinary run on a package upgrade, from the restart of the timer, without a second first-run summary (an assumption, [ARCHITECTURE.md](ARCHITECTURE.md) section 13).
+- [ ] The rest of the timer behavior of Q-P2: on a host that has been up for a while and on a package upgrade, the next runs every 30 minutes as `systemctl list-timers` shows them.
+- [ ] Reboot: runs resume by themselves, and the stamp of the failure reporter is gone.
+- [ ] Quorum loss: a node without quorum still runs its check and sends through the fallback if needed (Q-N4, Q-N5).
+- [ ] The failure reporter with real mail: a run made to crash on purpose sends one mail, a second crash on the same day none.
+- [ ] Acceptance steps 1 to 8 above on `pve1`, then on the cluster nodes `pve5`, `pve6` and `pve7`.
 
 ## M6: SAS and hardware RAID on recorded data (L)
 

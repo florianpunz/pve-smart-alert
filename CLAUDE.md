@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current milestone: **M5**, packaging, timer and installation; `ROADMAP.md` says what of it is done. Next step: the systemd units and the complete Debian package, so that `pve-smart-alert check` runs every 30 minutes by itself.
+Current milestone: **M5**, packaging, timer and installation, built on the branch `feature/m5` without a test host; `ROADMAP.md` says what of it is done. Next step: the container package test and the release pipeline, then the pending acceptance on a real Proxmox VE host, which must pass before `feature/m5` is merged into `main` and tagged 0.5.0.
 
 ### Where things are
 

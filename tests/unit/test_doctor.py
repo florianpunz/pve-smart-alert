@@ -35,6 +35,7 @@ from pve_smart_alert.doctor import (
     check_smartctl,
     check_state,
     check_templates,
+    check_timer,
     read_routes,
     run_doctor,
 )
@@ -721,6 +722,191 @@ def test_a_smartctl_that_does_not_answer_fails(bridge: Path) -> None:
     assert result.detail.endswith("did not answer within 30 seconds")
 
 
+# The timer
+
+# What `systemctl show` writes for the installed timer, with both entries of
+# the unit and a monotonic next start, which is a time since boot.
+TIMER_SHOWN = """\
+LoadState=loaded
+ActiveState=active
+UnitFileState=enabled
+TimersMonotonic={ OnBootUSec=3min ; next_elapse=3min }
+TimersMonotonic={ OnUnitActiveUSec=30min ; next_elapse=1d 2h 30min 1.5s }
+"""
+
+# What `systemctl list-timers --output=json` writes for it, as recorded with
+# systemd 255: the next start in microseconds since the epoch.
+TIMER_LISTED = (
+    '[{"next":1792091837866509,"left":1792091837866509,"last":1792005437857614,'
+    '"passed":87306838507,"unit":"pve-smart-alert.timer",'
+    '"activates":"pve-smart-alert.service"}]'
+)
+
+
+def answer(stdout: str, *, returncode: int = 0, stderr: str = "") -> ProcessResult:
+    """Return what a program that wrote `stdout` left behind."""
+    return ProcessResult(returncode=returncode, stdout=stdout, stderr=stderr, timed_out=False)
+
+
+def executable(path: Path) -> Path:
+    """Create an executable file at `path` and return it."""
+    path.write_text("#!/bin/sh\n", encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+class SystemctlRunner:
+    """Answers `systemctl show` and `systemctl list-timers` and records the calls."""
+
+    def __init__(self, shown: ProcessResult, listed: ProcessResult | None = None) -> None:
+        self.shown = shown
+        self.listed = answer(TIMER_LISTED) if listed is None else listed
+        self.calls: list[tuple[list[str], str | None, float]] = []
+
+    def __call__(
+        self,
+        command: Sequence[str | Path],
+        *,
+        input_text: str | None = None,
+        timeout: float,
+    ) -> ProcessResult:
+        arguments = [str(argument) for argument in command]
+        self.calls.append((arguments, input_text, timeout))
+        return self.shown if "show" in arguments else self.listed
+
+
+def shown_with(**changes: str) -> ProcessResult:
+    """Return the shown timer with some properties replaced."""
+    lines = []
+    for line in TIMER_SHOWN.splitlines():
+        key = line.partition("=")[0]
+        lines.append(f"{key}={changes[key]}" if key in changes else line)
+    return answer("\n".join(lines) + "\n")
+
+
+def test_an_active_and_enabled_timer_is_reported_with_its_schedule(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+
+    result = check_timer(systemctl, runner=SystemctlRunner(answer(TIMER_SHOWN)))
+
+    assert result.status is Status.OK
+    assert result.detail == (
+        "pve-smart-alert.timer is active, every 30min after the start of the last run,"
+        " next run 2026-10-15T19:17:17Z"
+    )
+
+
+def test_the_timer_is_only_asked(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+    runner = SystemctlRunner(answer(TIMER_SHOWN))
+
+    check_timer(systemctl, runner=runner)
+
+    # Nothing but reading: no start, enable or reload (ADR 0012).
+    commands = [arguments for arguments, _, _ in runner.calls]
+    assert [arguments[1] for arguments in commands] == ["show", "list-timers"]
+    assert all(arguments[0] == str(systemctl) for arguments in commands)
+    assert all("pve-smart-alert.timer" in arguments for arguments in commands)
+    assert all(input_text is None for _, input_text, _ in runner.calls)
+
+
+def test_a_schedule_changed_by_a_drop_in_is_the_one_reported(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+    shown = answer(
+        "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n"
+        "TimersCalendar={ OnCalendar=*-*-* *:00:00 ; next_elapse=Thu 2026-10-15 10:00:00 UTC }\n"
+    )
+
+    result = check_timer(systemctl, runner=SystemctlRunner(shown))
+
+    assert result.status is Status.OK
+    assert "on *-*-* *:00:00" in result.detail
+    assert "every" not in result.detail
+
+
+def test_a_timer_that_is_not_active_fails(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+
+    result = check_timer(systemctl, runner=SystemctlRunner(shown_with(ActiveState="inactive")))
+
+    assert result.status is Status.FAIL
+    assert result.detail == "pve-smart-alert.timer is inactive, no check runs by itself"
+    assert result.advice == "systemctl enable --now pve-smart-alert.timer"
+
+
+def test_a_timer_that_is_not_enabled_warns_about_the_next_reboot(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+
+    result = check_timer(systemctl, runner=SystemctlRunner(shown_with(UnitFileState="disabled")))
+
+    assert result.status is Status.WARN
+    assert "but it is disabled, so the runs stop with the next reboot" in result.detail
+    assert result.advice == "systemctl enable pve-smart-alert.timer"
+
+
+def test_a_timer_that_is_not_installed_fails(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+    shown = answer("LoadState=not-found\nActiveState=inactive\nUnitFileState=\n")
+
+    result = check_timer(systemctl, runner=SystemctlRunner(shown))
+
+    assert result.status is Status.FAIL
+    assert result.detail == "pve-smart-alert.timer is not installed"
+
+
+def test_without_systemctl_the_timer_is_skipped(tmp_path: Path) -> None:
+    result = check_timer(tmp_path / "systemctl", runner=SystemctlRunner(answer(TIMER_SHOWN)))
+
+    assert result.status is Status.SKIP
+    assert "missing" in result.detail
+
+
+def test_a_systemd_that_does_not_run_skips_the_timer(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+    refused = answer(
+        "", returncode=1, stderr="System has not been booted with systemd as init system (PID 1).\n"
+    )
+
+    result = check_timer(systemctl, runner=SystemctlRunner(refused))
+
+    assert result.status is Status.SKIP
+    assert result.detail.startswith("systemd cannot be asked: System has not been booted")
+
+
+def test_systemctl_that_cannot_be_started_skips_the_timer(tmp_path: Path) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+
+    refuse = StaticRunner(answer(""), failure=PermissionError(13, "Permission denied"))
+
+    result = check_timer(systemctl, runner=refuse)
+
+    assert result.status is Status.SKIP
+    assert result.detail.endswith("could not be started: Permission denied")
+
+
+@pytest.mark.parametrize(
+    "listed",
+    [
+        answer("", returncode=1, stderr="Unknown option --output\n"),
+        answer("not json"),
+        answer('[{"unit":"pve-smart-alert.timer","next":0}]'),
+        answer('[{"unit":"other.timer","next":1792091837866509}]'),
+        answer('{"unit":"pve-smart-alert.timer"}'),
+    ],
+)
+def test_a_next_run_that_systemd_does_not_tell_is_left_out(
+    tmp_path: Path, listed: ProcessResult
+) -> None:
+    systemctl = executable(tmp_path / "systemctl")
+
+    result = check_timer(systemctl, runner=SystemctlRunner(answer(TIMER_SHOWN), listed))
+
+    assert result.status is Status.OK
+    assert result.detail == (
+        "pve-smart-alert.timer is active, every 30min after the start of the last run"
+    )
+
+
 # The whole run
 
 
@@ -739,7 +925,13 @@ class HostRunner:
     ) -> ProcessResult:
         arguments = [str(argument) for argument in command]
         self.calls.append((arguments, input_text, timeout))
-        return scan_answer([7, 5]) if "--scan" in arguments else good_bridge()
+        if "--scan" in arguments:
+            return scan_answer([7, 5])
+        if "show" in arguments:
+            return answer(TIMER_SHOWN)
+        if "list-timers" in arguments:
+            return answer(TIMER_LISTED)
+        return good_bridge()
 
 
 def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) -> list[CheckResult]:
@@ -757,6 +949,7 @@ def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) ->
         pvesh_path=tmp_path / "pvesh",
         forward_path=tmp_path / "forward",
         state_path=tmp_path / "state.json",
+        systemctl_path=executable(tmp_path / "systemctl"),
         node="pve1",
         runner=HostRunner(),
     )
@@ -777,6 +970,7 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "routing",
         "fallback",
         "state",
+        "timer",
         "pending",
     ]
     assert all(result.status is not Status.FAIL for result in results)
@@ -790,6 +984,7 @@ def test_what_is_not_checked_yet_is_named(tmp_path: Path, bridge: Path, vendor_d
     assert pending.status is Status.SKIP
     assert "smartd" in pending.detail
     assert "smartctl" not in pending.detail
+    assert "timer" not in pending.detail
 
 
 # The command

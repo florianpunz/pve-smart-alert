@@ -2,11 +2,17 @@
 #
 # Every file the package installs and the place it goes to. ARCHITECTURE.md
 # section 12 shows the complete layout of version 1, including the files that
-# are not built yet (ADR 0013).
+# are not built yet (ADR 0013). The units are installed here and not by
+# dh_installsystemd, which only writes the maintainer script snippets for the
+# timer (debian/rules).
 
 libexec/pve-smart-alert		usr/sbin
 libexec/notify-bridge		usr/libexec/pve-smart-alert
+libexec/report-failure		usr/libexec/pve-smart-alert
 src/pve_smart_alert		usr/share/pve-smart-alert
 templates/*.hbs			usr/share/pve-manager/templates/default
 config/config.toml		etc/pve-smart-alert
 config/config.reference.toml	usr/share/doc/pve-smart-alert
+systemd/pve-smart-alert.service		usr/lib/systemd/system
+systemd/pve-smart-alert.timer		usr/lib/systemd/system
+systemd/pve-smart-alert-failure.service	usr/lib/systemd/system
