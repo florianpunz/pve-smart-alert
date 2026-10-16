@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-16
-- Extends: [ADR 0008](0008-notification-integration.md), [ADR 0028](0028-logical-volumes-and-enclosures.md)
+- Extends: [ADR 0008](0008-notification-integration.md), [ADR 0020](0020-routing-check.md), [ADR 0028](0028-logical-volumes-and-enclosures.md)
 
 ## Context
 
@@ -12,23 +12,25 @@ A drive behind a MegaRAID controller is read as `megaraid,N` or `sat+megaraid,N`
 
 The field names are a stable interface (NFR-21): changing what `device` holds would change which notifications an existing matcher selects.
 
-What the notification system does with fields ([Research 01](../research/01-notification-integration.md)): a `match-field` rule on a field the notification does not have does not match. The server accepts any field name that is a valid identifier, and its own field `job-id` has a hyphen.
+What the notification system does with fields ([Research 01](../research/01-notification-integration.md)): a `match-field` rule on a field the notification does not have does not match. The server accepts any field name that is a valid identifier; that a hyphen is valid is inferred from its own field `job-id`, not read in the schema.
+
+The device ID is the controller's number for the drive, not its slot, and it can change when a drive is replaced: after the disk in slot 2 was replaced, the new disk answered as `megaraid,5` ([Research 04](../research/04-hardware-raid.md), reported).
 
 The maintainer decided the question (Q-N10) on 2026-10-16.
 
 ## Options considered
 
 1. **The device ID in `device`**, such as `/dev/bus/6 [megaraid,8]`. Breaks NFR-21: an existing rule `exact:device=/dev/bus/6` would stop matching.
-2. **No new field.** The drives differ in `serial` and `model`, which select one drive. Nothing selects the drive in one position of the controller, whatever drive sits there.
+2. **No new field.** The drives differ in `serial` and `model`, which select one drive. But no field tells a matcher or a webhook which of the drives on the controller node the notification is about, as smartctl addresses it, without parsing the text.
 3. **A new field `device-id`**, only for drives read through a pass-through type.
 
 ## Decision
 
 Option 3.
 
-- The field `device-id` holds the device ID of the pass-through type of the read, the decimal number `N` as smartctl's type writes it: `8` for `megaraid,8`, `14` for `sat+megaraid,14`. Not the whole type: the type is a detail of how smartctl reads the drive, the ID is where the drive sits, and `device` already names the controller.
+- The field `device-id` holds the device ID of the pass-through type of the read, the decimal number `N` as smartctl's type writes it: `8` for `megaraid,8`, `14` for `sat+megaraid,14`. Not the whole type: the type is a detail of how smartctl reads the drive, the ID is what tells the drives on one controller node apart, and `device` already names that node.
 - It is present in a notification about a single drive read through `megaraid,N` or `sat+megaraid,N`. `cciss,N` follows with the HPE probe of milestone M6, slice 5.
-- It is absent, not empty, for every other drive and for every notification that is not about one drive: the summary, the first-run summary, a message about the tool and the test notification. An empty value would match `regex:device-id=.*` and `exact:device-id=` and so tell a matcher something that is not there; an absent field matches no rule.
+- It is absent, not empty, for every other drive and for every notification that is not about one drive: the summary, the first-run summary, a message about the tool and the test notification. An empty value would match `regex:device-id=.*` and so tell a matcher something that is not there; a rule on an absent field does not match.
 - For a missing drive it is the device ID of the last read, which the state keeps with the device type.
 - `device` stays as it is.
 - One function in the model reads the device ID from the device type. The location that `scan` and the message show, and the field, come from it, so that they cannot disagree.
@@ -36,8 +38,8 @@ Option 3.
 
 ## Consequences
 
-- A matcher can select one position of a controller, for example with `match-field exact:device=/dev/bus/6` and `match-field exact:device-id=8` in `mode all`.
-- **The device ID can change.** A controller can give a drive another ID after a reboot, a firmware update or a rebuild; the tool keeps the drive by its identity ([ADR 0005](0005-drive-discovery-and-identity.md)), and the field follows the current read. A matcher that must follow one drive uses `serial`.
+- A matcher can select the drive with one device ID on one controller node, for example with `match-field exact:device=/dev/bus/6` and `match-field exact:device-id=8` in `mode all`.
+- **The device ID is not a slot, and it can change.** A replaced drive can answer with another ID (Research 04), so a matcher on `device-id` does not follow a bay. The tool keeps the drive by its identity ([ADR 0005](0005-drive-discovery-and-identity.md)), and the field follows the current read. A matcher that must follow one drive uses `serial`.
 - The web interface does not offer the field, as for `serial` (Research 01): a rule on it is written in `/etc/pve/notifications.cfg` or through the API.
 - `device-id` is a notification field under NFR-21 from now on.
 
