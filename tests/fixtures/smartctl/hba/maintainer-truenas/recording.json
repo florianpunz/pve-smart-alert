@@ -1,9 +1,9 @@
 {
-  "origin": "Own hardware of the maintainer: the TrueNAS host truenas, recorded on 2026-10-16 through the read-only wrapper psa-agent. Three NetApp X371 SAS SSDs behind an LSI SAS2308 HBA (driver mpt2sas) and one Samsung SATA SSD on the AHCI controller of the board, smartmontools 7.4",
+  "origin": "Own hardware of the maintainer: the TrueNAS host truenas, recorded on 2026-10-16 at 14:52 UTC through the read-only wrapper psa-agent with the call of the tool. Three NetApp X371 SAS SSDs behind an LSI SAS2308 HBA (driver mpt2sas) and one Samsung SATA SSD on the AHCI controller of the board, smartmontools 7.4. Replaces the recording of 12:09 UTC the same day, which was made with -n standby for every drive",
   "license": "AGPL-3.0-or-later",
   "node": "truenas",
-  "collected": "20261016T120921Z",
-  "collected_with": "the read-only wrapper psa-agent on the host: smart-scan, smart DEVICE TYPE, lsblk",
+  "collected": "20261016T145208Z",
+  "collected_with": "the read-only wrapper psa-agent on the host: smart-scan, smart DEVICE TYPE (the call of the tool), lsblk",
   "anonymized_with": "scripts/make_fixtures.py (ADR 0023)",
   "smartmontools": "7.4",
   "controller": "LSI SAS2308 HBA, driver mpt2sas, for sda, sdc and sde; Intel AHCI for sdd",
@@ -20,7 +20,7 @@
       "protocol": "SCSI",
       "class": "ssd",
       "model": "NETAPP X371_SLBPE960ATE",
-      "command": "smartctl -x --json=c -n standby -d scsi /dev/sda",
+      "command": "smartctl --json=c --xall --device=scsi /dev/sda",
       "exit_status": 0
     },
     {
@@ -30,7 +30,7 @@
       "protocol": "SCSI",
       "class": "ssd",
       "model": "NETAPP X371_SLBPE960ATE",
-      "command": "smartctl -x --json=c -n standby -d scsi /dev/sdc",
+      "command": "smartctl --json=c --xall --device=scsi /dev/sdc",
       "exit_status": 0
     },
     {
@@ -40,7 +40,7 @@
       "protocol": "ATA",
       "class": "ssd",
       "model": "Samsung SSD 850 EVO 120GB",
-      "command": "smartctl -x --json=c -n standby -d sat /dev/sdd",
+      "command": "smartctl --json=c --xall --nocheck=standby --device=sat /dev/sdd",
       "exit_status": 0
     },
     {
@@ -50,7 +50,7 @@
       "protocol": "SCSI",
       "class": "ssd",
       "model": "NETAPP X371_SLBPE960ATE",
-      "command": "smartctl -x --json=c -n standby -d scsi /dev/sde",
+      "command": "smartctl --json=c --xall --device=scsi /dev/sde",
       "exit_status": 0
     },
     {

@@ -276,7 +276,7 @@ State: in progress. The work is split into six slices, one branch `feature/m6-<s
 Decided for M6 (2026-10-16): the non-medium error count of SCSI drives is not checked, because smartctl writes it only as text (Research 08); the recordings of HPE controllers that were found are evidence only, so HPE Smart Array is built on synthetic fixtures and labeled "Experimental".
 
 - Done: slice 1, merged in pull request #6: 13 public recordings as fixtures, ADR 0026, Research 08.
-- Done: slice 2, merged in pull request #7: the SCSI parser and the checks `scsi.*`, `health.failed` with the exception of a SAS drive, and a recording of the maintainer's TrueNAS host with SAS SSDs behind an LSI SAS2308 HBA, which answered Q-R6. Pull request #9, open, records that host again with the call of the tool.
+- Done: slice 2, merged in pull request #7: the SCSI parser and the checks `scsi.*`, `health.failed` with the exception of a SAS drive, and a recording of the maintainer's TrueNAS host with SAS SSDs behind an LSI SAS2308 HBA, which answered Q-R6. Pull request #9 recorded that host again with the call of the tool.
 - In progress: slice 3, `feature/m6-megaraid`: the pass-through types, the location of a drive behind the controller, logical volumes and enclosures skipped by [ADR 0028](docs/adr/0028-logical-volumes-and-enclosures.md), and the scenarios `megaraid-jbod`, `megaraid-id-change` and `megaraid-degraded`, which show result 2 above on derived data. MegaRAID rests on public recordings of SATA drives and scans and on derived data; SAS behind MegaRAID is derived only.
 
 ## M7: Hardening, documentation, release 1.0 (M)

@@ -14,12 +14,10 @@
     "build_info": "(local build)",
     "argv": [
       "smartctl",
-      "-x",
       "--json=c",
-      "-n",
-      "standby",
-      "-d",
-      "sat",
+      "--xall",
+      "--nocheck=standby",
+      "--device=sat",
       "/dev/sdd"
     ],
     "drive_database_version": {
@@ -28,8 +26,8 @@
     "exit_status": 0
   },
   "local_time": {
-    "time_t": 1792152562,
-    "asctime": "Fri Oct 16 05:09:22 2026 PDT"
+    "time_t": 1792162329,
+    "asctime": "Fri Oct 16 07:52:09 2026 PDT"
   },
   "device": {
     "name": "/dev/sdd",
@@ -186,8 +184,8 @@
           "auto_keep": true
         },
         "raw": {
-          "value": 11423,
-          "string": "11423"
+          "value": 11425,
+          "string": "11425"
         }
       },
       {
@@ -347,7 +345,7 @@
       {
         "id": 190,
         "name": "Airflow_Temperature_Cel",
-        "value": 65,
+        "value": 64,
         "worst": 45,
         "thresh": 0,
         "when_failed": "",
@@ -362,8 +360,8 @@
           "auto_keep": true
         },
         "raw": {
-          "value": 35,
-          "string": "35"
+          "value": 36,
+          "string": "36"
         }
       },
       {
@@ -450,18 +448,18 @@
           "auto_keep": true
         },
         "raw": {
-          "value": 12306657861,
-          "string": "12306657861"
+          "value": 12307805173,
+          "string": "12307805173"
         }
       }
     ]
   },
   "power_on_time": {
-    "hours": 11423
+    "hours": 11425
   },
   "power_cycle_count": 1242,
   "temperature": {
-    "current": 35,
+    "current": 36,
     "power_cycle_min": 29,
     "power_cycle_max": 40,
     "lifetime_min": 0,
@@ -901,7 +899,7 @@
       "string": "SCT command executing in background"
     },
     "temperature": {
-      "current": 35,
+      "current": 36,
       "power_cycle_min": 29,
       "power_cycle_max": 40,
       "lifetime_min": 0,
@@ -921,7 +919,7 @@
       "limit_max": 70
     },
     "size": 128,
-    "index": 23,
+    "index": 40,
     "table": [
       35,
       35,
@@ -979,23 +977,6 @@
       35,
       35,
       35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
-      35,
       34,
       34,
       35,
@@ -1050,7 +1031,24 @@
       35,
       35,
       35,
-      35
+      35,
+      36,
+      35,
+      35,
+      35,
+      35,
+      35,
+      36,
+      36,
+      36,
+      36,
+      35,
+      36,
+      36,
+      35,
+      36,
+      36,
+      36
     ]
   },
   "ata_sct_erc": {
