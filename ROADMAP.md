@@ -216,7 +216,7 @@ From here on the tool runs permanently on the maintainer's cluster. Version tag:
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 
-State: the development of M5 is on `main` since pull request #4, which merged the host-tested work of `feature/m5-packaging` onto the units of pull request #3; CI is green there. What is left needs a real Proxmox VE host (checklist below), and 0.5.0 is tagged only after it passed. Builds for test hosts are pre-releases `0.5.0~devN` until then, so that each one installs as an upgrade ([ADR 0027](docs/adr/0027-pre-release-versions-for-test-builds.md)). Open: the check in `.github/workflows/release.yml` that refuses to publish a pre-release, on the branch `chore/release-refuses-pre-releases`; it needs a push with the `workflow` scope.
+State: the development of M5 is on `main` since pull request #4, which merged the host-tested work of `feature/m5-packaging` onto the units of pull request #3; CI is green there. What is left needs a real Proxmox VE host (checklist below), and 0.5.0 is tagged only after it passed. Builds for test hosts are pre-releases `0.5.0~devN` until then, so that each one installs as an upgrade ([ADR 0027](docs/adr/0027-pre-release-versions-for-test-builds.md)).
 
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well.
 - Done: the sandboxing of the check service, [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) (Q-P1).

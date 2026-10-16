@@ -40,6 +40,14 @@ jobs:
             echo "the tag $GITHUB_REF_NAME is not the version $version"
             exit 1
           fi
+          # A pre-release is a build for test hosts and is never published
+          # (ADR 0027).
+          case "$version" in
+            *.dev*)
+              echo "$version is a pre-release for test hosts, not a release"
+              exit 1
+              ;;
+          esac
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: The changelog has a section for the version

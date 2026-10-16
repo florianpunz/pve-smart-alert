@@ -28,7 +28,7 @@ Option 4.
 - Every build that goes to a test host is a pre-release of the next release, `X.Y.Z~devN` in the package and `X.Y.Z.devN` in the program (PEP 440 has no `~`; its `.devN` sorts the same way). The first is `0.5.0~dev1`.
 - `N` is counted up by one for every such build, starting at 1 for each release. A build is not installed on a test host twice under the same version.
 - `debian/changelog` gets a new entry and `src/pve_smart_alert/__init__.py` the same version in the same commit. `scripts/check_version_sync.py` accepts exactly this pair besides an identical release version, and nothing else.
-- A pre-release is never tagged and never published. The release workflow is to refuse a tag whose version is a pre-release; until that check is on `main`, the rule is kept by hand ([ROADMAP.md](../../ROADMAP.md), M5).
+- A pre-release is never tagged and never published. The release workflow refuses a tag whose version is a pre-release.
 - The release itself, such as 0.5.0, drops the suffix after its acceptance, as before ([ADR 0013](0013-packaging-and-installation.md)).
 
 Checked: `dpkg --compare-versions` and the version rules of PEP 440 sort 0.4.0, 0.5.0~dev1 and .dev1, ~dev2 and .dev2, ~dev10 and .dev10, and 0.5.0 in this order (2026-10-16).
