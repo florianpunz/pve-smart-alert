@@ -224,6 +224,7 @@ State: the development of M5 is on `main` since pull request #4, which merged th
 - Done: `scripts/install.sh`; the package test of ADR 0016 in a clean container in CI (`scripts/package-test.sh`), which passed on 2026-10-15 (Q-P3); the release workflow `.github/workflows/release.yml`.
 - Done on `pve1` with test builds of 0.5.0 from `feature/m5-packaging` (2026-10-13): the installation starts the timer and the first check at once, which sent the first-run summary; an upgrade restarts the timer without a run, keeps the state and sends no summary (Q-P2); a run made to fail on purpose with a drop-in sent one failure mail, which reached `proxmox-mail-forward`, and a second failure on the same day sent none; a run skipped because of the lock exited 3 and counted as success; `systemd-analyze verify` accepts the units; an unreachable SMTP target blocks the bridge for about 5 seconds and a webhook target for about 10 (Q-N4). The sandboxing options of ADR 0025 were tested with both transports and a check (Q-P1).
 - The tests on `pve1` found that a run logged one progress line per drive to the journal besides its summary line (FR-606); the progress now goes to a terminal only.
+- Done on `pve1` (2026-10-16): the upgrades from 0.4.0 to 0.5.0~dev1 and from 0.5.0~dev1 to 0.5.0~dev2, installed with `apt` as a user would, kept the configuration, the last good configuration and the state file byte for byte, and the timer active and enabled ([ADR 0027](docs/adr/0027-pre-release-versions-for-test-builds.md)).
 
 Verified only by static checks, without systemd running the units:
 
@@ -278,7 +279,8 @@ Decided for M6 (2026-10-16): the non-medium error count of SCSI drives is not ch
 - Done: slice 1, merged in pull request #6: 13 public recordings as fixtures, ADR 0026, Research 08.
 - Done: slice 2, merged in pull request #7: the SCSI parser and the checks `scsi.*`, `health.failed` with the exception of a SAS drive, and a recording of the maintainer's TrueNAS host with SAS SSDs behind an LSI SAS2308 HBA, which answered Q-R6. Pull request #9 recorded that host again with the call of the tool.
 - Done: slice 3, merged in pull request #10: the pass-through types, the location of a drive behind the controller, logical volumes and enclosures skipped by [ADR 0028](docs/adr/0028-logical-volumes-and-enclosures.md), and the scenarios `megaraid-jbod`, `megaraid-id-change` and `megaraid-degraded`, which show result 2 above on derived data. MegaRAID rests on public recordings of SATA drives and scans and on derived data; SAS behind MegaRAID is derived only.
-- In progress: before slice 4, the test frame refuses every program of the host (`tests/guard.py`); one test had reached the smartctl of the machine it ran on. Then the notification field `device-id`.
+- Done: the test frame refuses every program of the host (`tests/guard.py`, pull request #11); one test had reached the smartctl of the machine it ran on.
+- Next: the notification field `device-id`, decided by the maintainer on 2026-10-16 (Q-N10): `device` stays as it is (NFR-21), and a new field `device-id` carries the device ID of a drive read through a pass-through type (`megaraid,N`, `sat+megaraid,N`, later `cciss,N`) and is absent for every other drive, so that a matcher can select one drive behind a controller. It comes as a pull request of its own with a decision record, and updates the field list, the renderer, the golden files and ARCHITECTURE.md section 10. Then slice 4.
 
 ## M7: Hardening, documentation, release 1.0 (M)
 
