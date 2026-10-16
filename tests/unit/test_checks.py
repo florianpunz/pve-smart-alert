@@ -8,8 +8,11 @@ host is tested in test_check_command.py.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from pve_smart_alert.checks import (
     CATALOG,
@@ -38,6 +41,7 @@ from pve_smart_alert.model import (
     Snapshot,
     WearSource,
 )
+from pve_smart_alert.parsers import parse
 
 IDENTITY = DriveIdentity.of("Samsung SSD 850 EVO 250GB", serial="ANON-SN-0001")
 ACCESS = DeviceAccess("/dev/sda", "sat", "ATA")
@@ -372,17 +376,46 @@ def test_the_nvme_error_log_is_disabled_by_default() -> None:
     assert evaluate(snapshot) == []
 
 
-# SAS (docs/check-catalog.md): no parser produces these metrics until M6.
+# SAS (docs/check-catalog.md, "SAS (SCSI log pages)")
 
 
-def test_the_scsi_checks_wait_for_a_parser() -> None:
-    snapshot = drive(DriveClass.HDD, metrics={"scsi.grown_defects": 150})
+@pytest.mark.parametrize(
+    ("value", "severity"),
+    [(0, None), (1, Severity.NOTICE), (99, Severity.NOTICE), (100, Severity.WARNING)],
+)
+def test_the_grown_defects(value: int, severity: Severity | None) -> None:
+    snapshot = drive(DriveClass.HDD, metrics={"scsi.grown_defects": value})
+
+    assert checks_of(snapshot).get("scsi.grown_defects") == severity
+    # A metric the drive does not report is not applicable.
+    assert "scsi.uncorrected_errors" not in checks_of(snapshot)
+
+
+@pytest.mark.parametrize("check", ["scsi.uncorrected_errors", "scsi.pending_defects"])
+@pytest.mark.parametrize(("value", "severity"), [(0, None), (1, Severity.WARNING)])
+def test_the_uncorrected_errors_and_the_pending_defects(
+    check: str, value: int, severity: Severity | None
+) -> None:
+    snapshot = drive(DriveClass.SSD, metrics={check: value})
+
+    assert checks_of(snapshot).get(check) == severity
+
+
+def test_a_failed_scsi_verdict_names_the_exception() -> None:
+    snapshot = replace(
+        drive(DriveClass.HDD),
+        health_passed=False,
+        health_detail="FAILURE PREDICTION THRESHOLD EXCEEDED (ASC 0x5d, ASCQ 0x00)",
+    )
 
     (finding,) = evaluate(snapshot)
 
-    assert finding.check == "scsi.grown_defects"
-    assert finding.severity is Severity.WARNING
-    assert "scsi.uncorrected_errors" not in checks_of(snapshot)
+    assert finding.check == "health.failed"
+    assert finding.severity is Severity.CRITICAL
+    assert finding.text == (
+        "the drive reports its health as failed:"
+        " FAILURE PREDICTION THRESHOLD EXCEEDED (ASC 0x5d, ASCQ 0x00)"
+    )
 
 
 def test_the_catalog_holds_the_identifiers_of_the_docs() -> None:
@@ -529,3 +562,53 @@ def test_the_worsening_rule_of_each_check_is_the_one_of_the_docs() -> None:
     words = {Worsening.INCREASE: "increase", Worsening.ESCALATION: "escalation", None: "\u2013"}
 
     assert documented == {check.id: words[check.worsening] for check in CATALOG.values()}
+
+
+def test_a_sas_drive_with_its_informational_exceptions_off_is_told_so() -> None:
+    snapshot = replace(
+        drive(DriveClass.HDD),
+        access=DeviceAccess("/dev/sdq", "scsi", "SCSI"),
+        smart_available=True,
+        smart_enabled=False,
+    )
+
+    (finding,) = evaluate(snapshot)
+
+    assert finding.check == "smart.disabled"
+    assert finding.severity is Severity.NOTICE
+    assert finding.text == (
+        "the informational exceptions are switched off, so the drive reports no failing"
+        " health; they can be turned on with: smartctl -s on /dev/sdq"
+    )
+
+
+SCSI_RECORDINGS = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl"
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        # The healthy SAS drives stay below every threshold.
+        ("hba/maintainer-truenas/sda.json", {}),
+        ("direct/libblockdev-seagate-st600mp0036/sdb.json", {}),
+        ("direct/exporter-hitachi-h109060sesun600g/sda.json", {}),
+        # The values the catalog names for the recordings (Q-T3, Q-T5).
+        ("direct/scrutiny-seagate-st4000nm0043/sdg.json", {"scsi.grown_defects": Severity.NOTICE}),
+        (
+            "direct/exporter-seagate-st373453lc-defects/sdb.json",
+            {"scsi.grown_defects": Severity.WARNING, "scsi.uncorrected_errors": Severity.WARNING},
+        ),
+        # The informational exceptions of this drive are off.
+        ("direct/libblockdev-wd-wd4001fyyg/sdq.json", {"smart.disabled": Severity.NOTICE}),
+    ],
+)
+def test_the_recorded_scsi_drives(path: str, expected: dict[str, Severity]) -> None:
+    document = json.loads((SCSI_RECORDINGS / path).read_text(encoding="utf-8"))
+    device = document["device"]
+    snapshot = parse(
+        document,
+        access=DeviceAccess(device["name"], device["type"], device["protocol"]),
+        collection=COLLECTION,
+    )
+
+    assert checks_of(snapshot) == expected

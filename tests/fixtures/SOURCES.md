@@ -5,7 +5,7 @@ No fixture contains a real serial number or WWN; a test checks every fixture for
 
 ## Output of smartctl: `smartctl/`
 
-Recordings, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, `lsblk.json` from `lsblk -J -O`, where the recording has them, and `recording.json` with the origin, the license and the smartmontools version, and the command line, exit status, protocol and class of every file.
+Recordings, one directory per recording under the controller of its drives (`direct` for directly attached drives, `hba` for drives behind a SAS host bus adapter that smartctl reads directly): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, `lsblk.json` from `lsblk -J -O`, where the recording has them, and `recording.json` with the origin, the license and the smartmontools version, and the command line, exit status, protocol and class of every file.
 The recordings of the maintainer were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs, EUI-64s, NGUIDs and UUIDs are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
 
 | Directory | Origin | Changes | License |
@@ -15,6 +15,7 @@ The recordings of the maintainer were written by [`scripts/make_fixtures.py`](..
 | `direct/test-cluster-pve7` | Same, node `pve7`. Samsung SSD 850 EVO 250GB, two Samsung MZVLW256HEHP (PM961) | Anonymized | AGPL-3.0-or-later |
 | `direct/standalone-pve1` | [Research 07](../../docs/research/07-standalone-host-pve1.md): the standalone test host `pve1` of the maintainer, not part of the test cluster, recorded on 2026-10-08 by the collection script. Intenso SSD; a USB device that the scan does not list | Anonymized | AGPL-3.0-or-later |
 | `direct/failing-hdd` | Derived by hand from the recording of `test-cluster-pve7`: a hard disk that fails several checks at once, for the tests of the evaluation of milestone M3 and its acceptance step 2. Identity and values replaced, derived on 2026-10-12 | Anonymized and modified | AGPL-3.0-or-later |
+| `hba/maintainer-truenas` | [Research 08](../../docs/research/08-public-recordings.md), addition of 2026-10-16: the TrueNAS host `truenas` of the maintainer, own hardware, recorded on 2026-10-16 through the read-only wrapper of the host, not by the collection script. Three NetApp X371 SAS SSDs behind an LSI SAS2308 HBA (`mpt2sas`) and one Samsung SSD 850 EVO 120GB on the AHCI controller, smartmontools 7.4. The SAS SSDs carry SAS addresses; the WWN of each in `lsblk` is its logical unit id (Q-R6) | Anonymized | AGPL-3.0-or-later |
 
 ### Taken from the test data of other projects
 

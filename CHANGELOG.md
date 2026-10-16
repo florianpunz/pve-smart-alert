@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The check service runs with the systemd sandboxing options of [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md); the drives and the mail queue stay reachable.
 - `pve-smart-alert doctor` also reports the version of Proxmox VE, and whether smartd is active and mails root, which reports some problems twice; the README says how to quiet smartd by hand (FR-603, [ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
 - `install.sh` installs the newest release, or a pinned one, after verifying the checksum of the package ([ADR 0013](docs/adr/0013-packaging-and-installation.md)).
+- SAS and parallel SCSI drives are monitored: their grown defect list, their uncorrected read, write and verify errors and, where the drive has the page, their pending defects are checked against the thresholds of the [check catalog](docs/check-catalog.md), together with the health verdict, the temperature, the self-test log and the endurance indicator of SAS SSDs. A SAS drive without a health verdict is not counted as failed, and a failed one names the exception the drive reports. A SAS drive whose informational exceptions are switched off gets the notice `smart.disabled`, which says so and names `smartctl -s on`. Until now such drives were unreadable; a run therefore clears their `drive.unreadable` condition once, with a recovery message.
 
 ### Changed
 

@@ -33,7 +33,8 @@ Drive classes: `hdd` and `ssd` (SATA or SAS, by rotation rate; unknown is treate
 
 Notes:
 
-- `health.failed` is not used for NVMe. The NVMe verdict is the Critical Warning byte, which is evaluated bit by bit below.
+- `health.failed` is not used for NVMe. The NVMe verdict is the Critical Warning byte, which is evaluated bit by bit below. A SAS drive without the informational exceptions mode page has no verdict at all, which is not a failed one; a failed verdict of a SAS drive names the exception the drive reports.
+- `smart.disabled` for a SAS drive means that its informational exceptions are switched off, so it would not report a failing health ([Research 08](research/08-public-recordings.md)). A SCSI device without the informational exceptions mode page has, for smartctl, no SMART capability at all, and discovery skips it as `no-smart` (FR-107).
 - `temperature`: the limits of the drive itself are not read; the fixed limits per class apply until [Q-T4](../OPEN-QUESTIONS.md) is answered. For NVMe, Critical Warning bit 1 raises at least a warning. On hosts with smartmontools 7.4 the NVMe limits do not exist in the JSON at all ([Research 03](research/03-smart-indicators.md)).
 - `wear`, sources in this order ([ADR 0021](adr/0021-wear-value-source.md)): `endurance_used` of smartmontools 7.5; then the ATA device statistics value, NVMe `percentage_used` or the SAS endurance indicator; then, for SATA only, the vendor attribute found through the name list of the Proxmox VE web interface, and last the same kind of guess made by smartmontools. The source used is shown with the value. For ATA, `endurance_used` counts as the first source only when the device statistics were read: without them smartmontools guesses it from a vendor attribute, and the guess is named for what it is ([Research 03](research/03-smart-indicators.md)); with `smartctl.detail = "basic"` the wear of an SSD therefore comes from a vendor attribute.
 - `selftest.failed` only reads logs. The tool never starts a self-test.
@@ -93,7 +94,8 @@ Notes:
 - Corrected errors are normal on SAS drives and are not evaluated.
 - No public failure-rate data was found for these values. The defaults are the weakest in the catalog.
 - `scsi.pending_defects` needs the pending defects log page, which smartctl reads with `--xall` and not with `--all`: with `smartctl.detail = "basic"` the check is never applicable, and many drives do not have the page ([Research 08](research/08-public-recordings.md)).
-- No parser produces these metrics until milestone M6; the checks exist so that their identifiers are stable from now on, and they are never applicable until then.
+- Parsed since milestone M6 (`parsers/scsi.py`), for SAS and parallel SCSI drives. The defaults rest on no failure-rate data and were checked only against recordings ([Research 08](research/08-public-recordings.md)): the healthy SAS drives stay below every threshold, a SAS drive with 56 grown defects gets a notice, and a parallel SCSI drive with 260 grown defects and 536 uncorrected errors gets two warnings, although its own health verdict passes. They are assumptions for the review in M7 (Q-T3, Q-T5).
+- `scsi.uncorrected_errors` adds up the read, write and verify parts that the drive reports; a drive without the error counter log has no value, not zero.
 
 ## Conditions of the tool itself
 

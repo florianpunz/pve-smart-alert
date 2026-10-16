@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from hosts import FAKE, Host
+from hosts import FAKE, RECORDINGS, Host
 
 from pve_smart_alert import cli
 from pve_smart_alert import config as config_module
@@ -122,6 +122,27 @@ def test_the_dry_run_of_healthy_drives_is_empty(
 
     out = capsys.readouterr().out
     assert "monitored" in out
+    assert "no findings" in out
+
+
+def test_the_dry_run_of_sas_drives_behind_an_hba(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    paths: tuple[Path, Path],
+) -> None:
+    # The maintainer's TrueNAS host: three SAS SSDs behind an LSI SAS2308 HBA
+    # and one SATA SSD, all healthy (tests/fixtures/SOURCES.md).
+    config_path, _ = paths
+    host = Host(tmp_path, monkeypatch, RECORDINGS.parent / "hba" / "maintainer-truenas")
+    with_host(monkeypatch, host)
+    config_path.write_text(fake_smartctl_config(), encoding="utf-8")
+
+    assert cli.main(["check", "--dry-run"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    # Every drive is read and parsed; none is unreadable.
+    assert "4 monitored, 0 in standby, 0 unreadable" in out
     assert "no findings" in out
 
 

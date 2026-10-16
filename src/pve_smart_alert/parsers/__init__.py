@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from pve_smart_alert.model import Collection, DeviceAccess, Snapshot
-from pve_smart_alert.parsers import ata, nvme
+from pve_smart_alert.parsers import ata, nvme, scsi
 from pve_smart_alert.parsers.common import ParseError, protocol_of
 
 __all__ = ["ParseError", "parse"]
@@ -22,12 +22,14 @@ def parse(
 ) -> Snapshot:
     """Return the snapshot of one drive output of smartctl.
 
-    Raises `ParseError` for a protocol without a parser yet, such as SCSI
-    before milestone M6, and for an output without a model name.
+    Raises `ParseError` for a protocol without a parser, and for an output
+    without a model name.
     """
     protocol = protocol_of(document) or access.protocol
     if protocol == "ATA":
         return ata.parse(document, access=access, collection=collection)
     if protocol == "NVMe":
         return nvme.parse(document, access=access, collection=collection)
+    if protocol == "SCSI":
+        return scsi.parse(document, access=access, collection=collection)
     raise ParseError(f"no parser for the protocol {protocol or 'that smartctl did not name'}")

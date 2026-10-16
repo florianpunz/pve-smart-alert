@@ -305,6 +305,9 @@ class Snapshot:
     smart_available: bool | None = None
     smart_enabled: bool | None = None
     health_passed: bool | None = None
+    # What the drive says about a failed health verdict, where it says more
+    # than "failed": for SCSI the informational exception and its codes.
+    health_detail: str | None = None
     nvme_critical_warning: int | None = None
     failing_attributes: tuple[FailingAttribute, ...] = ()
     last_self_test_passed: bool | None = None

@@ -373,3 +373,36 @@ def test_an_import_that_would_leave_a_real_value_writes_nothing(tmp_path: Path) 
     assert result.returncode == 1
     assert "logical_unit_id in an unknown form" in result.stderr
     assert not (tmp_path / "out").exists()
+
+
+def test_an_archive_recorded_otherwise_names_how(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--output",
+            str(tmp_path / "out"),
+            "--prefix",
+            "lab",
+            "--origin",
+            "A test",
+            "--collected-with",
+            "a read-only wrapper",
+            "--controller",
+            "an HBA",
+            "--lsblk-command",
+            "lsblk --json --output-all",
+            str(archive(tmp_path)),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    recording = json.loads(
+        (tmp_path / "out" / "lab-pve9" / "recording.json").read_text(encoding="utf-8")
+    )
+    assert recording["collected_with"] == "a read-only wrapper"
+    assert recording["controller"] == "an HBA"
+    assert recording["files"][-1]["command"] == "lsblk --json --output-all"

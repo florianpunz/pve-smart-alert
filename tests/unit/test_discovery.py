@@ -277,13 +277,13 @@ def test_a_drive_without_smart_is_skipped(pve7: Host) -> None:
 
 def test_a_protocol_without_a_parser_is_unreadable(pve7: Host) -> None:
     drive = pve7.drive("sda.json")
-    drive["device"] = {"name": "/dev/sda", "type": "scsi", "protocol": "SCSI"}
+    drive["device"] = {"name": "/dev/sda", "type": "test", "protocol": "TEST"}
     pve7.behave("sda.json", stdout=json.dumps(drive), exit_status=0)
 
     found = pve7.discover().devices[0]
 
     assert found.outcome is Outcome.UNREADABLE
-    assert found.detail == "no parser for the protocol SCSI"
+    assert found.detail == "no parser for the protocol TEST"
 
 
 # When parts of the host fail (FR-205)

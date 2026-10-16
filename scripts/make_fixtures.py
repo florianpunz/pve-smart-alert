@@ -84,12 +84,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--prefix", default="recording", help="the name before the node")
     parser.add_argument("--origin", required=True, help="where the recordings come from")
     parser.add_argument("--license", default=DEFAULT_LICENSE, help="SPDX license of the data")
+    parser.add_argument(
+        "--collected-with", default=COLLECTED_WITH, help="what recorded the files of the archive"
+    )
+    parser.add_argument("--controller", default=CONTROLLER, help="what the drives are behind")
+    parser.add_argument(
+        "--lsblk-command", default=LSBLK_COMMAND, help="the command that recorded lsblk.json"
+    )
     arguments = parser.parse_args(argv)
 
     status = 0
     for archive in arguments.archives:
         try:
-            recording = read_archive(archive)
+            recording = read_archive(
+                archive,
+                collected_with=arguments.collected_with,
+                controller=arguments.controller,
+                lsblk_command=arguments.lsblk_command,
+            )
             files = anonymize(
                 recording,
                 origin=arguments.origin,
@@ -209,8 +221,19 @@ def _json_exit(document: object) -> int | None:
     return status if isinstance(status, int) else None
 
 
-def read_archive(path: Path) -> Recording:
-    """Read the scan, the drive outputs, lsblk and their exit statuses of one archive."""
+def read_archive(
+    path: Path,
+    *,
+    collected_with: str = COLLECTED_WITH,
+    controller: str = CONTROLLER,
+    lsblk_command: str = LSBLK_COMMAND,
+) -> Recording:
+    """Read the scan, the drive outputs, lsblk and their exit statuses of one archive.
+
+    The archive has the layout of scripts/collect-node-data.sh. One recorded
+    otherwise in that layout, such as through the read-only wrapper of a host
+    of the maintainer, names what recorded it and what the drives are behind.
+    """
     with tarfile.open(path, "r:gz") as archive:
         contents = {
             PurePosixPath(*PurePosixPath(member.name).parts[1:]).as_posix(): _read(archive, member)
@@ -222,15 +245,15 @@ def read_archive(path: Path) -> Recording:
     recording = Recording(
         node=info["node"],
         collected=info.get("collected"),
-        collected_with=COLLECTED_WITH,
+        collected_with=collected_with,
         scan=json.loads(contents["scan.json"]),
         scan_exit=_exit(contents.get("scan.json.exit")),
-        controller=CONTROLLER,
+        controller=controller,
     )
     if "lsblk.json" in contents:
         recording.lsblk = json.loads(contents["lsblk.json"])
         recording.lsblk_exit = _exit(contents.get("lsblk.json.exit"))
-        recording.lsblk_command = LSBLK_COMMAND
+        recording.lsblk_command = lsblk_command
     for name, text in sorted(contents.items()):
         if name.startswith("smart/") and name.endswith(".json"):
             stem = name.removeprefix("smart/").removesuffix(".json")
