@@ -138,6 +138,32 @@ def remove(device: str) -> Edit:
     return edit
 
 
+def remove_file(file: str) -> Edit:
+    """Take away the drive of one recording file, which may share its device node.
+
+    Drives behind a controller share the device node, so `remove` would take
+    all of them; this edit takes the one of `file`, by node and type.
+    """
+
+    def edit(documents: Documents) -> None:
+        device = _device_of(documents[file])
+        scan = documents["scan.json"]
+        devices = scan.get("devices")
+        assert isinstance(devices, list)
+        scan["devices"] = [
+            entry
+            for entry in devices
+            if (entry.get("name"), entry.get("type")) != (device["name"], device["type"])
+        ]
+        recording = documents["recording.json"]
+        files = recording.get("files")
+        assert isinstance(files, list)
+        recording["files"] = [entry for entry in files if entry.get("file") != file]
+        del documents[file]
+
+    return edit
+
+
 def copies(file: str, count: int) -> Edit:
     """Make `count` drives of one: the copies get the next device names and serial numbers.
 
@@ -375,7 +401,7 @@ SCENARIOS: Final = {
             base=MEGARAID_BASE,
             description=(
                 "Two drives behind a MegaRAID controller whose device IDs change while one"
-                " has a finding"
+                " has a finding, and then one of them is gone"
             ),
             prepare=(megaraid_host(),),
             steps=(
@@ -402,6 +428,24 @@ SCENARIOS: Final = {
                         device_id(MEGARAID_SAS, 9),
                     ),
                     "the same again: nothing, no drive missing",
+                ),
+                Step(
+                    "05-gone",
+                    (
+                        attribute(MEGARAID_SATA, 197, 8),
+                        device_id(MEGARAID_SATA, 15),
+                        remove_file(MEGARAID_SAS),
+                    ),
+                    "the SAS drive is gone: nothing yet",
+                ),
+                Step(
+                    "06-gone",
+                    (
+                        attribute(MEGARAID_SATA, 197, 8),
+                        device_id(MEGARAID_SATA, 15),
+                        remove_file(MEGARAID_SAS),
+                    ),
+                    "gone for the second run: one missing drive, with its last device ID 9",
                 ),
             ),
         ),

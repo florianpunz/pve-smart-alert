@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from pve_smart_alert.model import Location, Membership
+from pve_smart_alert.model import Location, Membership, pass_through_id
 from pve_smart_alert.paths import DISK_LINKS_DIR, LSBLK_PATH, SYSFS_DIR
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
@@ -53,10 +53,9 @@ NOT_DISKS: Final = frozenset({"rom", "tape"})
 
 _NVME_CONTROLLER: Final = re.compile(r"nvme[0-9]+")
 # The device node through which smartctl reaches the drives of the SCSI host
-# H with a MegaRAID controller, and the pass-through types that address one
-# drive behind it, with or without the SCSI to ATA translation.
+# H with a MegaRAID controller. The pass-through types that address one drive
+# behind it are read by `pass_through_id` of the model.
 _SCSI_HOST_NODE: Final = re.compile(r"/dev/bus/([0-9]+)")
-_MEGARAID_TYPE: Final = re.compile(r"(?:sat\+)?megaraid,([0-9]+)")
 _VOLUME_GROUP: Final = re.compile(r"((?:[^-]|--)+)-")
 
 
@@ -167,17 +166,6 @@ def details_of(
         model=_trimmed(first, "model"),
         block_device=True,
     )
-
-
-def pass_through_id(device_type: str) -> str | None:
-    """Return the device ID of a type that addresses a drive behind a controller.
-
-    `megaraid,N` reaches a SAS or SCSI drive, `sat+megaraid,N` a SATA drive,
-    both behind a MegaRAID controller. Any other type reads the device
-    itself, and the answer is `None`.
-    """
-    match = _MEGARAID_TYPE.fullmatch(device_type)
-    return match.group(1) if match is not None else None
 
 
 def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:

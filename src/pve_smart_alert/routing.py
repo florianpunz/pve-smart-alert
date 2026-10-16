@@ -42,6 +42,7 @@ from typing import Final, TypeAlias, TypeGuard
 
 from pve_smart_alert.model import (
     FIELD_DEVICE,
+    FIELD_DEVICE_ID,
     FIELD_EVENT,
     FIELD_HOSTNAME,
     FIELD_MODEL,
@@ -64,9 +65,14 @@ TARGETS: Final = "/cluster/notifications/targets"
 
 # The fields whose values differ from one notification of the tool to the
 # next (FR-503). A rule on one of them matches some notifications and not
-# others. A field the tool sends in the future belongs here as well, because
-# a rule on a field the tool never sends is decided as "no match".
-VARYING_FIELDS: Final = frozenset({FIELD_EVENT, FIELD_DEVICE, FIELD_SERIAL, FIELD_MODEL})
+# others. `device-id` is carried only by some notifications at all, and a
+# rule on a field a notification lacks does not match it, so a rule on it is
+# just as undecided (ADR 0029). A field the tool sends in the future belongs
+# here as well, because a rule on a field the tool never sends is decided as
+# "no match".
+VARYING_FIELDS: Final = frozenset(
+    {FIELD_EVENT, FIELD_DEVICE, FIELD_DEVICE_ID, FIELD_SERIAL, FIELD_MODEL}
+)
 
 # The keys of a matcher as `proxmox-notify` defines it. Another key could
 # change what the matcher does, so a matcher that has one is unknown.

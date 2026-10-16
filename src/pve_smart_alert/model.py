@@ -12,6 +12,7 @@ the checks read nothing else: they never see smartctl JSON (ADR 0004).
 
 from __future__ import annotations
 
+import re
 import socket
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -31,6 +32,15 @@ FIELD_EVENT: Final = "event"
 FIELD_DEVICE: Final = "device"
 FIELD_SERIAL: Final = "serial"
 FIELD_MODEL: Final = "model"
+# Only a drive read through a pass-through type carries this one: the device
+# ID of the drive behind the controller, which `device` does not tell apart
+# (FR-503, ADR 0029). Every other notification leaves it out.
+FIELD_DEVICE_ID: Final = "device-id"
+
+# The pass-through types that address one drive behind a controller, with
+# its device ID: `megaraid,N` for a SAS or SCSI drive and `sat+megaraid,N`
+# for a SATA drive behind a MegaRAID controller (ADR 0028).
+_PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+)?megaraid,([0-9]+)")
 
 # Longer field values are cut. Field values go into the configuration of the
 # notification system and drive data is untrusted (ARCHITECTURE.md section 14).
@@ -138,6 +148,19 @@ class Notification:
         merged[FIELD_TYPE] = NOTIFICATION_TYPE
         merged[FIELD_HOSTNAME] = self.node
         return {name: sanitize_field_value(value) for name, value in merged.items()}
+
+
+def pass_through_id(device_type: str) -> str | None:
+    """Return the device ID of a type that addresses a drive behind a controller.
+
+    `megaraid,N` reaches a SAS or SCSI drive, `sat+megaraid,N` a SATA drive,
+    both behind a MegaRAID controller. The ID is `N` as the type writes it.
+    Any other type reads the device itself, and the answer is `None`. The
+    location that `scan` and a message show and the field `device-id` both
+    come from here, so that they cannot disagree (ADR 0028, ADR 0029).
+    """
+    match = _PASS_THROUGH_TYPE.fullmatch(device_type)
+    return match.group(1) if match is not None else None
 
 
 def node_name(hostname: str | None = None) -> str:

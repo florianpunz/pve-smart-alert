@@ -1,4 +1,11 @@
 Subject: [pve-smart-alert] WARNING pve1: /dev/bus/6 SEAGATE ST600MP0036 (ANON-SN-0002): 150 grown defects
+Field device: /dev/bus/6
+Field device-id: 8
+Field event: problem
+Field hostname: pve1
+Field model: SEAGATE ST600MP0036
+Field serial: ANON-SN-0002
+Field type: pve-smart-alert
 
 A drive in pve1 needs attention.
 

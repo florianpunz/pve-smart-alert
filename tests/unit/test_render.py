@@ -1,15 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests for the renderer: subject and body against golden files (ADR 0016).
 
-A change to the text of a notification has to update its golden file in
-`tests/fixtures/golden/`. With PVE_SMART_ALERT_UPDATE_GOLDEN=1 the tests
-write the files instead of comparing them; the diff is then reviewed like
-any other change.
+A golden file holds the subject, the metadata fields that matchers and
+webhooks see, one `Field NAME: VALUE` line each in the order of their
+names, and the body. A change to the text or the fields of a notification
+has to update its golden file in `tests/fixtures/golden/`. With
+PVE_SMART_ALERT_UPDATE_GOLDEN=1 the tests write the files instead of
+comparing them; the diff is then reviewed like any other change.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +22,7 @@ from pve_smart_alert.checks import CATALOG
 from pve_smart_alert.config import Config, NotifySettings
 from pve_smart_alert.model import (
     FIELD_DEVICE,
+    FIELD_DEVICE_ID,
     FIELD_EVENT,
     FIELD_HOSTNAME,
     FIELD_MODEL,
@@ -39,7 +43,13 @@ from pve_smart_alert.planner import (
     Presence,
     SkippedSeen,
 )
-from pve_smart_alert.render import TEXTS, RenderContext, cluster_name, render
+from pve_smart_alert.render import (
+    TEXTS,
+    RenderContext,
+    cluster_name,
+    render,
+    render_test_notification,
+)
 from pve_smart_alert.state import Access
 from pve_smart_alert.tool_conditions import TOOL_CONDITIONS
 
@@ -64,6 +74,31 @@ SSD = DriveInfo(
     power_on_hours=14210,
 )
 
+# A SAS drive read as `megaraid,8` on SCSI host 6 (ADR 0028).
+BEHIND_CONTROLLER = DriveInfo(
+    key="SEAGATE ST600MP0036|ANON-SN-0002",
+    name="/dev/bus/6",
+    type="megaraid,8",
+    model="SEAGATE ST600MP0036",
+    serial="ANON-SN-0002",
+    wwn="5000c50000000002",
+    firmware="KT3A",
+    capacity_bytes=600_127_266_816,
+    drive_class=DriveClass.HDD,
+    location="/dev/bus/6 (megaraid_sas), device 8",
+    power_on_hours=4665,
+)
+
+GROWN_DEFECTS = Item(
+    event=EventType.PROBLEM,
+    check="scsi.grown_defects",
+    severity=Severity.WARNING,
+    text="150 defects, at or above the warning threshold of 100",
+    value=150,
+    threshold=100,
+    since=SINCE,
+)
+
 REALLOCATED = Item(
     event=EventType.PROBLEM,
     check="ata.reallocated_sectors",
@@ -76,8 +111,11 @@ REALLOCATED = Item(
 
 
 def golden(name: str, notification: Notification) -> None:
-    """Compare subject and body with a golden file, or write it."""
-    text = f"Subject: {notification.subject}\n\n{notification.body}"
+    """Compare subject, fields and body with a golden file, or write it."""
+    fields = "".join(
+        f"Field {name}: {value}\n" for name, value in sorted(notification.fields_for().items())
+    )
+    text = f"Subject: {notification.subject}\n{fields}\n{notification.body}"
     path = GOLDEN / f"{name}.txt"
     if UPDATE:
         GOLDEN.mkdir(parents=True, exist_ok=True)
@@ -102,33 +140,61 @@ def test_a_new_problem() -> None:
 
 def test_a_drive_behind_a_raid_controller_names_controller_and_device_id() -> None:
     # FR-507, ADR 0028: a SAS drive read as `megaraid,8` on SCSI host 6.
-    sas = DriveInfo(
-        key="SEAGATE ST600MP0036|ANON-SN-0002",
-        name="/dev/bus/6",
-        type="megaraid,8",
-        model="SEAGATE ST600MP0036",
-        serial="ANON-SN-0002",
-        wwn="5000c50000000002",
-        firmware="KT3A",
-        capacity_bytes=600_127_266_816,
-        drive_class=DriveClass.HDD,
-        location="/dev/bus/6 (megaraid_sas), device 8",
-        power_on_hours=4665,
-    )
-    defects = Item(
-        event=EventType.PROBLEM,
-        check="scsi.grown_defects",
-        severity=Severity.WARNING,
-        text="150 defects, at or above the warning threshold of 100",
-        value=150,
-        threshold=100,
-        since=SINCE,
-    )
-
-    notification = render(drive_message(defects, drive=sas), CONTEXT)
+    notification = render(drive_message(GROWN_DEFECTS, drive=BEHIND_CONTROLLER), CONTEXT)
 
     golden("drive-problem-megaraid", notification)
     assert "Location:   /dev/bus/6 (megaraid_sas), device 8\n" in notification.body
+    # The device ID tells it apart from the other drives behind the
+    # controller, which share `device` (FR-503, ADR 0029).
+    fields = notification.fields_for()
+    assert fields[FIELD_DEVICE] == "/dev/bus/6"
+    assert fields[FIELD_DEVICE_ID] == "8"
+
+
+@pytest.mark.parametrize(
+    ("device_type", "device_id"),
+    [("megaraid,8", "8"), ("sat+megaraid,14", "14"), ("megaraid,0", "0")],
+)
+def test_the_device_id_is_the_one_of_the_pass_through_type(
+    device_type: str, device_id: str
+) -> None:
+    drive = replace(BEHIND_CONTROLLER, type=device_type)
+
+    fields = render(drive_message(GROWN_DEFECTS, drive=drive), CONTEXT).fields_for()
+
+    assert fields[FIELD_DEVICE_ID] == device_id
+
+
+@pytest.mark.parametrize("device_type", ["sat", "nvme", "scsi", "auto", "ata", "megaraid"])
+def test_a_drive_read_directly_carries_no_device_id(device_type: str) -> None:
+    drive = replace(SSD, type=device_type)
+
+    fields = render(drive_message(REALLOCATED, drive=drive), CONTEXT).fields_for()
+
+    assert FIELD_DEVICE_ID not in fields
+
+
+def test_a_missing_drive_behind_a_raid_controller_keeps_its_last_device_id() -> None:
+    # A missing drive is shown with what the state knows: the type of the
+    # last read gives the device ID (ADR 0029).
+    gone = replace(
+        BEHIND_CONTROLLER, type="megaraid,9", present=False, last_seen=SINCE, power_on_hours=None
+    )
+    missing = Item(
+        event=EventType.MISSING,
+        check="drive.missing",
+        severity=Severity.WARNING,
+        text="the drive was not found in 2 runs in a row; last seen 2026-10-03T12:34:12Z as"
+        " /dev/bus/6",
+        value=2,
+        since=SINCE,
+    )
+
+    fields = render(drive_message(missing, drive=gone), CONTEXT).fields_for()
+
+    assert fields[FIELD_EVENT] == "missing"
+    assert fields[FIELD_DEVICE] == "/dev/bus/6"
+    assert fields[FIELD_DEVICE_ID] == "9"
 
 
 def test_an_escalation_names_the_previous_value_and_severity() -> None:
@@ -237,6 +303,23 @@ def test_a_summary_lists_every_drive() -> None:
     assert set(notification.fields_for()) == {FIELD_TYPE, FIELD_HOSTNAME, FIELD_EVENT}
 
 
+def test_a_summary_of_drives_behind_a_controller_carries_no_device_id() -> None:
+    # Not about one drive, so neither `device` nor `device-id` (ADR 0029).
+    planned = Planned(
+        MessageKind.SUMMARY,
+        Severity.WARNING,
+        EventType.SUMMARY,
+        drives=tuple(
+            DriveMessage(replace(BEHIND_CONTROLLER, type=f"megaraid,{number}"), (GROWN_DEFECTS,))
+            for number in range(4)
+        ),
+    )
+
+    fields = render(planned, CONTEXT).fields_for()
+
+    assert set(fields) == {FIELD_TYPE, FIELD_HOSTNAME, FIELD_EVENT}
+
+
 def test_the_first_run_summary() -> None:
     planned = Planned(
         MessageKind.FIRST_RUN,
@@ -267,6 +350,19 @@ def test_the_first_run_summary() -> None:
     golden("first-run", notification)
     assert notification.event is EventType.FIRST_RUN
     assert notification.fields_for()[FIELD_EVENT] == "first-run"
+
+
+def test_the_first_run_summary_carries_no_device_id() -> None:
+    planned = Planned(
+        MessageKind.FIRST_RUN,
+        Severity.WARNING,
+        EventType.FIRST_RUN,
+        drives=(DriveMessage(BEHIND_CONTROLLER, (GROWN_DEFECTS,)),),
+    )
+
+    fields = render(planned, CONTEXT).fields_for()
+
+    assert set(fields) == {FIELD_TYPE, FIELD_HOSTNAME, FIELD_EVENT}
 
 
 def test_the_first_run_summary_after_a_reset() -> None:
@@ -311,6 +407,14 @@ def test_a_condition_of_the_tool() -> None:
     assert notification.event is EventType.TOOL
     assert notification.fields[FIELD_EVENT] == "problem"
     assert notification.fields[FIELD_DEVICE] == "pve-smart-alert"
+    assert FIELD_DEVICE_ID not in notification.fields_for()
+
+
+@pytest.mark.parametrize("severity", list(Severity))
+def test_the_test_notification_carries_no_device_id(severity: Severity) -> None:
+    fields = render_test_notification(severity, node="pve1").fields_for()
+
+    assert set(fields) == {FIELD_TYPE, FIELD_HOSTNAME, FIELD_EVENT}
 
 
 def test_a_drive_message_carries_the_fields_of_the_drive() -> None:
