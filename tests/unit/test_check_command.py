@@ -16,8 +16,9 @@ from hosts import FAKE, RECORDINGS, Host
 
 from pve_smart_alert import cli
 from pve_smart_alert import config as config_module
+from pve_smart_alert import run as run_module
 from pve_smart_alert.config import Config
-from pve_smart_alert.discovery import discover
+from pve_smart_alert.discovery import Discovery, discover
 
 
 def fake_smartctl_config(content: str = "") -> str:
@@ -175,18 +176,28 @@ def test_the_dry_run_uses_the_last_good_configuration(
     assert "runs continue with the last good configuration" in error
 
 
+def _no_finding(*_args: object, **_kwargs: object) -> None:
+    return None
+
+
+def _no_drives(*_args: object, **_kwargs: object) -> Discovery:
+    return Discovery((), (7, 5))
+
+
 def test_the_dry_run_names_the_built_in_defaults_without_a_last_good_configuration(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     paths: tuple[Path, Path],
 ) -> None:
     # An invalid file without a last good configuration falls back to the
     # built-in defaults, and the warning says so (FR-406). The defaults name
-    # the real smartctl, so the fake plays no part in this run.
+    # the smartctl of the host, which a test never runs (tests/guard.py): the
+    # run is given a discovery without drives instead, so that only the
+    # warning is left to look at.
     config_path, last_good = paths
-    host = Host.of_recording(tmp_path, monkeypatch, "failing-hdd")
-    with_host(monkeypatch, host)
+    monkeypatch.setattr(run_module, "smartctl_missing", _no_finding)
+    monkeypatch.setattr(run_module, "smartctl_too_old", _no_finding)
+    monkeypatch.setattr(cli, "discover", _no_drives)
     config_path.write_text(
         fake_smartctl_config('[checks."no_such_check"]\nenabled = false\n'),
         encoding="utf-8",

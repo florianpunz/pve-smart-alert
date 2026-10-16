@@ -35,6 +35,7 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - Tests never need root, a Proxmox VE host or real drives ([ADR 0016](docs/adr/0016-test-strategy.md)).
 - Every check of the catalog and every rule of the notification policy needs a test.
 - The path to smartctl and to the notify bridge is injectable for this reason. Tests that use it do not depend on what is installed on the machine.
+- `tests/guard.py` makes this a rule of the test frame: every program the tool starts goes through `pve_smart_alert.process`, and in a test it may come only from the test tree, such as `tests/fake-smartctl`, or from the temporary directory of pytest, where a test writes its stand-ins for lsblk, pvesh, sendmail and the notify bridge. A test that would start the smartctl, lsblk, pvesh or notify bridge of the machine fails and names the program, also when the tool catches the error. Only the tests of the process runner start programs of the machine on purpose; they carry the marker `real_programs`. `tests/unit/test_test_frame.py` shows that the guard stops a misconfigured test.
 - Run the full suite with `make test` before you open a pull request.
 
 ## The Debian package
