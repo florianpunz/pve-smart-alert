@@ -165,28 +165,37 @@ From the source code of smartmontools 7.4 and 7.5, **Verified**; no recording sh
 
 [ADR 0028](../adr/0028-logical-volumes-and-enclosures.md) builds on these facts.
 
-## Addition 2026-10-16, evening: the SCSI hosts of the maintainer's hosts
+## Addition 2026-10-16, evening: the SCSI hosts of the maintainer's hosts, and what is known about `mpi3mr`
 
-Recorded on 2026-10-16 at 20:04 UTC through the command `hosts` of the read-only wrapper on each host, which prints every SCSI host with its `proc_name` from `/sys/class/scsi_host/hostN/proc_name`, and then the storage controllers that `lspci` lists. The output holds no serial number. Everything here is **Verified** on these hosts.
+The SCSI hosts were recorded on 2026-10-16. On `truenas`, `pve5`, `pve6` and `pve7` at 20:04 UTC through the command `hosts` of the read-only wrapper, which prints every SCSI host with its `proc_name` from `/sys/class/scsi_host/hostN/proc_name`, and then the storage controllers that `lspci` lists. On the standalone host `pve-test` (`pve1`, Proxmox VE kernel 7.0.6-2-pve) at about 20:40 UTC, from the same files and the target of each link in `/sys/class/scsi_host`. The output holds no serial number. The table is **Verified** on these hosts.
 
 | Host | SCSI hosts and drivers | Storage controllers in `lspci` |
 | --- | --- | --- |
-| `truenas` (TrueNAS SCALE) | `host0` `mpt2sas`; `host1` to `host6` `ahci`; `host7` `ahciem` | Intel Cannon Lake PCH SATA AHCI controller `[8086:a352]`; Broadcom / LSI SAS2308 PCI-Express Fusion-MPT SAS-2 `[1000:0087]` |
+| `truenas` (TrueNAS SCALE, kernel 6.12.33-production+truenas) | `host0` `mpt2sas`; `host1` to `host6` `ahci`; `host7` `ahciem` | Intel Cannon Lake PCH SATA AHCI controller `[8086:a352]`; Broadcom / LSI SAS2308 PCI-Express Fusion-MPT SAS-2 `[1000:0087]` |
 | `pve5` | `host0`, `host1` `ahci` | Intel Celeron/Pentium Silver SATA controller `[8086:31e3]` |
 | `pve6` | `host0`, `host1` `ahci` | Intel 200 Series PCH SATA controller in AHCI mode `[8086:a282]`; SanDisk / WD NVMe SSD `[15b7:5002]` |
 | `pve7` | `host0` to `host5` `ahci` | Intel 5 Series/3400 Series 6 port SATA AHCI controller `[8086:3b22]`; two Samsung SM961/PM961 NVMe SSDs `[144d:a804]` |
+| `pve-test` (kernel 7.0.6-2-pve) | `host0`, `host1` `ahci`; `host2` `usb-storage` | Not recorded |
 
-- **One SCSI host per AHCI port.** The number of `ahci` hosts follows the ports of the controller, not the drives attached.
-- **`ahciem` is a SCSI host of its own** next to the `ahci` hosts of the TrueNAS host: the enclosure management pseudo-host of AHCI that newer kernels add. It is no drive controller.
+- **One SCSI host per AHCI port.** The number of `ahci` hosts follows the ports of the controller, not the drives attached. On `pve-test` they are `ata1` and `ata2` of the controller at `0000:00:13.0`.
+- **The entries of `/sys/class/scsi_host` are links** into `/sys/devices`, for example `host0` to `../../devices/pci0000:00/0000:00:13.0/ata1/host0/scsi_host/host0`.
+- **A USB storage device is a SCSI host of its own**, with the driver `usb-storage`: on `pve-test` the virtual drive of the KVM-over-IP device, below `usb1/1-4/1-4.1/1-4.1.1`.
+- **`ahciem` is a SCSI host of its own** next to the `ahci` hosts of the TrueNAS host, seen only on the TrueNAS SCALE kernel; `pve-test` with kernel 7.0.6 has none. It is taken for the enclosure management of AHCI, but where it comes from was not checked in kernel source: a web search found no `proc_name` of that name in the Linux source, only FreeBSD documents AHCI enclosure management under it (**Assumed**).
 - **The HBA is one SCSI host with `mpt2sas`**, whose drives smartctl reads directly (the addition on the TrueNAS host above).
 - **NVMe controllers have no SCSI host.** The NVMe drives of `pve6` and `pve7` appear only in `lspci`.
 
-No host shows an `mpi3mr` controller, and no recording of one exists. [ADR 0030](../adr/0030-controllers-whose-drives-cannot-be-queried.md) builds on these facts: none of these drivers is reported as a controller whose drives cannot be queried. The tests use sysfs trees built from the TrueNAS host and from `pve7` (`tests/unit/hosts.py`).
+No host shows an `mpi3mr` controller, and no recording of one exists. What is known about it, checked on 2026-10-16:
+
+- **Issue 313 covers the RAID personality only** (**Verified** in the issue): a PERC H965i Front with one RAID 0 virtual drive, titled "Physical drives are not shown for raid controller PERC H965i Front with driver mpi3mr". Dell writes there that the "PERC 12 H965 does not block SmartCTL, but the tool has to use passthrough commands to get to the devices behind the perc".
+- **Broadcom 9600-series cards run `mpi3mr` in an "Enhanced HBA Personality" as well**, in which the drives are exposed to the system (**Reported**, `dmesg` of a 9600-24i in a TrueNAS forum thread). Whether smartctl reads the drives in that personality is not recorded anywhere (Q-R7). An `mpi3mr` host in HBA personality may therefore be reported although its drives are monitored.
+
+[ADR 0030](../adr/0030-controllers-whose-drives-cannot-be-queried.md) builds on these facts: none of the recorded drivers is reported as a controller whose drives cannot be queried, and the text about `mpi3mr` names the drives in RAID mode only. The tests use sysfs trees built from the TrueNAS host, from `pve7` and from `pve-test` (`tests/unit/hosts.py`).
 
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>
 - smartmontools issue 313: <https://github.com/smartmontools/smartmontools/issues/313>
+- TrueNAS forum, "9600-24i mpi3mr error on passthrough" (Enhanced HBA Personality): <https://forums.truenas.com/t/9600-24i-mpi3mr-error-on-passthrough/42408>
 - libblockdev: <https://github.com/storaged-project/libblockdev/tree/3c5433aba8c87b83a590d9363bf0fc71c205e08a/tests/smart_dumps>
 - smartctl_exporter: <https://github.com/prometheus-community/smartctl_exporter/tree/952076d119c8a17abdb075871348e072263de822/testdata>
 - Scrutiny: <https://github.com/AnalogJ/scrutiny/tree/ac2056d6c3cef4a8dd6fe3e0b8c002d9595da75f>
