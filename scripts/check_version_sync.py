@@ -8,6 +8,11 @@ the Debian package lives in the newest entry of ``debian/changelog``. Since the
 package ships the program as it is, both name the same release, and a
 difference means that one of the two was forgotten (ADR 0013).
 
+A test build before a release is a pre-release (ADR 0027). Python and Debian
+write it differently: the program says ``0.5.0.devN`` (PEP 440) and the
+package ``0.5.0~devN``; both sort after 0.4.0 and before 0.5.0. That is the
+only difference the check accepts.
+
 Usage:
     scripts/check_version_sync.py [--root PATH]
 
@@ -31,6 +36,8 @@ VERSION_PATTERN: Final = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILIN
 # The first line of a changelog entry, as in
 # "pve-smart-alert (0.1.0) unstable; urgency=medium".
 CHANGELOG_PATTERN: Final = re.compile(r"^pve-smart-alert \(([^)]+)\)", re.MULTILINE)
+# A release, or a pre-release of one, as the program writes it (ADR 0027).
+PROGRAM_VERSION: Final = re.compile(r"\d+\.\d+\.\d+(?:\.dev\d+)?")
 
 
 class VersionMissingError(Exception):
@@ -59,12 +66,27 @@ def check_version_sync(root: Path) -> list[str]:
     except VersionMissingError as problem:
         return [str(problem)]
 
-    if program != package:
+    if PROGRAM_VERSION.fullmatch(program) is None:
+        return [
+            f"{VERSION_MODULE} has {program}, which is neither a release X.Y.Z"
+            " nor a pre-release X.Y.Z.devN (ADR 0027)"
+        ]
+    expected = debian_version(program)
+    if package != expected:
         return [
             f"{VERSION_MODULE} has {program} and {CHANGELOG} has {package}:"
-            " the package ships this version of the program (ADR 0013)"
+            f" the package of {program} is {expected} (ADR 0013, ADR 0027)"
         ]
     return []
+
+
+def debian_version(program: str) -> str:
+    """Return the version of the package for a version of the program (ADR 0027).
+
+    ``0.5.0`` stays ``0.5.0``; the pre-release ``0.5.0.dev3`` becomes
+    ``0.5.0~dev3``, which dpkg sorts before ``0.5.0``.
+    """
+    return re.sub(r"\.dev(\d+)$", r"~dev\1", program)
 
 
 def build_parser() -> argparse.ArgumentParser:
