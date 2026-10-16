@@ -9,7 +9,8 @@ recording transport of the frame do what the scenario tests rely on.
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+import shutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -169,6 +170,38 @@ def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.Mon
     assert fields[FIELD_DEVICE] == "/dev/bus/6"
     assert fields[FIELD_DEVICE_ID] == "9"
     assert fields[FIELD_SERIAL] == "ANON-SN-0002"
+
+
+# A state that the code of 0.5.0~dev2 wrote after the steps 01 to 04 of the
+# scenario `megaraid-id-change` (tests/fixtures/SOURCES.md).
+DEV2_STATE = Path(__file__).parents[1] / "fixtures" / "state" / "dev2-megaraid-id-change.json"
+
+
+def test_a_state_of_an_earlier_build_is_read_and_continued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The schema is still 1, so nothing is migrated (ADR 0007). The device
+    # type of the last read was kept since the first schema, so a drive that
+    # goes missing from that state carries the device ID dev2 read (ADR 0029).
+    host = megaraid_host(tmp_path, monkeypatch, "megaraid-id-change")
+    host.state_dir.mkdir()
+    shutil.copy(DEV2_STATE, host.state_path)
+    host.clock.now = datetime(2026, 10, 12, 16, 0, tzinfo=UTC)
+
+    assert host.run("05-gone") == []
+    missing = only(host.run("06-gone"))
+
+    assert host.exit_status == 0
+    assert not [path for path in host.state_dir.iterdir() if ".corrupt-" in path.name]
+    assert missing.event is EventType.MISSING
+    fields = missing.fields_for()
+    assert fields[FIELD_DEVICE] == "/dev/bus/6"
+    assert fields[FIELD_DEVICE_ID] == "9"
+    assert fields[FIELD_SERIAL] == "ANON-SN-0002"
+    state = json.loads(host.state_path.read_text(encoding="utf-8"))
+    assert state["schema"] == 1
+    sata = state["drives"]["ST6000NM0115-1YZ110|ANON-SN-0001"]
+    assert sata["conditions"]["ata.pending_sectors"]["first_detected"] == "2026-10-12T09:00:00Z"
 
 
 def test_the_megaraid_degraded_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

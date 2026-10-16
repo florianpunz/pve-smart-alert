@@ -1,0 +1,105 @@
+{
+  "drives": {
+    "SEAGATE ST600MP0036|ANON-SN-0002": {
+      "baselines": {},
+      "class": "hdd",
+      "conditions": {},
+      "details": {
+        "capacity_bytes": 600127266816,
+        "firmware": "KT3A",
+        "location": "/dev/bus/6 (megaraid_sas), device 9",
+        "removable": null,
+        "transport": null,
+        "used_by": null
+      },
+      "event_notified": {},
+      "exempt_from_missing": false,
+      "first_seen": "2026-10-12T08:30:00Z",
+      "identity": {
+        "model": "SEAGATE ST600MP0036",
+        "serial": "ANON-SN-0002",
+        "wwn": "5000c50000000002"
+      },
+      "last_access": {
+        "name": "/dev/bus/6",
+        "type": "megaraid,9"
+      },
+      "last_notified": null,
+      "last_seen": "2026-10-12T16:00:00Z",
+      "missing_notified": false,
+      "missing_runs": 0,
+      "pending": {},
+      "unreadable_runs": 0
+    },
+    "ST6000NM0115-1YZ110|ANON-SN-0001": {
+      "baselines": {
+        "ata.crc_errors": 0,
+        "ata.error_log": 0
+      },
+      "class": "hdd",
+      "conditions": {
+        "ata.pending_sectors": {
+          "clear_runs": 0,
+          "current_value": 8,
+          "first_detected": "2026-10-12T09:00:00Z",
+          "last_notified": "2026-10-12T09:00:00Z",
+          "notified_severity": "warning",
+          "notified_value": 8,
+          "severity": "warning",
+          "text": "8 sectors, at or above the warning threshold of 1",
+          "threshold": 1
+        }
+      },
+      "details": {
+        "capacity_bytes": 6001175126016,
+        "firmware": "SN04",
+        "location": "/dev/bus/6 (megaraid_sas), device 15",
+        "removable": null,
+        "transport": null,
+        "used_by": null
+      },
+      "event_notified": {},
+      "exempt_from_missing": false,
+      "first_seen": "2026-10-12T08:30:00Z",
+      "identity": {
+        "model": "ST6000NM0115-1YZ110",
+        "serial": "ANON-SN-0001",
+        "wwn": "5000c50000000001"
+      },
+      "last_access": {
+        "name": "/dev/bus/6",
+        "type": "sat+megaraid,15"
+      },
+      "last_notified": "2026-10-12T09:00:00Z",
+      "last_seen": "2026-10-12T16:00:00Z",
+      "missing_notified": false,
+      "missing_runs": 0,
+      "pending": {},
+      "unreadable_runs": 0
+    }
+  },
+  "host": "pve1",
+  "initialized": "2026-10-12T08:30:00Z",
+  "last_run": {
+    "drives_evaluated": 2,
+    "drives_failed": 0,
+    "drives_skipped": 1,
+    "finished": "2026-10-12T16:00:00Z",
+    "notifications_failed": 0,
+    "notifications_sent": 0,
+    "result": "ok",
+    "started": "2026-10-12T16:00:00Z"
+  },
+  "schema": 1,
+  "skipped": {
+    "/dev/sda|scsi": {
+      "detail": "lsblk vendor DELL, model PERC H730P Mini",
+      "reason": "logical-volume",
+      "since": "2026-10-12T08:30:00Z"
+    }
+  },
+  "tool": {
+    "conditions": {},
+    "last_notified": null
+  }
+}

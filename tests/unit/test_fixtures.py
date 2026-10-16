@@ -188,12 +188,13 @@ def test_the_guard_accepts_placeholders(document: object) -> None:
 
 def test_every_fixture_has_a_recorded_source() -> None:
     # Every directory of fixtures is named in SOURCES.md, below the section of
-    # its kind (NFR-20).
+    # its kind (NFR-20); a fixture directly in the directory of its kind is
+    # named by its file name.
     sources = SOURCES.read_text(encoding="utf-8")
     for path in fixture_files():
         parts = path.parent.relative_to(FIXTURES).parts
         assert f"`{parts[0]}/`" in sources, parts[0]
-        assert "`" + "/".join(parts[1:]) + "`" in sources, path
+        assert "`" + ("/".join(parts[1:]) or path.name) + "`" in sources, path
 
 
 def imported_recordings() -> list[Path]:
