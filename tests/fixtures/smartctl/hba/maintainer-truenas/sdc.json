@@ -14,19 +14,16 @@
     "build_info": "(local build)",
     "argv": [
       "smartctl",
-      "-x",
       "--json=c",
-      "-n",
-      "standby",
-      "-d",
-      "scsi",
+      "--xall",
+      "--device=scsi",
       "/dev/sdc"
     ],
     "exit_status": 0
   },
   "local_time": {
-    "time_t": 1792152562,
-    "asctime": "Fri Oct 16 05:09:22 2026 PDT"
+    "time_t": 1792162328,
+    "asctime": "Fri Oct 16 07:52:08 2026 PDT"
   },
   "device": {
     "name": "/dev/sdc",
@@ -88,10 +85,10 @@
     "grown_defects_during_cert": 0,
     "blocks_reassigned_during_format": 0,
     "total_new_block_since_format": 0,
-    "power_on_minutes_since_format": 171899
+    "power_on_minutes_since_format": 172062
   },
   "temperature": {
-    "current": 42,
+    "current": 43,
     "drive_trip": 65
   },
   "scsi_start_stop_cycle_counter": {
@@ -120,7 +117,7 @@
       "errors_corrected_by_rereads_rewrites": 0,
       "total_errors_corrected": 0,
       "correction_algorithm_invocations": 0,
-      "gigabytes_processed": "78904.778",
+      "gigabytes_processed": "78904.782",
       "total_uncorrected_errors": 0
     },
     "verify": {
@@ -143,22 +140,22 @@
     }
   },
   "power_on_time": {
-    "hours": 37532,
-    "minutes": 33
+    "hours": 37535,
+    "minutes": 16
   },
   "scsi_general_statistics_and_performance_log": {
     "general_access": {
       "number_of_read_commands": 23081460,
-      "number_of_write_commands": 7406214,
+      "number_of_write_commands": 7406683,
       "number_of_logical_blocks_received": 3629120642,
-      "number_of_logical_blocks_transmitted": 1338422824,
+      "number_of_logical_blocks_transmitted": 1338428712,
       "read_command_processing_intervals": 814,
-      "write_command_processing_intervals": 809,
+      "write_command_processing_intervals": 812,
       "weighted_number_of_read_commands_plus_write_commands": 0,
       "weighted_read_command_processing_plus_write_command_processing": 0
     },
     "idle_time": {
-      "idle_time_intervals": 84662
+      "idle_time_intervals": 84822
     },
     "time_interval": {
       "exponent": 3,
