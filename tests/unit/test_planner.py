@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
+import pytest
 from frame import RUN_INTERVAL, Clock
 
 from pve_smart_alert.config import CheckOverride, Config, NotifySettings, ReminderSettings
@@ -570,6 +571,20 @@ def test_a_drive_that_is_excluded_now_is_forgotten() -> None:
     assert excluded == []
     assert host.state.drives == {}
     assert host.state.skipped["/dev/sda|sat"].reason == "excluded"
+
+
+@pytest.mark.parametrize("reason", ["logical-volume", "not-a-disk"])
+def test_a_device_that_is_no_drive_is_forgotten_and_never_missing(reason: str) -> None:
+    # A build before ADR 0028 took a RAID volume read as SCSI for a drive.
+    host = Host()
+    host.started(read(DRIVE))
+    access = DRIVE.access
+    skipped = (SkippedSeen(Access(access.name, access.type), reason),)
+
+    runs = [host.run(skipped=skipped) for _ in range(3)]
+
+    assert runs == [[], [], []]
+    assert host.state.drives == {}
 
 
 # Drives that stop answering (FR-310)

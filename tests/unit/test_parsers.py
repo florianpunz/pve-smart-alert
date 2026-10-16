@@ -22,7 +22,7 @@ from pve_smart_alert.model import (
     Snapshot,
     WearSource,
 )
-from pve_smart_alert.parsers import ParseError, parse
+from pve_smart_alert.parsers import Inquiry, ParseError, inquiry_of, parse
 
 RECORDINGS: Final = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl" / "direct"
 COLLECTION: Final = Collection(smartctl_version=(7, 5), exit_status=0)
@@ -417,7 +417,8 @@ def test_a_scsi_output_without_a_model_is_refused() -> None:
         for path in FIXTURES.rglob("*.json")
         if path.name not in ("scan.json", "recording.json", "lsblk.json")
         and '"protocol": "SCSI"' in path.read_text(encoding="utf-8")
-        # A RAID volume, not a drive; slice 3 of M6 skips it as such.
+        # A RAID volume with a temperature of 0, not a drive: discovery
+        # skips it as a logical volume before it is parsed (ADR 0028).
         and "intel-rst" not in path.parts
     ),
 )
@@ -428,13 +429,36 @@ def test_every_recorded_scsi_drive_is_parsed(path: str) -> None:
     assert snapshot.metrics["temperature.current"] > 0
 
 
-def test_a_raid_volume_is_parsed_like_a_drive_until_discovery_skips_it() -> None:
-    # The Intel RAID 1 volume of Scrutiny, smartmontools 7.0: no SMART
-    # support key and a temperature of 0. Discovery does not recognize it as
-    # a logical volume yet (ROADMAP.md, M6 slice 3).
+def test_the_inquiry_data_of_a_raid_volume_are_read() -> None:
+    # The Intel RAID 1 volume of Scrutiny, smartmontools 7.0, with the keys
+    # `vendor` and `product` of 7.0 to 7.2. Discovery takes them for a
+    # logical volume and skips it (ADR 0028, tests/unit/test_discovery.py).
+    document = json.loads(
+        (FIXTURES / "intel-rst/scrutiny-raid1-volume/sdb.json").read_text(encoding="utf-8")
+    )
+
+    assert inquiry_of(document) == Inquiry(
+        vendor="Intel", product="Raid 1 Volume", peripheral_type=0, peripheral_name="disk"
+    )
+
+
+def test_a_raid_volume_still_parses_like_a_drive() -> None:
+    # The parser does not judge what a device is: no SMART support key and
+    # a temperature of 0 make a snapshot without findings.
     snapshot = scsi_snapshot("intel-rst/scrutiny-raid1-volume/sdb.json")
 
     assert snapshot.identity.model == "Intel Raid 1 Volume"
     assert snapshot.smart_available is None
     assert snapshot.health_passed is None
     assert snapshot.metrics == {"temperature.current": 0}
+
+
+def test_the_inquiry_data_of_smartmontools_7_3_are_read() -> None:
+    document = json.loads(
+        (FIXTURES / "direct/libblockdev-seagate-st600mp0036/sdb.json").read_text(encoding="utf-8")
+    )
+
+    inquiry = inquiry_of(document)
+
+    assert (inquiry.vendor, inquiry.product) == ("SEAGATE", "ST600MP0036")
+    assert inquiry.peripheral_type == 0

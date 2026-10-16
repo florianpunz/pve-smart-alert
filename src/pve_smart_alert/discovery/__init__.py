@@ -6,10 +6,12 @@ A pipeline of four steps:
 1. Sources: the device scan of smartctl, then the manual entries of the
    configuration (FR-104).
 2. Enrichment from lsblk, the links below /dev/disk and sysfs, best effort.
-3. Filtering. A device on a remote transport or one that is not a disk is
-   skipped before it is read. A drive that reports no SMART capability, or
-   that an exclude rule selects (ADR 0024), is skipped after it was read,
-   because only its output tells what it is (FR-107).
+3. Filtering. A device on a remote transport, one that is not a disk, and a
+   logical volume that lsblk or the scan names as one are skipped before
+   they are read. A logical volume or a non-disk that only its inquiry data
+   name, a drive that reports no SMART capability, and one that an exclude
+   rule selects (ADR 0024) are skipped after they were read, because only
+   the output tells what they are (FR-107, ADR 0028).
 4. De-duplication: a drive reachable through several paths is kept once, by
    its identity, preferably through a block device of the host and through
    the scan; the other paths are recorded as aliases (FR-106).
@@ -21,7 +23,7 @@ single device (FR-205).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
@@ -35,6 +37,7 @@ from pve_smart_alert.discovery.enrichment import (
     HostPaths,
     details_of,
     is_remote,
+    pass_through_id,
     read_block_devices,
 )
 from pve_smart_alert.discovery.sources import (
@@ -43,8 +46,14 @@ from pve_smart_alert.discovery.sources import (
     manual_candidates,
     run_scan,
 )
+from pve_smart_alert.discovery.volumes import (
+    DISK_TYPES,
+    asks_for_megaraid,
+    inquiry_text,
+    logical_volume,
+)
 from pve_smart_alert.model import Collection, DeviceAccess, DriveIdentity, Snapshot
-from pve_smart_alert.parsers import ParseError, parse
+from pve_smart_alert.parsers import ParseError, inquiry_of, parse, protocol_of
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
 __all__ = [
@@ -76,7 +85,7 @@ class SkipReason(StrEnum):
     EXCLUDED = "excluded"
     REMOTE = "remote"
     NOT_A_DISK = "not-a-disk"
-    # Recognized from milestone M6 on, with recordings of RAID controllers.
+    # A logical volume of a RAID controller (ADR 0028).
     LOGICAL_VOLUME = "logical-volume"
     NO_SMART = "no-smart"
     DUPLICATE = "duplicate"
@@ -175,7 +184,7 @@ def _examine(
             detail="the name or the type has a form that is not passed to smartctl",
         )
 
-    details = details_of(candidate.name, block_devices, paths)
+    details = details_of(candidate.name, block_devices, paths, device_type=candidate.type)
     if is_remote(details, candidate.name):
         return Found(
             candidate,
@@ -190,6 +199,15 @@ def _examine(
             Outcome.SKIPPED,
             reason=SkipReason.NOT_A_DISK,
             detail=f"lsblk type {details.lsblk_type}",
+            details=details,
+        )
+    volume = _volume_before_reading(candidate, details)
+    if volume is not None:
+        return Found(
+            candidate,
+            Outcome.SKIPPED,
+            reason=SkipReason.LOGICAL_VOLUME,
+            detail=volume,
             details=details,
         )
 
@@ -214,6 +232,17 @@ def _examine(
             Outcome.UNREADABLE,
             collected=collected,
             detail=collected.reason,
+            details=details,
+        )
+    skipped = _not_a_drive(collected.document, candidate)
+    if skipped is not None:
+        reason, detail = skipped
+        return Found(
+            candidate,
+            Outcome.SKIPPED,
+            collected=collected,
+            reason=reason,
+            detail=detail,
             details=details,
         )
 
@@ -284,6 +313,44 @@ def _examine(
     return Found(
         candidate, Outcome.MONITORED, snapshot=snapshot, collected=collected, details=details
     )
+
+
+def _volume_before_reading(candidate: Candidate, details: Details) -> str | None:
+    """Return the signal that names a device a logical volume before it is read (ADR 0028).
+
+    First the vendor and model that lsblk shows, then the scan, whose
+    `open_error` asks for `-d megaraid,N`. The inquiry data of lsblk are
+    those of the device node, so they count only when smartctl reads the
+    node itself and not a drive behind it.
+    """
+    if pass_through_id(candidate.type) is None and logical_volume(details.vendor, details.model):
+        return "lsblk " + inquiry_text(details.vendor, details.model, product_label="model")
+    if asks_for_megaraid(candidate.open_error):
+        return "the scan: smartctl asks for -d megaraid,N"
+    return None
+
+
+def _not_a_drive(
+    document: Mapping[str, object], candidate: Candidate
+) -> tuple[SkipReason, str] | None:
+    """Return why a device read as SCSI is not a drive, from its inquiry data (ADR 0028).
+
+    A logical volume is named by vendor and product; a device that is not a
+    disk by its peripheral device type, such as an enclosure (13) or a
+    storage array controller (12). The output of any other protocol has no
+    inquiry data and passes.
+    """
+    if (protocol_of(document) or candidate.protocol) != "SCSI":
+        return None
+    inquiry = inquiry_of(document)
+    if logical_volume(inquiry.vendor, inquiry.product):
+        named = inquiry_text(inquiry.vendor, inquiry.product, product_label="product")
+        return SkipReason.LOGICAL_VOLUME, f"the inquiry data of the drive output: {named}"
+    kind = inquiry.peripheral_type
+    if kind is not None and kind not in DISK_TYPES:
+        name = f", {' '.join(inquiry.peripheral_name.split())}" if inquiry.peripheral_name else ""
+        return SkipReason.NOT_A_DISK, f"SCSI peripheral device type {kind}{name}"
+    return None
 
 
 def _read_again(

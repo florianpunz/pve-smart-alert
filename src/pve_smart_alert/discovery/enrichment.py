@@ -2,10 +2,17 @@
 """What the host tells about a drive besides smartctl, best effort (ADR 0005).
 
 `lsblk` is read once per run, from the database of udev, which does not wake
-a drive. It gives the transport, the removable flag, the type of a device and
-what uses it. The links below `/dev/disk` give the `by-id` and `by-path`
-names, and sysfs the transport of an NVMe controller. When any of it is
-missing, the drive is still monitored, only without these details (FR-110).
+a drive. It gives the transport, the removable flag, the type of a device,
+its vendor and model, and what uses it. The links below `/dev/disk` give the
+`by-id` and `by-path` names, and sysfs the transport of an NVMe controller
+and the driver of a SCSI host. When any of it is missing, the drive is still
+monitored, only without these details (FR-110).
+
+A drive behind a RAID controller, read with a pass-through type such as
+`sat+megaraid,14` on `/dev/bus/6`, is not a block device of the host: what
+lsblk says about the device node is about the controller or a logical
+volume, not about the drive. Its location is the controller, with the driver
+of its SCSI host, and the device ID of the type (ADR 0028).
 
 The volume group of a drive is read from the device-mapper names of its LVM
 devices, as Research 06 verified against `pvs` on the test cluster: the name
@@ -30,7 +37,9 @@ from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
 # The columns of lsblk this tool reads. Named explicitly: the set of `-O`
 # changes between versions of util-linux.
-LSBLK_COLUMNS: Final = "NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL"
+# VENDOR and MODEL are the inquiry data of a SCSI device, which name a
+# logical volume of a RAID controller (ADR 0028).
+LSBLK_COLUMNS: Final = "NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL,VENDOR,MODEL"
 LSBLK_TIMEOUT_SECONDS: Final = 10.0
 
 # Transports on which the drive belongs to another host (FR-107). The names
@@ -43,6 +52,11 @@ REMOTE_NVME_TRANSPORTS: Final = frozenset({"tcp", "rdma", "fc", "loop"})
 NOT_DISKS: Final = frozenset({"rom", "tape"})
 
 _NVME_CONTROLLER: Final = re.compile(r"nvme[0-9]+")
+# The device node through which smartctl reaches the drives of the SCSI host
+# H with a MegaRAID controller, and the pass-through types that address one
+# drive behind it, with or without the SCSI to ATA translation.
+_SCSI_HOST_NODE: Final = re.compile(r"/dev/bus/([0-9]+)")
+_MEGARAID_TYPE: Final = re.compile(r"(?:sat\+)?megaraid,([0-9]+)")
 _VOLUME_GROUP: Final = re.compile(r"((?:[^-]|--)+)-")
 
 
@@ -74,6 +88,9 @@ class Details:
     location: Location = field(default_factory=Location)
     membership: Membership = field(default_factory=Membership)
     lsblk_type: str | None = None
+    # The inquiry data lsblk shows for the device, trimmed (ADR 0028).
+    vendor: str | None = None
+    model: str | None = None
     # Whether the name is a block device of the host, not a pass-through path.
     block_device: bool = False
 
@@ -113,8 +130,18 @@ def parse_block_devices(stdout: str) -> BlockDevices:
     return BlockDevices(devices=devices)
 
 
-def details_of(name: str, block_devices: BlockDevices, paths: HostPaths = HOST) -> Details:
-    """Return what the host tells about the device with this name."""
+def details_of(
+    name: str,
+    block_devices: BlockDevices,
+    paths: HostPaths = HOST,
+    *,
+    device_type: str = "",
+) -> Details:
+    """Return what the host tells about the device with this name and type."""
+    device_id = pass_through_id(device_type)
+    if device_id is not None:
+        return Details(location=Location(controller=_controller(name, paths), device_id=device_id))
+
     base = PurePosixPath(name).name
     disks = _disks(base, block_devices)
     if not disks:
@@ -136,8 +163,34 @@ def details_of(name: str, block_devices: BlockDevices, paths: HostPaths = HOST) 
         location=location,
         membership=_membership(disks),
         lsblk_type=_text(first, "type"),
+        vendor=_trimmed(first, "vendor"),
+        model=_trimmed(first, "model"),
         block_device=True,
     )
+
+
+def pass_through_id(device_type: str) -> str | None:
+    """Return the device ID of a type that addresses a drive behind a controller.
+
+    `megaraid,N` reaches a SAS or SCSI drive, `sat+megaraid,N` a SATA drive,
+    both behind a MegaRAID controller. Any other type reads the device
+    itself, and the answer is `None`.
+    """
+    match = _MEGARAID_TYPE.fullmatch(device_type)
+    return match.group(1) if match is not None else None
+
+
+def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
+    """Return the driver of a SCSI host, such as `megaraid_sas`, best effort.
+
+    It is the `proc_name` of the host in sysfs; `None` when that is missing
+    or empty.
+    """
+    try:
+        text = (paths.sysfs / "class" / "scsi_host" / f"host{host}" / "proc_name").read_text()
+    except OSError:
+        return None
+    return text.strip() or None
 
 
 def is_remote(details: Details, name: str) -> bool:
@@ -238,6 +291,16 @@ def _links(paths: HostPaths, kind: str, disk: Mapping[str, object]) -> Iterator[
             yield str(link)
 
 
+def _controller(name: str, paths: HostPaths) -> str:
+    """Return the controller of a drive read through `name`: the device node and its driver.
+
+    On `/dev/bus/H` the driver is the one of SCSI host H, where sysfs has it.
+    """
+    node = _SCSI_HOST_NODE.fullmatch(name)
+    driver = scsi_host_driver(node.group(1), paths) if node is not None else None
+    return f"{name} ({driver})" if driver is not None else name
+
+
 def _nvme_transport(controller: str, paths: HostPaths) -> str | None:
     try:
         text = (paths.sysfs / "class" / "nvme" / controller / "transport").read_text()
@@ -259,6 +322,14 @@ def _walk(nodes: Sequence[object]) -> Iterator[Mapping[str, object]]:
 def _text(node: Mapping[str, object], key: str) -> str | None:
     value = node.get(key)
     return value if isinstance(value, str) else None
+
+
+def _trimmed(node: Mapping[str, object], key: str) -> str | None:
+    """Return a value of lsblk with its padding removed; inquiry data are padded."""
+    value = _text(node, key)
+    if value is None:
+        return None
+    return " ".join(value.split()) or None
 
 
 def _truth(value: object) -> bool:

@@ -1,3 +1,11 @@
+pve-smart-alert (0.5.0~dev2) unstable; urgency=medium
+
+  * Pre-release of 0.5.0 for test hosts (ADR 0027): of milestone M6 the
+    drives behind MegaRAID controllers with their controller and device
+    ID, and logical volumes and enclosures skipped (ADR 0028).
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Fri, 16 Oct 2026 15:18:39 +0000
+
 pve-smart-alert (0.5.0~dev1) unstable; urgency=medium
 
   * Pre-release of 0.5.0 for test hosts (ADR 0027): of milestone M5 the

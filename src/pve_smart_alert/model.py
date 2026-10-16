@@ -251,8 +251,17 @@ class Location:
     removable: bool | None = None
     by_id: tuple[str, ...] = ()
     by_path: str | None = None
+    # A drive behind a RAID controller: the controller, such as
+    # "/dev/bus/6 (megaraid_sas)", and the device ID of the drive on it.
     controller: str | None = None
     device_id: str | None = None
+
+    @property
+    def controller_text(self) -> str | None:
+        """Return controller and device ID as `scan` and notifications show them (FR-507)."""
+        if self.controller is None or self.device_id is None:
+            return None
+        return f"{self.controller}, device {self.device_id}"
 
 
 @dataclass(frozen=True)
