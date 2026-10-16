@@ -31,6 +31,7 @@ from pve_smart_alert.config import (
     effective_checks,
     load_effective,
     save_last_good,
+    tool_conditions_enabled,
 )
 from pve_smart_alert.discovery import Candidate, Discovery, HostPaths, Outcome, discover
 from pve_smart_alert.discovery.controllers import read_scsi_hosts
@@ -198,12 +199,18 @@ def _run(env: Environment, *, dry_run: bool) -> RunResult:
         # sysfs could not be read: the condition stays as it is.
         not_evaluated = frozenset({UNSUPPORTED_CONTROLLER})
     else:
-        unsupported = unsupported_controller(scsi_hosts.unsupported)
+        unsupported = unsupported_controller(scsi_hosts.unsupported, _monitored(discovery))
         if unsupported is not None:
             tool.append(unsupported)
     degraded = transport_degraded(config.notify, env.bridge_path, runner=env.runner)
     if degraded is not None:
         tool.append(degraded)
+
+    # A condition of the tool that the configuration switched off is not
+    # raised at all; one that is active in the state is dropped by the planner
+    # without a recovery (FR-408, ADR 0031).
+    enabled = tool_conditions_enabled(config)
+    tool = [finding for finding in tool if finding.check in enabled]
 
     observation, findings = _observe(
         discovery, config, state, tool, state_reset, not_evaluated=not_evaluated
@@ -244,6 +251,18 @@ def _run(env: Environment, *, dry_run: bool) -> RunResult:
         result.save_error = f"the state could not be saved to {env.state_path}: {failure}"
     result.summary = _summary_line(result)
     return result
+
+
+def _monitored(discovery: Discovery | None) -> int | None:
+    """Return how many drives the run monitors, or `None` while it cannot count them.
+
+    Without smartctl, and when the device scan failed, the run did not look
+    for all drives, so the notice about a controller whose drives cannot be
+    read leaves the number out (ADR 0031).
+    """
+    if discovery is None or discovery.scan_error is not None:
+        return None
+    return len(discovery.monitored)
 
 
 def _state(

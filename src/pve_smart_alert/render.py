@@ -39,7 +39,7 @@ from pve_smart_alert.model import (
 from pve_smart_alert.paths import CONFIG_PATH, COROSYNC_CONF_PATH
 from pve_smart_alert.planner import RANK, DriveInfo, DriveMessage, Item, MessageKind, Planned
 from pve_smart_alert.state import format_time
-from pve_smart_alert.tool_conditions import PSEUDO_DEVICE
+from pve_smart_alert.tool_conditions import PSEUDO_DEVICE, TOOL_CONDITIONS
 
 # Every subject starts here. The severity follows, so that it survives the
 # mail route, which carries none (ADR 0008, FR-508).
@@ -47,6 +47,13 @@ SUBJECT_PREFIX: Final = "[pve-smart-alert]"
 
 # Strings of a drive are cut to this length in a message.
 _MAX_TEXT: Final = 200
+# The text of a condition of the tool is the tool's own words: it says what a
+# run found about the host and what to do about it, and its only untrusted
+# fragment is the driver name of a SCSI host, which is cut to 64 characters
+# where it is read (ARCHITECTURE.md section 14, ADR 0030). It is therefore cut
+# far later, so that the notice about an unsupported controller reaches the
+# reader with its count and the way to switch it off (ADR 0031).
+_MAX_TOOL_TEXT: Final = 1000
 
 # The width of the labels of the header block, and of the severity column.
 _LABEL: Final = 12
@@ -573,11 +580,11 @@ def _finding(item: Item, thresholds: Thresholds | None) -> list[str]:
         status = f"escalated from {item.previous_severity.value}"
     lines = [f"  {item.severity.value.upper():<{_SEVERITY}}{item.check}  {status}"]
     if item.value is None or item.check in _NO_VALUE_LINE:
-        lines += _wrapped(f"{_title(item)}: {_clean(item.text)}", indent)
+        lines += _wrapped(f"{_title(item)}: {_cleaned(item)}", indent)
     else:
         lines.append(f"{indent}{_title(item)}: {_value_text(item)}")
         if item.check in _TEXT_ADDS or (item.check == "temperature" and item.threshold is None):
-            lines += _wrapped(_clean(item.text), indent)
+            lines += _wrapped(_cleaned(item), indent)
     if thresholds is not None:
         lines.append(f"{indent}Thresholds: {_thresholds_text(thresholds, _unit(item))}")
     elif item.threshold is not None:
@@ -589,7 +596,7 @@ def _finding(item: Item, thresholds: Thresholds | None) -> list[str]:
 
 def _short(item: Item) -> str:
     if item.value is None or item.check in _NO_VALUE_LINE:
-        return f"  {item.severity.value.upper():<{_SEVERITY}}{item.check}: {_clean(item.text)}"
+        return f"  {item.severity.value.upper():<{_SEVERITY}}{item.check}: {_cleaned(item)}"
     return f"  {item.severity.value.upper():<{_SEVERITY}}{item.check}: {_value_text(item)}"
 
 
@@ -687,7 +694,7 @@ def _item_data(item: Item) -> dict[str, object]:
         "value": item.value,
         "previous": item.previous,
         "threshold": item.threshold,
-        "text": _clean(item.text),
+        "text": _cleaned(item),
     }
 
 
@@ -770,6 +777,12 @@ def _clean(value: str | None, *, limit: int = _MAX_TEXT) -> str:
         " " if character < " " or character == "\x7f" else character for character in value
     )
     return " ".join(without_controls.split())[:limit]
+
+
+def _cleaned(item: Item) -> str:
+    """Return the text of one finding, safe to write, cut to the length that applies to it."""
+    limit = _MAX_TOOL_TEXT if item.check in TOOL_CONDITIONS else _MAX_TEXT
+    return _clean(item.text, limit=limit)
 
 
 def _wrapped(text: str, indent: str, width: int = 78) -> list[str]:
