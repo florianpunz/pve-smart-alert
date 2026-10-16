@@ -9,7 +9,8 @@ The first of these sources that a drive reports is used:
    smartmontools guesses it from a vendor attribute, and the guess counts
    as the vendor attribute it is ([Research 03](../research/03-smart-indicators.md)).
 2. ATA: the "Percentage Used Endurance Indicator" of the device statistics.
-   NVMe: `percentage_used` of the SMART health log.
+   NVMe: `percentage_used` of the SMART health log. SCSI: the percentage
+   used endurance indicator of the solid state media log page.
 3. ATA only: the vendor attribute that the web interface of Proxmox VE reads,
    as `100 - normalized value`, and the same kind of guess of smartmontools.
 
@@ -96,6 +97,22 @@ def nvme_wear(document: Mapping[str, object]) -> Wear:
         return Wear(endurance, WearSource.ENDURANCE_USED, health_log)
     if health_log is not None:
         return Wear(health_log, WearSource.HEALTH_LOG, health_log)
+    return Wear()
+
+
+def scsi_wear(document: Mapping[str, object]) -> Wear:
+    """Return the wear of a SCSI drive.
+
+    smartmontools 7.5 writes the indicator under both keys, 7.3 and 7.4 only
+    as `scsi_percentage_used_endurance_indicator` (Research 08). The web
+    interface shows no wear for SAS drives.
+    """
+    endurance = _endurance_used(document)
+    if endurance is not None:
+        return Wear(endurance, WearSource.ENDURANCE_USED)
+    indicator = integer(document, "scsi_percentage_used_endurance_indicator")
+    if indicator is not None:
+        return Wear(indicator, WearSource.ENDURANCE_INDICATOR)
     return Wear()
 
 

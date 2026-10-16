@@ -136,6 +136,19 @@ That `/dev/sda` and `/dev/sdb` of the Telegraf scan are logical volumes of the M
 - HPE Smart Array and `mpi3mr` rest on the source code and on synthetic fixtures. HPE stays "Experimental" ([ADR 0016](../adr/0016-test-strategy.md)); `cciss,N` is limited to N from 0 to 127 by smartctl itself.
 - Q-R5 stays open for recordings from users; the call for recordings arrives at the end of M6.
 
+## Addition 2026-10-16: the maintainer's TrueNAS host
+
+Recorded on 2026-10-16 through the read-only wrapper of the host `truenas` of the maintainer: smartmontools 7.4 on Linux 6.12, three NetApp X371 SAS SSDs behind an LSI SAS2308 HBA, whose SCSI host has the `proc_name` `mpt2sas`, and one Samsung SATA SSD on the AHCI controller of the board. The anonymized recording is `tests/fixtures/smartctl/hba/maintainer-truenas/`; the raw output stays outside the repository ([ADR 0016](../adr/0016-test-strategy.md)). Everything here is **Verified** on that host or in the source code named.
+
+- **Q-R6 is answered for these drives:** the WWN that `lsblk` shows for each SAS SSD is its `logical_unit_id`, digit for digit, and the anonymizer gives both the same placeholder ([ADR 0026](../adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)). The SAS addresses differ from the logical unit id.
+- **The SAS addresses are in the output of `--xall`** under `scsi_sas_port_N.phy_M.sas_address` and `attached_sas_address`, as the source code says. The second port of each drive is attached to nothing and has the attached address `0x0`.
+- **`smart_support.enabled` of a SCSI drive** says whether the informational exceptions are switched on (`scsiprint.cpp` line 3181 in 7.4, 3220 in 7.5), and `smartctl -s on` switches them on (line 3598 in 7.4, 3637 in 7.5). With them off, the drive does not report a failing health. One public recording, the WD4001FYYG of libblockdev, has them off.
+- **The self-test log of a SCSI drive** lists the most recent test first, as `scsi_self_test_0` (`scsiprint.cpp` line 1137). Its `result.value` is 0 for a test completed without error, 1 and 2 for aborted tests, 3 to 7 for an error or a failed segment, for which smartctl sets its own failure bits, and 15 for a test in progress (table at line 1066, cases from line 1161; the same in 7.4 and 7.5).
+- **A SCSI device without the informational exceptions mode page** gets `smart_support.available` false, written where the mode page cannot be read (`scsiprint.cpp` line 3167 in 7.4, 3206 in 7.5). A missing `temperature.current` is a value of 255, which smartctl leaves out (line 407); a 0 is a value the device reported.
+- **The start-stop cycles** are `scsi_start_stop_cycle_counter.accumulated_start_stop_cycles` (line 548 in both).
+
+These drives are SAS and reached through an HBA in IT mode. They are no evidence for MegaRAID or any other RAID controller.
+
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>

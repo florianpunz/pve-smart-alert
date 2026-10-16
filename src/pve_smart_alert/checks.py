@@ -425,9 +425,8 @@ CATALOG: Final[Mapping[str, Check]] = {
             enabled=False,
             metric="nvme.error_log_entries",
         ),
-        # SAS (docs/check-catalog.md, "SAS (SCSI log pages)"). No parser
-        # produces these metrics until milestone M6; the checks exist so
-        # that their identifiers are stable from now on.
+        # SAS and parallel SCSI (docs/check-catalog.md, "SAS (SCSI log
+        # pages)"), read by `parsers/scsi.py`.
         Check(
             "scsi.grown_defects",
             ATA_CLASSES,
@@ -603,7 +602,8 @@ def _counter(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
 
 def _health(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
     if snapshot.health_passed is False:
-        return _flag(item, "the drive reports its health as failed")
+        detail = f": {snapshot.health_detail}" if snapshot.health_detail else ""
+        return _flag(item, f"the drive reports its health as failed{detail}")
     return None
 
 
@@ -618,6 +618,14 @@ def _smart_disabled(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
         # The tool never enables SMART itself (FR-311, ADR 0012); it names
         # the command an administrator can use.
         command = f"smartctl -s on {snapshot.access.name}"
+        if snapshot.access.protocol == "SCSI":
+            # For a SCSI drive SMART is its informational exceptions, without
+            # which it reports no failing health (Research 08).
+            return _flag(
+                item,
+                "the informational exceptions are switched off, so the drive reports"
+                f" no failing health; they can be turned on with: {command}",
+            )
         return _flag(item, f"SMART is switched off; it can be turned on with: {command}")
     return None
 

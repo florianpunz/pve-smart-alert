@@ -13,7 +13,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
 | M5: Packaging, timer and installation | Built, waits for the remaining checks on a real Proxmox VE host and the acceptance on the test cluster |
-| M6: SAS and hardware RAID on recorded data | In progress, being planned |
+| M6: SAS and hardware RAID on recorded data | In progress |
 | M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
@@ -268,14 +268,15 @@ State: in progress. The work is split into six slices, one branch `feature/m6-<s
 
 1. `recordings`: the public recordings of [Research 08](docs/research/08-public-recordings.md) as fixtures, and the anonymization of SCSI names and the import of other projects' test data ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)).
 2. `scsi`: the parser for SCSI and SAS drives and the checks `scsi.*` of the catalog. Thresholds that rest only on recordings are listed in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) for the review in M7.
-3. `megaraid`: pass-through types, logical volumes and enclosures skipped with a reason, de-duplication in JBOD mode, changing device IDs, and notifications that name controller and device ID. A logical volume is recognized by structured fields first and by the message of smartctl only as a second signal.
+3. `megaraid`: pass-through types, logical volumes and enclosures skipped with a reason (since slice 2 parses SCSI, a logical volume that smartctl reads without an error, such as the Intel RAID volume of Research 08, counts as monitored until this slice recognizes it), de-duplication in JBOD mode, changing device IDs, and notifications that name controller and device ID. A logical volume is recognized by structured fields first and by the message of smartctl only as a second signal.
 4. `unsupported-controllers`: controllers whose drives cannot be queried, such as `mpi3mr`, in `scan`, `doctor` and `tool.unsupported_controller`.
 5. `hpe-probe`: the experimental `cciss,N` probe with its configuration key, on synthetic fixtures only.
 6. `support-table`: scenarios per controller family, the hardware support table with evidence labels, manual entries for the other pass-through types, and the call for recordings.
 
 Decided for M6 (2026-10-16): the non-medium error count of SCSI drives is not checked, because smartctl writes it only as text (Research 08); the recordings of HPE controllers that were found are evidence only, so HPE Smart Array is built on synthetic fixtures and labeled "Experimental".
 
-- In progress: slice 1, `feature/m6-recordings`.
+- Done: slice 1, merged in pull request #6: 13 public recordings as fixtures, ADR 0026, Research 08.
+- In progress: slice 2, `feature/m6-scsi`: the SCSI parser and the checks `scsi.*`, `health.failed` with the exception of a SAS drive, and a recording of the maintainer's TrueNAS host with SAS SSDs behind an LSI SAS2308 HBA, which answered Q-R6.
 
 ## M7: Hardening, documentation, release 1.0 (M)
 

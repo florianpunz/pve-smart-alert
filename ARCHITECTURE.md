@@ -86,7 +86,7 @@ The first run is the same sequence with empty state. The planner recognizes it a
 
 The models are in `model.py`. The parsers fill the drive snapshot, and the checks read it.
 
-**Drive identity**: model, serial number, WWN if known, normalized: trimmed, inner whitespace collapsed, the WWN as lowercase hexadecimal digits. Key in the state file. An identity is stable only with a serial number or a WWN. See [ADR 0005](docs/adr/0005-drive-discovery-and-identity.md).
+**Drive identity**: model, serial number, WWN if known, normalized: trimmed, inner whitespace collapsed, the WWN as lowercase hexadecimal digits. Key in the state file. An identity is stable only with a serial number or a WWN. The WWN of a SCSI drive is its `logical_unit_id` where that is an NAA 5 name, which is the WWN that `lsblk` shows for the same drive (Q-R6, checked on the SAS SSDs of the maintainer's TrueNAS host on 2026-10-16, [Research 08](docs/research/08-public-recordings.md)). See [ADR 0005](docs/adr/0005-drive-discovery-and-identity.md).
 
 **Drive snapshot**: what one run learned about one drive.
 
@@ -99,11 +99,13 @@ The models are in `model.py`. The parsers fill the drive snapshot, and the check
 | Membership | ZFS pool, md array, LVM volume group, if known |
 | Capabilities | SMART available, SMART enabled |
 | Metrics | A flat mapping from metric name to value, for example `ata.attr.5.raw`, `nvme.available_spare`, `scsi.grown_defects`, `temperature.current`, `wear.percent_used` |
-| Flags | Health verdict, NVMe critical warning bits, attributes at or below threshold, last self-test result |
+| Flags | Health verdict, with what a SCSI drive says about a failed one (the informational exception, ASC and ASCQ), NVMe critical warning bits, attributes at or below threshold, last self-test result |
 | Context | Power-on hours, power cycles |
 | Collection | smartctl version, exit status, messages, duration |
 
 The metric `wear.percent_used` is taken from the first source present, in the order of [ADR 0021](docs/adr/0021-wear-value-source.md): `endurance_used`, then the device statistics, the NVMe health log or the SAS indicator, then the vendor attribute of the web interface's name list, and last the same kind of guess made by smartmontools. For ATA, `endurance_used` counts as the first source only when the device statistics were read; without them smartmontools guesses it from a vendor attribute, and the guess is named as the vendor attribute it is ([Research 03](docs/research/03-smart-indicators.md)). The source is stored next to the value as `wear_source` of the snapshot, and the value the web interface shows as the metric `wear.web_interface_percent_used`: for ATA the vendor attribute, searched exactly as `PVE/Diskmanage.pm` does, for NVMe `percentage_used` ([Research 02](docs/research/02-builtin-smart-handling.md)). `parsers/wear.py` implements it.
+
+The SCSI parser (`parsers/scsi.py`) reads the keys of smartmontools 7.3 and later and falls back to those of 7.0 to 7.2. A missing health verdict stays unknown and is never a failed one. smartctl writes the verdict when the drive has the informational exceptions mode page; a device without that page has `smart_support.available` false and is skipped as `no-smart` before its verdict counts. `scsi.uncorrected_errors` adds up the uncorrected read, write and verify errors of the parts the drive reports. A self-test result of 3 to 7 is a failed self-test; an aborted test or one in progress says nothing ([Research 08](docs/research/08-public-recordings.md)).
 
 **Finding**: check ID, kind (condition or event), severity, current value, threshold that was crossed, short text.
 

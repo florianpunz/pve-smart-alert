@@ -1,0 +1,218 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      4
+    ],
+    "pre_release": false,
+    "svn_revision": "5530",
+    "platform_info": "x86_64-linux-6.12.33-production+truenas",
+    "build_info": "(local build)",
+    "argv": [
+      "smartctl",
+      "-x",
+      "--json=c",
+      "-n",
+      "standby",
+      "-d",
+      "scsi",
+      "/dev/sde"
+    ],
+    "exit_status": 0
+  },
+  "local_time": {
+    "time_t": 1792152563,
+    "asctime": "Fri Oct 16 05:09:23 2026 PDT"
+  },
+  "device": {
+    "name": "/dev/sde",
+    "info_name": "/dev/sde",
+    "type": "scsi",
+    "protocol": "SCSI"
+  },
+  "scsi_vendor": "NETAPP",
+  "scsi_product": "X371_SLBPE960ATE",
+  "scsi_model_name": "NETAPP X371_SLBPE960ATE",
+  "scsi_revision": "NA50",
+  "scsi_version": "SPC-5",
+  "user_capacity": {
+    "blocks": 1875385008,
+    "bytes": 960197124096
+  },
+  "logical_block_size": 512,
+  "physical_block_size": 4096,
+  "scsi_lb_provisioning": {
+    "name": "resource provisioned",
+    "value": 1,
+    "management_enabled": {
+      "name": "LBPME",
+      "value": 1
+    },
+    "read_zeros": {
+      "name": "LBPRZ",
+      "value": 1
+    }
+  },
+  "rotation_rate": 0,
+  "form_factor": {
+    "scsi_value": 3,
+    "name": "2.5 inches"
+  },
+  "logical_unit_id": "0x5000c5000000000a",
+  "serial_number": "ANON-SN-0004",
+  "device_type": {
+    "scsi_terminology": "Peripheral Device Type [PDT]",
+    "scsi_value": 0,
+    "name": "disk"
+  },
+  "scsi_transport_protocol": {
+    "name": "SAS (SPL-4)",
+    "value": 6
+  },
+  "smart_support": {
+    "available": true,
+    "enabled": true
+  },
+  "temperature_warning": {
+    "enabled": true
+  },
+  "smart_status": {
+    "passed": true
+  },
+  "scsi_percentage_used_endurance_indicator": 5,
+  "scsi_format_status": {
+    "grown_defects_during_cert": 0,
+    "blocks_reassigned_during_format": 0,
+    "total_new_block_since_format": 0,
+    "power_on_minutes_since_format": 171862
+  },
+  "temperature": {
+    "current": 42,
+    "drive_trip": 65
+  },
+  "scsi_start_stop_cycle_counter": {
+    "year_of_manufacture": "2021",
+    "week_of_manufacture": "21",
+    "specified_cycle_count_over_device_lifetime": 10000,
+    "accumulated_start_stop_cycles": 100
+  },
+  "scsi_grown_defect_list": 0,
+  "seagate_farm_log": {
+    "supported": false
+  },
+  "scsi_error_counter_log": {
+    "read": {
+      "errors_corrected_by_eccfast": 0,
+      "errors_corrected_by_eccdelayed": 0,
+      "errors_corrected_by_rereads_rewrites": 0,
+      "total_errors_corrected": 0,
+      "correction_algorithm_invocations": 0,
+      "gigabytes_processed": "54596.313",
+      "total_uncorrected_errors": 0
+    },
+    "write": {
+      "errors_corrected_by_eccfast": 0,
+      "errors_corrected_by_eccdelayed": 0,
+      "errors_corrected_by_rereads_rewrites": 0,
+      "total_errors_corrected": 0,
+      "correction_algorithm_invocations": 0,
+      "gigabytes_processed": "75476.739",
+      "total_uncorrected_errors": 0
+    },
+    "verify": {
+      "errors_corrected_by_eccfast": 0,
+      "errors_corrected_by_eccdelayed": 0,
+      "errors_corrected_by_rereads_rewrites": 0,
+      "total_errors_corrected": 0,
+      "correction_algorithm_invocations": 0,
+      "gigabytes_processed": "70781.898",
+      "total_uncorrected_errors": 0
+    }
+  },
+  "scsi_background_scan": {
+    "status": {
+      "value": 8,
+      "string": "waiting until BMS interval timer expires",
+      "number_scans_performed": 231,
+      "scan_progress": "0.00%",
+      "number_medium_scans_performed": 231
+    }
+  },
+  "power_on_time": {
+    "hours": 37531,
+    "minutes": 56
+  },
+  "scsi_general_statistics_and_performance_log": {
+    "general_access": {
+      "number_of_read_commands": 23070262,
+      "number_of_write_commands": 7404462,
+      "number_of_logical_blocks_received": 3624874474,
+      "number_of_logical_blocks_transmitted": 1338425904,
+      "read_command_processing_intervals": 845,
+      "write_command_processing_intervals": 826,
+      "weighted_number_of_read_commands_plus_write_commands": 0,
+      "weighted_read_command_processing_plus_write_command_processing": 0
+    },
+    "idle_time": {
+      "idle_time_intervals": 84656
+    },
+    "time_interval": {
+      "exponent": 3,
+      "integer": 60000
+    }
+  },
+  "scsi_sas_port_0": {
+    "relative_target_port_id": 1,
+    "generation_code": 4,
+    "number_of_phys": 1,
+    "phy_0": {
+      "identifier": 0,
+      "attached_device_type": "SAS or SATA device",
+      "attached_reason": "unknown",
+      "reason": "unknown",
+      "negotiated_logical_link_rate": "phy enabled; 6 Gbps",
+      "attached_initiator_port": {
+        "ssp_stp_smp": "111"
+      },
+      "attached_target_port": {
+        "ssp_stp_smp": "000"
+      },
+      "sas_address": "0x5000c5000000000b",
+      "attached_sas_address": "0x500605b00000000c",
+      "attached_phy_identifier": 2,
+      "invalid_dword_count": 27,
+      "running_disparity_error_count": 27,
+      "loss_of_dword_synchronization_count": 41,
+      "phy_reset_problem_count": 0
+    }
+  },
+  "scsi_sas_port_1": {
+    "relative_target_port_id": 2,
+    "generation_code": 4,
+    "number_of_phys": 1,
+    "phy_0": {
+      "identifier": 1,
+      "attached_device_type": "no device attached",
+      "attached_reason": "unknown",
+      "reason": "unknown",
+      "negotiated_logical_link_rate": "phy enabled; unknown",
+      "attached_initiator_port": {
+        "ssp_stp_smp": "000"
+      },
+      "attached_target_port": {
+        "ssp_stp_smp": "000"
+      },
+      "sas_address": "0x5000c5000000000d",
+      "attached_sas_address": "0x0",
+      "attached_phy_identifier": 0,
+      "invalid_dword_count": 0,
+      "running_disparity_error_count": 0,
+      "loss_of_dword_synchronization_count": 0,
+      "phy_reset_problem_count": 0
+    }
+  }
+}

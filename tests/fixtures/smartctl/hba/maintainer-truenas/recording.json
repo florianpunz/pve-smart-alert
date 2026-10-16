@@ -1,0 +1,62 @@
+{
+  "origin": "Own hardware of the maintainer: the TrueNAS host truenas, recorded on 2026-10-16 through the read-only wrapper psa-agent. Three NetApp X371 SAS SSDs behind an LSI SAS2308 HBA (driver mpt2sas) and one Samsung SATA SSD on the AHCI controller of the board, smartmontools 7.4",
+  "license": "AGPL-3.0-or-later",
+  "node": "truenas",
+  "collected": "20261016T120921Z",
+  "collected_with": "the read-only wrapper psa-agent on the host: smart-scan, smart DEVICE TYPE, lsblk",
+  "anonymized_with": "scripts/make_fixtures.py (ADR 0023)",
+  "smartmontools": "7.4",
+  "controller": "LSI SAS2308 HBA, driver mpt2sas, for sda, sdc and sde; Intel AHCI for sdd",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl --scan-open --json=c",
+      "exit_status": 0
+    },
+    {
+      "file": "sda.json",
+      "device": "/dev/sda",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "ssd",
+      "model": "NETAPP X371_SLBPE960ATE",
+      "command": "smartctl -x --json=c -n standby -d scsi /dev/sda",
+      "exit_status": 0
+    },
+    {
+      "file": "sdc.json",
+      "device": "/dev/sdc",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "ssd",
+      "model": "NETAPP X371_SLBPE960ATE",
+      "command": "smartctl -x --json=c -n standby -d scsi /dev/sdc",
+      "exit_status": 0
+    },
+    {
+      "file": "sdd.json",
+      "device": "/dev/sdd",
+      "type": "sat",
+      "protocol": "ATA",
+      "class": "ssd",
+      "model": "Samsung SSD 850 EVO 120GB",
+      "command": "smartctl -x --json=c -n standby -d sat /dev/sdd",
+      "exit_status": 0
+    },
+    {
+      "file": "sde.json",
+      "device": "/dev/sde",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "ssd",
+      "model": "NETAPP X371_SLBPE960ATE",
+      "command": "smartctl -x --json=c -n standby -d scsi /dev/sde",
+      "exit_status": 0
+    },
+    {
+      "file": "lsblk.json",
+      "command": "lsblk as JSON through the read-only wrapper psa-agent",
+      "exit_status": 0
+    }
+  ]
+}

@@ -8,6 +8,7 @@ is compared with the values that the recordings show (Research 06).
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
@@ -205,10 +206,10 @@ def test_missing_sections_leave_the_values_out() -> None:
 
 
 def test_a_protocol_without_a_parser_is_refused() -> None:
-    document = {"device": {"protocol": "SCSI"}, "model_name": "Some Disk"}
+    document = {"model_name": "Some Disk"}
 
-    with pytest.raises(ParseError, match="no parser for the protocol SCSI"):
-        parse(document, access=DeviceAccess("/dev/sdb", "scsi", "SCSI"), collection=COLLECTION)
+    with pytest.raises(ParseError, match="no parser for the protocol that smartctl did not name"):
+        parse(document, access=DeviceAccess("/dev/sdb", "auto", ""), collection=COLLECTION)
 
 
 def test_an_output_without_a_model_is_refused() -> None:
@@ -235,3 +236,205 @@ def test_an_nvme_snapshot_carries_the_wear() -> None:
 
     assert snapshot.metrics["wear.percent_used"] == 19
     assert snapshot.wear_source is WearSource.ENDURANCE_USED
+
+
+# SCSI: SAS and parallel SCSI (Research 08)
+
+FIXTURES: Final = RECORDINGS.parent
+
+
+def scsi_snapshot(path: str, document: Mapping[str, object] | None = None) -> Snapshot:
+    if document is None:
+        document = json.loads((FIXTURES / path).read_text(encoding="utf-8"))
+    assert document is not None
+    return parse(
+        document,
+        access=DeviceAccess("/dev/sda", "scsi", "SCSI"),
+        collection=Collection(smartctl_version=(7, 4), exit_status=0),
+    )
+
+
+def test_a_sas_ssd_behind_an_hba() -> None:
+    # The maintainer's TrueNAS host, smartmontools 7.4.
+    snapshot = scsi_snapshot("hba/maintainer-truenas/sda.json")
+
+    # The logical unit id is the WWN that lsblk shows for the drive (Q-R6).
+    assert snapshot.identity == DriveIdentity(
+        "NETAPP X371_SLBPE960ATE", serial="ANON-SN-0001", wwn="5000c50000000001"
+    )
+    assert snapshot.drive_class is DriveClass.SSD
+    assert snapshot.firmware == "NA50"
+    assert snapshot.capacity_bytes == 960197124096
+    assert snapshot.health_passed is True
+    assert snapshot.smart_available is True
+    assert snapshot.smart_enabled is True
+    assert snapshot.power_on_hours == 37532
+    assert snapshot.power_cycles == 100
+    assert snapshot.metrics == {
+        "wear.percent_used": 0,
+        "temperature.current": 42,
+        "scsi.grown_defects": 0,
+        "scsi.uncorrected_errors": 0,
+    }
+    # smartmontools 7.4 writes no endurance_used for SCSI.
+    assert snapshot.wear_source is WearSource.ENDURANCE_INDICATOR
+
+
+def test_a_drive_with_grown_defects_and_uncorrected_errors() -> None:
+    snapshot = scsi_snapshot("direct/exporter-seagate-st373453lc-defects/sdb.json")
+
+    assert snapshot.drive_class is DriveClass.HDD
+    # 1 uncorrected read error and 535 uncorrected write errors; the drive
+    # still reports its health as passed.
+    assert snapshot.metrics["scsi.grown_defects"] == 260
+    assert snapshot.metrics["scsi.uncorrected_errors"] == 536
+    assert snapshot.health_passed is True
+    # Its logical unit id is missing, so there is no WWN.
+    assert snapshot.identity.wwn is None
+
+
+def test_the_key_names_before_smartmontools_7_3() -> None:
+    # `model_name` and `revision` instead of `scsi_model_name` and `scsi_revision`.
+    snapshot = scsi_snapshot("direct/scrutiny-seagate-st4000nm0043/sdg.json")
+
+    assert snapshot.identity.model == "SEAGATE ST4000NM0043"
+    assert snapshot.firmware == "MS03"
+    assert snapshot.metrics["scsi.grown_defects"] == 56
+
+
+def test_a_value_the_drive_does_not_report_is_left_out() -> None:
+    # This SAS SSD has no grown defect list, and no pending defects page.
+    snapshot = scsi_snapshot("direct/libblockdev-hgst-husmr3280ass200/sdc.json")
+
+    assert "scsi.grown_defects" not in snapshot.metrics
+    assert "scsi.pending_defects" not in snapshot.metrics
+    assert snapshot.last_self_test_passed is True
+
+
+def test_only_the_parts_of_the_error_counter_log_the_drive_reports_add_up() -> None:
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "SEAGATE ST600MP0036",
+        "scsi_error_counter_log": {
+            "read": {"total_uncorrected_errors": 2},
+            "write": {"total_uncorrected_errors": 3},
+        },
+    }
+
+    assert scsi_snapshot("", document).metrics["scsi.uncorrected_errors"] == 5
+
+
+def test_no_error_counter_log_is_not_zero_errors() -> None:
+    document = {"device": {"protocol": "SCSI"}, "scsi_model_name": "SEAGATE ST600MP0036"}
+
+    assert "scsi.uncorrected_errors" not in scsi_snapshot("", document).metrics
+
+
+def test_the_pending_defects_are_read_where_the_drive_has_the_page() -> None:
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "SEAGATE ST600MP0036",
+        "scsi_pending_defects": {"count": 4},
+    }
+
+    assert scsi_snapshot("", document).metrics["scsi.pending_defects"] == 4
+
+
+def test_a_missing_health_verdict_is_not_a_failed_one() -> None:
+    # A drive without the informational exceptions mode page (Research 08).
+    document = {"device": {"protocol": "SCSI"}, "scsi_model_name": "Intel Raid 1 Volume"}
+
+    assert scsi_snapshot("", document).health_passed is None
+
+
+def test_a_failed_verdict_keeps_what_the_drive_says() -> None:
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "SEAGATE ST600MP0036",
+        "smart_status": {
+            "passed": False,
+            "scsi": {"asc": 93, "ascq": 0, "ie_string": "FAILURE PREDICTION THRESHOLD EXCEEDED"},
+        },
+    }
+
+    snapshot = scsi_snapshot("", document)
+
+    assert snapshot.health_passed is False
+    assert snapshot.health_detail == ("FAILURE PREDICTION THRESHOLD EXCEEDED (ASC 0x5d, ASCQ 0x00)")
+
+
+@pytest.mark.parametrize(
+    ("result", "passed"),
+    [(0, True), (1, None), (2, None), (3, False), (5, False), (7, False), (15, None)],
+)
+def test_the_most_recent_self_test(result: int, passed: bool | None) -> None:
+    # 1 and 2 are aborted tests, 15 a test in progress (SPC-3 7.2.10).
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "SEAGATE ST600MP0036",
+        "scsi_self_test_0": {"result": {"value": result}},
+        "scsi_self_test_1": {"result": {"value": 5}},
+    }
+
+    assert scsi_snapshot("", document).last_self_test_passed is passed
+
+
+def test_endurance_used_comes_first() -> None:
+    # smartmontools 7.5 writes the indicator under both keys.
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "TOSHIBA KPM5XMUG400G",
+        "rotation_rate": 0,
+        "scsi_percentage_used_endurance_indicator": 7,
+        "endurance_used": {"current_percent": 7},
+    }
+
+    snapshot = scsi_snapshot("", document)
+
+    assert snapshot.metrics["wear.percent_used"] == 7
+    assert snapshot.wear_source is WearSource.ENDURANCE_USED
+
+
+def test_a_logical_unit_id_that_is_not_naa_5_is_no_wwn() -> None:
+    document = {
+        "device": {"protocol": "SCSI"},
+        "scsi_model_name": "HP LOGICAL VOLUME",
+        "logical_unit_id": "0x600508b0000000000000000000000001",
+    }
+
+    assert scsi_snapshot("", document).identity.wwn is None
+
+
+def test_a_scsi_output_without_a_model_is_refused() -> None:
+    with pytest.raises(ParseError, match="no model name"):
+        scsi_snapshot("", {"device": {"protocol": "SCSI"}, "serial_number": "ANON-SN-0001"})
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(
+        str(path.relative_to(FIXTURES))
+        for path in FIXTURES.rglob("*.json")
+        if path.name not in ("scan.json", "recording.json", "lsblk.json")
+        and '"protocol": "SCSI"' in path.read_text(encoding="utf-8")
+        # A RAID volume, not a drive; slice 3 of M6 skips it as such.
+        and "intel-rst" not in path.parts
+    ),
+)
+def test_every_recorded_scsi_drive_is_parsed(path: str) -> None:
+    snapshot = scsi_snapshot(path)
+
+    assert (snapshot.identity.serial or "").startswith("ANON-SN-")
+    assert snapshot.metrics["temperature.current"] > 0
+
+
+def test_a_raid_volume_is_parsed_like_a_drive_until_discovery_skips_it() -> None:
+    # The Intel RAID 1 volume of Scrutiny, smartmontools 7.0: no SMART
+    # support key and a temperature of 0. Discovery does not recognize it as
+    # a logical volume yet (ROADMAP.md, M6 slice 3).
+    snapshot = scsi_snapshot("intel-rst/scrutiny-raid1-volume/sdb.json")
+
+    assert snapshot.identity.model == "Intel Raid 1 Volume"
+    assert snapshot.smart_available is None
+    assert snapshot.health_passed is None
+    assert snapshot.metrics == {"temperature.current": 0}

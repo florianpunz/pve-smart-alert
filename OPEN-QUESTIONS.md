@@ -35,8 +35,9 @@ Answered or narrowed in milestone M3, some only with feedback from users.
 | --- | --- | --- | --- |
 | Q-T1 | How must the raw value of attribute 188 (command timeout) be decoded on drives that pack several counters into it? | Without decoding, healthy drives would exceed the threshold of 100 | The check uses the decoded value from smartctl's string form where it has several parts; otherwise the number |
 | Q-T2 | Are the defect counter thresholds derived from hard disk data appropriate for SATA SSDs? | No public data was found for SSDs | Same thresholds for both |
-| Q-T3 | What are sensible thresholds for grown defects on SAS drives? | No public data was found | Notice at 1, warning at 100, every increase reported |
+| Q-T3 | What are sensible thresholds for grown defects on SAS drives? | No public failure-rate data was found | Notice at 1, warning at 100, every increase reported. Checked only against recordings ([Research 08](docs/research/08-public-recordings.md)): the healthy SAS drives have 0, one SAS drive with 56 gets a notice, a parallel SCSI drive with 260 a warning. To be reviewed in M7 |
 | Q-T4 | Are the temperature limits per class right, and should limits reported by the drive itself take precedence where available? | Temperature is the most likely source of noise | Fixed limits per class, confirmation in two runs |
+| Q-T5 | Are the defaults of `scsi.uncorrected_errors` (warning at 1) and `scsi.pending_defects` (warning at 1) right? | No public failure-rate data was found, and every recording seen has 0 pending defects or no page for them | Warning at the first one, every increase reported, no critical. Checked only against recordings: the healthy SAS drives have 0 uncorrected errors, the parallel SCSI drive with 260 grown defects has 536. To be reviewed in M7 |
 
 ## Packaging and operation
 
@@ -44,7 +45,7 @@ None at the moment. Milestone M5 answered Q-P1 in [ADR 0025](docs/adr/0025-sandb
 
 ## Hardware RAID
 
-Narrowed in milestone M6. Some of these stay open until users with the hardware contribute recordings. [Research 08](docs/research/08-public-recordings.md) (2026-10-16) narrowed Q-R1 and Q-R2 from the source code of smartmontools and from public recordings, and answered which public recordings have a usable license, the second half of the former Q-R5.
+Narrowed in milestone M6. Some of these stay open until users with the hardware contribute recordings. [Research 08](docs/research/08-public-recordings.md) (2026-10-16) narrowed Q-R1 and Q-R2 from the source code of smartmontools and from public recordings, and answered which public recordings have a usable license, the second half of the former Q-R5. Q-R6, whether the WWN of a SAS drive in `lsblk` is its `logical_unit_id`, was answered on the maintainer's TrueNAS host on 2026-10-16; the answer is in [ARCHITECTURE.md](ARCHITECTURE.md) section 4.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
@@ -53,7 +54,6 @@ Narrowed in milestone M6. Some of these stay open until users with the hardware 
 | Q-R3 | Can NVMe drives behind tri-mode RAID controllers be queried with smartctl 7.4? | Coverage statement in the documentation | Unknown; documented as unknown |
 | Q-R4 | When will smartmontools support controllers that use the `mpi3mr` driver (issue 313)? | Dell PERC 12 and Broadcom 96xx are current hardware | Not supported; the tool reports the controller as not queryable |
 | Q-R5 | Who can contribute recordings from MegaRAID, HPE, Adaptec and Areca systems? | Evidence level of the hardware support | The public recordings of Research 08 as a start; a call for recordings with M6 |
-| Q-R6 | Is the WWN that `lsblk` shows for a SAS drive the same name as its `logical_unit_id`? | The anonymizer gives both the same placeholder, and de-duplication may compare them | Yes: udev and smartctl read the same device identification page ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)); no recording shows both |
 
 ## Upstream developments to watch
 

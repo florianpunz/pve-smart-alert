@@ -15,7 +15,7 @@
 > - **M3 (done):** evaluation and configuration
 > - **M4 (done):** state and notification policy
 > - **M5 (in progress):** packaging, timer and installation
-> - **M6 (being planned):** SAS and hardware RAID on recorded data
+> - **M6 (in progress):** SAS and hardware RAID on recorded data
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
 >
 > </details>

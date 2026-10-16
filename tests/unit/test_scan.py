@@ -216,3 +216,18 @@ def test_an_unusable_configuration_ends_with_two(
 
     assert cli.main(["scan"]) == cli.EXIT_USAGE
     assert "unknown key" in capsys.readouterr().err
+
+
+def test_a_sas_drive_behind_an_hba_is_shown_with_its_endurance_indicator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The maintainer's TrueNAS host: SAS SSDs behind an LSI SAS2308 HBA.
+    source = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl" / "hba"
+    text = report(Host(tmp_path, monkeypatch, source / "maintainer-truenas").discover())
+
+    block = next(part for part in text.split("\n\n") if part.startswith("/dev/sda "))
+    assert block.splitlines()[0] == "/dev/sda [scsi], from the scan: monitored"
+    assert "  WWN:       5000c50000000001" in block
+    assert "  Class:     ssd, transport sas" in block
+    assert "  Wear:      0 % (endurance indicator)" in block
+    assert text.endswith("\n4 monitored, 0 in standby, 0 unreadable, 0 skipped\n")
