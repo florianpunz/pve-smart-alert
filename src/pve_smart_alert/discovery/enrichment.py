@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from pve_smart_alert.model import Location, Membership, pass_through_id
+from pve_smart_alert.model import Location, Membership, pass_through_id, sanitize_field_value
 from pve_smart_alert.paths import DISK_LINKS_DIR, LSBLK_PATH, SYSFS_DIR
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
@@ -57,6 +57,11 @@ _NVME_CONTROLLER: Final = re.compile(r"nvme[0-9]+")
 # behind it are read by `pass_through_id` of the model.
 _SCSI_HOST_NODE: Final = re.compile(r"/dev/bus/([0-9]+)")
 _VOLUME_GROUP: Final = re.compile(r"((?:[^-]|--)+)-")
+
+# The longest driver name that is kept. Kernel drivers have short names; the
+# limit only keeps an odd value of sysfs out of messages (ARCHITECTURE.md
+# section 14).
+MAX_DRIVER_NAME: Final = 64
 
 
 @dataclass(frozen=True)
@@ -172,13 +177,16 @@ def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
     """Return the driver of a SCSI host, such as `megaraid_sas`, best effort.
 
     It is the `proc_name` of the host in sysfs; `None` when that is missing
-    or empty.
+    or empty. The value is untrusted text from the host: control characters
+    are removed and it is cut to `MAX_DRIVER_NAME` characters, as strings of
+    drives are (ARCHITECTURE.md section 14).
     """
+    path = paths.sysfs / "class" / "scsi_host" / f"host{host}" / "proc_name"
     try:
-        text = (paths.sysfs / "class" / "scsi_host" / f"host{host}" / "proc_name").read_text()
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    return text.strip() or None
+    return sanitize_field_value(text, limit=MAX_DRIVER_NAME) or None
 
 
 def is_remote(details: Details, name: str) -> bool:

@@ -226,7 +226,9 @@ TEXTS: Final[Mapping[str, Texts]] = {
     "tool.unsupported_controller": Texts(
         "Controller",
         "unsupported controller",
-        "The drives behind this controller cannot be monitored with smartctl.",
+        "The drives behind this controller are not monitored until smartmontools can read"
+        " them. Check them with the tool of the controller's vendor, and run"
+        " pve-smart-alert doctor to see the controller.",
     ),
 }
 

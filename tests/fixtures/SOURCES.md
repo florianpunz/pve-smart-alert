@@ -49,6 +49,16 @@ The scenario tests of the notification policy replay a host whose drives change 
 | `megaraid-id-change` | Same | The same host without `/dev/sdc`; the raw value of attribute 197 of the SATA drive set to 8, then the device IDs changed to `sat+megaraid,15` and `megaraid,9`; then the SAS drive removed from the scan and the recording |
 | `megaraid-degraded` | Same | The same host without `/dev/sdc`; the raw value of attribute 197 of the SATA drive set to 3 and the grown defect list of the derived SAS drive set to 150 |
 
+## SCSI hosts of sysfs: `../unit/hosts.py`
+
+The trees below `/sys/class/scsi_host` that the tests of the controllers whose drives cannot be queried read ([ADR 0030](../../docs/adr/0030-controllers-whose-drives-cannot-be-queried.md)) are written by the tests into their temporary directory, from the constants in `tests/unit/hosts.py`. They hold only the number and the driver of each SCSI host, no identifier. License AGPL-3.0-or-later.
+
+| Constant | Origin |
+| --- | --- |
+| `TRUENAS_SCSI_HOSTS` | Recorded on 2026-10-16 at 20:04 UTC on the maintainer's TrueNAS host through the command `hosts` of the read-only wrapper ([Research 08](../../docs/research/08-public-recordings.md)): `mpt2sas`, six `ahci`, `ahciem` |
+| `CLUSTER_NODE_SCSI_HOSTS` | Recorded in the same session on `pve7` of the test cluster: six `ahci`; `pve5` and `pve6` have two |
+| `MPI3MR_SCSI_HOSTS`, `MIXED_SCSI_HOSTS` | Synthetic: no recording of an `mpi3mr` host exists. `mpi3mr` next to `ahci`, and next to an `mpt3sas` HBA |
+
 ## Rendered notifications: `golden/`
 
 The subject, the metadata fields and the body of every kind of notification, written by the renderer from plans that the tests in `tests/unit/test_render.py` build by hand ([ADR 0016](../../docs/adr/0016-test-strategy.md): rendering is compared with golden files). The drives in them are made up, with the placeholder serial numbers of the anonymization. A change to the text or the fields of a notification updates these files: `PVE_SMART_ALERT_UPDATE_GOLDEN=1 make test` writes them, and the diff is reviewed with the change. License AGPL-3.0-or-later.

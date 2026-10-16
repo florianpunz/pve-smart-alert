@@ -5,7 +5,8 @@ One block per device found, in the order of discovery: its name, type and
 source, what became of it, and for a drive that was read what the tool knows
 about it: identity, class, the controller and device ID of a drive behind a
 RAID controller (ADR 0028), what uses it, the wear value with its source,
-and how long smartctl took. A wear value that differs by 10 percentage points or
+and how long smartctl took. A controller whose drives smartctl cannot read
+is named above the devices (FR-109, ADR 0030). A wear value that differs by 10 percentage points or
 more from what the web interface of Proxmox VE shows names both (ADR 0021).
 """
 
@@ -34,6 +35,8 @@ def render(discovery: Discovery, *, smartctl_path: Path) -> list[str]:
         lines.append(
             f"Without lsblk: {discovery.enrichment_error}; transport, links and use are missing"
         )
+    for host in discovery.scsi_hosts.unsupported:
+        lines.append(f"Unsupported controller: {host.describe()}")
     for found in discovery.devices:
         lines.append("")
         lines.extend(_device(found))

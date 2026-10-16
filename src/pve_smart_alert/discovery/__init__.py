@@ -18,7 +18,9 @@ A pipeline of four steps:
 
 Every device found is reported with what became of it, so that
 `pve-smart-alert scan` can show each one (FR-108). Nothing here stops for a
-single device (FR-205).
+single device (FR-205). The SCSI hosts of sysfs are read with the same
+paths, so that a controller whose drives smartctl cannot read is named
+instead of silently monitoring nothing (FR-109, ADR 0030).
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from enum import StrEnum
 
 from pve_smart_alert.collect import Collected, Status, collect_drive
 from pve_smart_alert.config import Config, SmartctlSettings, drive_override
+from pve_smart_alert.discovery.controllers import ScsiHost, ScsiHosts, read_scsi_hosts
 from pve_smart_alert.discovery.enrichment import (
     HOST,
     NOT_DISKS,
@@ -67,6 +70,8 @@ __all__ = [
     "Found",
     "HostPaths",
     "Outcome",
+    "ScsiHost",
+    "ScsiHosts",
     "SkipReason",
     "Source",
     "discover",
@@ -121,6 +126,9 @@ class Discovery:
     smartctl_version: tuple[int, ...] = ()
     scan_error: str | None = None
     enrichment_error: str | None = None
+    # The SCSI hosts of sysfs, for the controllers whose drives cannot be
+    # read (FR-109, ADR 0030).
+    scsi_hosts: ScsiHosts = field(default_factory=ScsiHosts)
 
     @property
     def monitored(self) -> tuple[Found, ...]:
@@ -170,6 +178,7 @@ def discover(
         smartctl_version=version,
         scan_error=scan.error,
         enrichment_error=block_devices.error,
+        scsi_hosts=read_scsi_hosts(paths),
     )
 
 

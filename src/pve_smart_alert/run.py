@@ -69,6 +69,7 @@ from pve_smart_alert.tool_conditions import (
     smartctl_missing,
     smartctl_too_old,
     transport_degraded,
+    unsupported_controller,
 )
 from pve_smart_alert.transports import Transport, TransportOutcome, build_transport
 
@@ -186,6 +187,9 @@ def _run(env: Environment, *, dry_run: bool) -> RunResult:
             failed = scan_failed(discovery.scan_error)
             if failed is not None:
                 tool.append(failed)
+        unsupported = unsupported_controller(discovery.scsi_hosts.unsupported)
+        if unsupported is not None:
+            tool.append(unsupported)
     degraded = transport_degraded(config.notify, env.bridge_path, runner=env.runner)
     if degraded is not None:
         tool.append(degraded)

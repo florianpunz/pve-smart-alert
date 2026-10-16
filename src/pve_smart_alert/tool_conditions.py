@@ -5,20 +5,21 @@ They are reported like the conditions of a drive, on a pseudo-device named
 after the tool: once, reminded per severity, and cleared with a recovery
 (FR-518). This module lists them and finds out, at the start of a run,
 which of them hold. `tool.state_reset` is a one-time event that the
-planner mentions in the summary after the reset; `tool.unsupported_controller`
-is detected from milestone M6 on.
+planner mentions in the summary after the reset. `tool.unsupported_controller`
+is read from the SCSI hosts that discovery found in sysfs (ADR 0030).
 """
 
 from __future__ import annotations
 
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.config import ConfigError, NotifySettings, SmartctlSettings, TransportName
+from pve_smart_alert.discovery.controllers import ScsiHost, describe_all
 from pve_smart_alert.model import CheckKind, Finding, Severity
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS
@@ -34,6 +35,7 @@ __all__ = [
     "smartctl_missing",
     "smartctl_too_old",
     "transport_degraded",
+    "unsupported_controller",
 ]
 
 #: The name of the pseudo-device the conditions of the tool are reported on.
@@ -147,6 +149,17 @@ def transport_degraded(
     else:
         consequence = "notifications cannot be delivered"
     return finding("tool.transport_degraded", f"{reason}; {consequence}")
+
+
+def unsupported_controller(hosts: Sequence[ScsiHost]) -> Finding | None:
+    """Return `tool.unsupported_controller` for SCSI hosts whose drives cannot be read.
+
+    One condition for all of them, which names each host and its driver; it
+    clears with a recovery when the last of them is gone (ADR 0030).
+    """
+    if not hosts:
+        return None
+    return finding("tool.unsupported_controller", describe_all(hosts))
 
 
 def _bridge_problem(path: Path, runner: ProcessRunner) -> str | None:

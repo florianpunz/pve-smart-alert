@@ -42,7 +42,7 @@ Properties that follow from this shape:
 | Component | Responsibility | Decision record |
 | --- | --- | --- |
 | Command-line interface | Parses commands, sets up logging and locking, maps results to exit codes | – |
-| Self-diagnosis | Checks the parts of the host the tool works with and reports one line per part (FR-603) | – |
+| Self-diagnosis | Checks the parts of the host the tool works with and reports one line per part (FR-603) | [0030](docs/adr/0030-controllers-whose-drives-cannot-be-queried.md) for the line `controllers` |
 | Configuration | Loads `/etc/pve-smart-alert/config.toml`, validates it, merges it over the built-in defaults, falls back to the last good configuration | [0011](docs/adr/0011-configuration.md) |
 | Discovery | Finds drives, enriches them with system information, filters and de-duplicates them | [0005](docs/adr/0005-drive-discovery-and-identity.md) |
 | Collector | Runs smartctl for one drive with a timeout and returns JSON, exit status and messages | [0004](docs/adr/0004-smartctl-json-as-data-source.md) |
@@ -66,7 +66,7 @@ Dependencies point in one direction: command-line interface → run orchestratio
 1. **Lock.** Take the lock in `/run/pve-smart-alert/`, an advisory lock on the file `lock` that the kernel releases when the process ends. If it is held, exit with a message and exit status 3.
 2. **Configuration.** Load and validate. On error, use the last good configuration and record the tool condition `tool.config_invalid`.
 3. **State.** Load, migrate if needed. If unreadable, set it aside, start empty and record `tool.state_reset`.
-4. **Preflight.** Check that smartctl exists and can be executed. If not, record `tool.smartctl_missing` and skip to step 9 with no drives. After the device scan of step 5, a smartctl older than 7.0 records `tool.smartctl_too_old`, a scan without usable output `tool.scan_failed`. With `transport` `auto` or `pve-notify`, run the notify bridge with `--check`; if it fails, record `tool.transport_degraded`.
+4. **Preflight.** Check that smartctl exists and can be executed. If not, record `tool.smartctl_missing` and skip to step 9 with no drives. After the device scan of step 5, a smartctl older than 7.0 records `tool.smartctl_too_old`, a scan without usable output `tool.scan_failed`. With `transport` `auto` or `pve-notify`, run the notify bridge with `--check`; if it fails, record `tool.transport_degraded`. A SCSI host of discovery whose driver is on the list of controllers that cannot be queried records `tool.unsupported_controller` (section 5).
 5. **Discovery.** Run the scan, the probes and the manual entries; enrich, filter, de-duplicate. Result: a list of drives to query and a list of skipped devices with reasons.
 6. **Collection and parsing.** For each drive, one after the other: run smartctl with the timeout, parse the output into a snapshot. A drive that fails is recorded as unreadable for this run; a drive in standby is recorded as skipped.
 7. **Evaluation.** Run the applicable checks on each snapshot. Result: findings per drive.
@@ -142,7 +142,7 @@ Classification as `excluded` and `no-smart`, and as `logical-volume` or `not-a-d
 
 A drive behind a MegaRAID controller is read as `megaraid,N` (SAS) or `sat+megaraid,N` (SATA) on `/dev/bus/H`. Its location is the controller `/dev/bus/H` with the driver of SCSI host H, read from `/sys/class/scsi_host/hostH/proc_name`, and the device ID N; `scan` shows it as `Location:  /dev/bus/6 (megaraid_sas), device 14`, and notifications name it the same way (FR-507). lsblk says nothing about such a drive, since the node is the controller and not the drive. A drive read through a pass-through type on a node that is a block device, as `sat+megaraid,N` on `/dev/sda` in a public recording, has that node as its controller, without a driver, and the vendor and model of lsblk do not count for it, because they are those of the node. A record that an earlier build kept for a device that is now skipped as `logical-volume` or `not-a-disk` is forgotten without a notification, found by the path it was read through, and never reported as missing. In JBOD mode the same drive is also a block device and is kept once, through the block device, with the controller path as its alias. A changed device ID changes only the location, never the identity or the state ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)). A device of the scan whose name or type does not have the form that may reach smartctl is reported as unreadable and not read. It is repeated on every run, because a device name can be taken over by a different device. Skipped devices are recorded in state only so that `pve-smart-alert status` can show them.
 
-Controllers whose drives cannot be reached (driver `mpi3mr`) are detected from sysfs and reported as `tool.unsupported_controller`. This arrives with milestone M6.
+Controllers whose drives smartctl cannot read are detected from sysfs ([ADR 0030](docs/adr/0030-controllers-whose-drives-cannot-be-queried.md), FR-109). Discovery reads every SCSI host `hostN` below `/sys/class/scsi_host` with the driver in its `proc_name`, through the same paths as the rest of enrichment, so that tests point it at a temporary tree. A missing directory means no SCSI host; one that cannot be read is no error and no finding. A driver is reported only when it is on the list `UNSUPPORTED_DRIVERS` of `discovery/controllers.py`, which holds `mpi3mr` with its reason and source (smartmontools issue 313). `mpt2sas` and `mpt3sas`, HBAs whose drives smartctl reads directly, `ahciem`, the enclosure management pseudo-host of AHCI, the drivers whose drives a probe or a manual entry reaches (`hpsa`, `smartpqi`, `aacraid`, `arcmsr`), and every unknown driver are not reported. A reported host is named in three places, each with the host, the driver, that its drives are not monitored and the upstream limitation: a line `Unsupported controller:` above the devices of `pve-smart-alert scan`, the line `controllers` of `pve-smart-alert doctor` as `warn`, and the tool condition `tool.unsupported_controller` of a run (section 11). Otherwise `doctor` reports `controllers` as `ok` with the number of SCSI hosts and their drivers, or as `skip` when sysfs cannot be read.
 
 ## 6. Evaluation
 
@@ -468,7 +468,7 @@ pve-smart-alert 1.0.0 on pve1
 | Drive reports SMART as disabled | Notice `smart.disabled`. Nothing is changed on the drive |
 | Device has no SMART capability | Skipped with reason `no-smart`. No finding |
 | A known drive is absent | Counter increases. After 2 runs: `drive.missing`, once. Not for removable drives |
-| Controller cannot be queried by smartctl | `tool.unsupported_controller`, notice |
+| Controller cannot be queried by smartctl | `tool.unsupported_controller`, notice, one condition that names every such SCSI host and clears with a recovery when none is left. Not raised while smartctl is missing, since no discovery runs then. `scan` and `doctor` name the host as well ([ADR 0030](docs/adr/0030-controllers-whose-drives-cannot-be-queried.md)) |
 | Configuration file is invalid | Last good configuration is used. `tool.config_invalid`, warning |
 | State file is unreadable or has an unknown schema | File is renamed, empty state is used, `tool.state_reset`. Next notification is one summary |
 | State directory is not writable | Run fails after delivering what it can. The failure unit reports it |
@@ -556,7 +556,7 @@ Checked on `pve1` (Proxmox VE 9.2.3, systemd 257, 2026-10-13, answers Q-P2):
 - The tool runs as root, because smartctl needs raw device access and the notification configuration is readable by root only.
 - It accepts no input from the network and opens no socket. Network traffic to SMTP, Gotify or webhook targets is made by the Proxmox VE notification library inside the bridge process, according to the administrator's notification configuration.
 - External programs (smartctl, lsblk, pvesh, the bridge, sendmail) are started with argument lists, never through a shell. Device names and types are checked against strict patterns.
-- The content of smartctl output is treated as untrusted data: it is parsed as JSON, and strings from drives (model, serial number, firmware) are length-limited and stripped of control characters before they are used in messages or as metadata values.
+- The content of smartctl output is treated as untrusted data: it is parsed as JSON, and strings from drives (model, serial number, firmware) are length-limited and stripped of control characters before they are used in messages or as metadata values. The same holds for the driver name of a SCSI host in sysfs, which is cut to 64 characters.
 - The state file is readable by root only. The configuration file is writable by root only.
 - `dump-fixture` replaces serial numbers, WWNs and other identifying values before anything leaves the host.
 
