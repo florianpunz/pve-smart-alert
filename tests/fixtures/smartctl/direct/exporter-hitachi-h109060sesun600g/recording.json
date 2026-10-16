@@ -1,0 +1,32 @@
+{
+  "origin": "Test data of smartctl_exporter: a healthy SAS hard disk, smartmontools 7.3",
+  "license": "Apache-2.0",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/prometheus-community/smartctl_exporter",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.3",
+  "controller": "unknown; the drive answers as a SCSI block device",
+  "files": [
+    {
+      "file": "sda.json",
+      "device": "/dev/sda",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "hdd",
+      "model": "HITACHI H109060SESUN600G",
+      "command": "smartctl --json --info --health --attributes --tolerance=verypermissive --nocheck=standby --format=brief --log=error /dev/sda",
+      "exit_status": 0
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/prometheus-community/smartctl_exporter",
+    "commit": "952076d119c8a17abdb075871348e072263de822",
+    "copyright": "Copyright The Prometheus Authors",
+    "license_file": "tests/fixtures/licenses/smartctl_exporter-Apache-2.0.txt",
+    "paths": {
+      "sda.json": "testdata/HITACHI_H109060SESUN600G_9.json"
+    },
+    "changes": "The source replaced the serial number, smartctl.build_info and smartctl.platform_info with one fixed word, and the logical unit id with a run of ascending digits. The anonymizer treats that word as the serial number and replaced it in all three fields"
+  }
+}

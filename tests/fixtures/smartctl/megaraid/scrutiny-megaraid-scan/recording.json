@@ -1,0 +1,26 @@
+{
+  "origin": "Test data of Scrutiny: the device scan of a host with two drives behind a MegaRAID controller, smartmontools 7.1",
+  "license": "MIT",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/AnalogJ/scrutiny",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.1",
+  "controller": "MegaRAID",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl -j --scan",
+      "exit_status": 0
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/AnalogJ/scrutiny",
+    "commit": "ac2056d6c3cef4a8dd6fe3e0b8c002d9595da75f",
+    "copyright": "Copyright (c) 2020 Jason Kulatunga",
+    "license_file": "tests/fixtures/licenses/scrutiny-MIT.txt",
+    "paths": {
+      "scan.json": "collector/pkg/detect/testdata/smartctl_scan_megaraid.json"
+    }
+  }
+}

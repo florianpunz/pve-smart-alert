@@ -6,8 +6,13 @@ device and the block devices of lsblk. `anonymize` turns it into the files of
 a fixture: the identifiers numbered in the order of the scan, every file
 checked for real values, and `recording.json` describing where each file
 comes from. `scripts/make_fixtures.py` makes fixtures of archives of the
-collection script with it, and `pve-smart-alert dump-fixture` (FR-604) the
-archive a user can attach to an issue.
+collection script and of the test data of other projects with it, and
+`pve-smart-alert dump-fixture` (FR-604) the archive a user can attach to an
+issue.
+
+A recording taken from another project may lack the device scan, or consist of
+the scan alone. Nothing missing is made up: such a fixture simply has no
+`scan.json`, or no drive files (ADR 0026).
 """
 
 from __future__ import annotations
@@ -25,13 +30,15 @@ class Recording:
     """What one host answered, before anonymization.
 
     `drives` are the drive outputs by the name of their file without
-    `.json`, `exits` their exit statuses.
+    `.json`, `exits` their exit statuses. `scan` is `None` when the source
+    has no device scan. `source` says where a recording of another project
+    was taken from: repository, commit, path and copyright (ADR 0026).
     """
 
     node: str
     collected: str | None
     collected_with: str
-    scan: Mapping[str, object]
+    scan: Mapping[str, object] | None
     scan_exit: int | None
     drives: dict[str, Mapping[str, object]] = field(default_factory=dict)
     exits: dict[str, int | None] = field(default_factory=dict)
@@ -39,6 +46,7 @@ class Recording:
     lsblk_exit: int | None = None
     lsblk_command: str | None = None
     controller: str | None = None
+    source: Mapping[str, object] | None = None
 
 
 def anonymize(
@@ -57,7 +65,9 @@ def anonymize(
     if recording.lsblk is not None:
         anonymizer.learn_lsblk(recording.lsblk)
 
-    files: dict[str, object] = {"scan.json": anonymizer.document(recording.scan)}
+    files: dict[str, object] = {}
+    if recording.scan is not None:
+        files["scan.json"] = anonymizer.document(recording.scan)
     for stem in order:
         files[f"{stem}.json"] = anonymizer.drive(recording.drives[stem])
     if recording.lsblk is not None:
@@ -85,7 +95,7 @@ def write_directory(directory: Path, files: Mapping[str, object]) -> None:
 
 def scan_order(recording: Recording) -> list[str]:
     """Return the drive files in the order of the scan, then the others by name."""
-    devices = recording.scan.get("devices")
+    devices = recording.scan.get("devices") if recording.scan is not None else None
     scanned: list[str] = []
     if isinstance(devices, list):
         for entry in devices:
@@ -114,13 +124,15 @@ def _metadata(
     anonymized_with: str,
 ) -> dict[str, object]:
     """Return the content of `recording.json`."""
-    files: list[dict[str, object]] = [
-        {
-            "file": "scan.json",
-            "command": _command(recording.scan),
-            "exit_status": recording.scan_exit,
-        }
-    ]
+    files: list[dict[str, object]] = []
+    if recording.scan is not None:
+        files.append(
+            {
+                "file": "scan.json",
+                "command": _command(recording.scan),
+                "exit_status": recording.scan_exit,
+            }
+        )
     for stem in order:
         drive = recording.drives[stem]
         access = drive.get("device")
@@ -132,7 +144,7 @@ def _metadata(
                 "type": access.get("type"),
                 "protocol": access.get("protocol"),
                 "class": drive_class(drive),
-                "model": drive.get("model_name"),
+                "model": _model(drive),
                 "command": _command(drive),
                 "exit_status": recording.exits.get(stem),
             }
@@ -145,17 +157,35 @@ def _metadata(
                 "exit_status": recording.lsblk_exit,
             }
         )
-    return {
+    metadata: dict[str, object] = {
         "origin": origin,
         "license": license_id,
         "node": recording.node,
         "collected": recording.collected,
         "collected_with": recording.collected_with,
         "anonymized_with": anonymized_with,
-        "smartmontools": _version(recording.scan),
+        "smartmontools": _recorded_version(recording, order),
         "controller": recording.controller,
         "files": files,
     }
+    if recording.source is not None:
+        metadata["source"] = dict(recording.source)
+    return metadata
+
+
+def _recorded_version(recording: Recording, order: Sequence[str]) -> str | None:
+    """Return the version of smartmontools of the scan, or of the first drive without one."""
+    for document in [recording.scan, *(recording.drives[stem] for stem in order)]:
+        version = _version(document) if document is not None else None
+        if version is not None:
+            return version
+    return None
+
+
+def _model(drive: Mapping[str, object]) -> object:
+    """Return the model name: for SCSI from smartmontools 7.3 on, `scsi_model_name`."""
+    model = drive.get("model_name")
+    return model if model is not None else drive.get("scsi_model_name")
 
 
 def _device_name(drive: Mapping[str, object]) -> object:

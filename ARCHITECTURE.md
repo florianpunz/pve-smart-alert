@@ -55,7 +55,7 @@ Properties that follow from this shape:
 | Notify bridge | Perl script that calls `PVE::Notify` | [0008](docs/adr/0008-notification-integration.md) |
 | Routing check | Reads the matchers and targets through `pvesh` and evaluates them for the notifications of the tool and for its fallback, mail to root | [0020](docs/adr/0020-routing-check.md), [0022](docs/adr/0022-fallback-routing-check.md) |
 | systemd units | Timer, service and failure reporter | [0006](docs/adr/0006-scheduling.md) |
-| Fixture tooling | Records and anonymizes smartctl output (`anonymize.py`, `scripts/make_fixtures.py`); fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md), [0023](docs/adr/0023-anonymization-of-recordings.md) |
+| Fixture tooling | Records and anonymizes smartctl output and imports the test data of other projects (`anonymize.py`, `scripts/make_fixtures.py`); fake smartctl for tests | [0016](docs/adr/0016-test-strategy.md), [0023](docs/adr/0023-anonymization-of-recordings.md), [0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md) |
 
 Dependencies point in one direction: command-line interface → run orchestration → components. Components do not call each other sideways. Discovery, collector, checks, planner and renderer are free of side effects other than running smartctl and reading system files, which makes them testable in isolation.
 

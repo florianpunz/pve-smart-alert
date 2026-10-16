@@ -92,6 +92,7 @@ Notes:
 
 - Corrected errors are normal on SAS drives and are not evaluated.
 - No public failure-rate data was found for these values. The defaults are the weakest in the catalog.
+- `scsi.pending_defects` needs the pending defects log page, which smartctl reads with `--xall` and not with `--all`: with `smartctl.detail = "basic"` the check is never applicable, and many drives do not have the page ([Research 08](research/08-public-recordings.md)).
 - No parser produces these metrics until milestone M6; the checks exist so that their identifiers are stable from now on, and they are never applicable until then.
 
 ## Conditions of the tool itself
@@ -120,3 +121,4 @@ Notes:
 - Performance attributes.
 - Power-on hours, power cycles, start-stop counts, unsafe shutdowns. They appear in notifications as context.
 - The state of pools, arrays and logical volumes.
+- The non-medium error count of SCSI drives. smartctl 7.4 and 7.5 write it only as text, with no JSON key of its own, and the tool reads only JSON ([Research 08](research/08-public-recordings.md), FR-201).

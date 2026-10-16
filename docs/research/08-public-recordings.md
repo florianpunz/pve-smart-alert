@@ -1,0 +1,147 @@
+# Research 08: Public recordings of SAS and RAID drives, and what smartctl writes for them
+
+- Research date: 2026-10-16
+- Applies to: smartmontools 7.4 and 7.5; the test data of other projects at the commits named below.
+- Used by: [ADR 0026](../adr/0026-recordings-of-scsi-drives-and-of-other-projects.md), milestone M6 ([ROADMAP.md](../../ROADMAP.md))
+
+## Summary
+
+| Family | Usable real recording? | Imported as fixture |
+| --- | --- | --- |
+| SAS, directly attached | Yes, healthy SAS hard disks and SSDs (smartmontools 7.3). One SAS hard disk with grown defects, without the version of smartmontools | 7 recordings below `direct/` |
+| Parallel SCSI | Yes, also one with grown defects and uncorrected errors (smartmontools 7.4) | 2 recordings below `direct/` |
+| MegaRAID | Yes for SATA drives behind it (`sat+megaraid,N`) and for device scans. **No** real JSON of a SAS drive read as `megaraid,N` | 3 recordings below `megaraid/` |
+| Logical volume of a RAID controller | One Intel RAID 1 volume read as a SCSI device (smartmontools 7.0). None of MegaRAID | 1 recording below `intel-rst/` |
+| HPE Smart Array (`cciss,N`) | Only `--info` output whose license chain is unclear | None; evidence only |
+| `mpi3mr` | None. smartmontools 7.5 has no code for it | None |
+
+Two questions of the M6 plan are answered from the source code:
+
+- **Non-medium errors have no JSON key.** smartctl writes the count only as text. A check for it would have to read text, which [ADR 0004](../adr/0004-smartctl-json-as-data-source.md) and FR-201 rule out. It is not checked.
+- **`--xall` reads the pending defects log of a SCSI drive; `--all` does not.** The tool reads `--xall` by default (`smartctl.detail = "extended"`, [ADR 0004](../adr/0004-smartctl-json-as-data-source.md)), so `scsi_pending_defects.count` is there where the drive supports the log page, and missing with `smartctl.detail = "basic"`.
+
+## Method
+
+The source code of smartmontools was read at the tags `RELEASE_7_4` (commit `0c0bada5eedb759c9d7bb50ff54959cf0809c5a9`) and `RELEASE_7_5` (commit `f276b249fdc84019403491303479485030ac7c80`), in the files `scsiprint.cpp`, `smartctl.cpp`, `os_linux.cpp`, `json.cpp` and `json.h`.
+Line numbers are given for both versions, because they differ in most places after line 1000.
+
+The test data of other projects was searched in the repositories named in [Research 05](05-prior-art.md) and in projects found by searching for smartctl JSON test data.
+Every file named below was read at the commit given, together with the license file of its repository.
+Values that identify a drive are not quoted here; where a file has them, the field is named.
+
+All statements are **Verified** in the cited source or file, unless marked otherwise.
+
+## What smartctl writes for a SCSI drive
+
+| Key | Meaning | `scsiprint.cpp` 7.4 | 7.5 |
+| --- | --- | --- | --- |
+| `smart_status.passed` | `false` with `smart_status.scsi.asc`, `ascq` and `ie_string` when the drive reports an informational exception; `true` only when the drive has the IEC mode page. Without the page the key is **absent** | 396–403 | 396–403 |
+| `temperature.current`, `temperature.drive_trip` | Current temperature and the trip temperature of the drive | 411, 417 | 411, 417 |
+| `scsi_grown_defect_list` | Number of elements in the grown defect list | 745, 753 | 745, 753 |
+| `scsi_error_counter_log.read`, `.write`, `.verify` | Each with `errors_corrected_by_eccfast`, `errors_corrected_by_eccdelayed`, `errors_corrected_by_rereads_rewrites`, `total_errors_corrected`, `correction_algorithm_invocations`, `gigabytes_processed` (a string) and `total_uncorrected_errors` | 969–992 | 969–992 |
+| `scsi_pending_defects.count` | Pending defects, from a log subpage that only some drives have | 620 | 620 |
+| `scsi_percentage_used_endurance_indicator` | SSD endurance used, in percent | 1771 | 1771 |
+| `endurance_used.current_percent` | The same value under the vendor-neutral key | – | 1772 |
+| `logical_unit_id` | The name from the device identification page, `0x` and hexadecimal digits | 3081 | 3120 |
+| `serial_number` | Serial number | 3099 | 3138 |
+| `device_type.scsi_value`, `.name` | Peripheral device type; the table names value 12 `storage array` and 13 `enclosure` | 3111–3115, table 2734 | 3150–3154, table 2770 |
+| `scsi_transport_protocol.name` | Such as `SAS (SPL-4)` or `Parallel SCSI (SPI-4)` | 3125 | 3164 |
+| `scsi_vendor`, `scsi_product`, `scsi_model_name`, `scsi_revision` | Inquiry data | 2851–2859 | 2890–2898 |
+| `scsi_sas_port_N.phy_M.sas_address`, `.attached_sas_address` | SAS addresses, `0x` and hexadecimal digits without leading zeros; only with the SAS phy log, which `--xall` reads | 2496, 2512, 2611, 2616 | 2532, 2548, 2647, 2652 |
+
+How the keys are formed: `json::ref` turns every key with `json::str2key`, which lowercases it and replaces every other character by one underscore (`json.h` line 96, `json.cpp` line 41, the same in 7.4 and 7.5). The code writes `jref["SAS address"]`, so the key is `sas_address`.
+
+Of the recordings read for this note, those of smartmontools 7.0 to 7.2 have `vendor`, `product`, `model_name` and `revision` instead of the `scsi_` keys, and all of 7.3 and 7.4 have the `scsi_` keys. In which version the names changed was not checked (**Assumed**: 7.3).
+
+### Non-medium errors
+
+`scsiprint.cpp` lines 997–1009, identical in 7.4 and 7.5: the non-medium error count and the two Hitachi counters of the same log page are written with `pout` only. `pout` adds a line to the JSON output only as text: to the array `smartctl.output` with `--json=o`, or as a key `smartctl_NNNN_u` with `--json=u` (`smartctl.cpp`, function `vjpout`, lines 1323–1367 in 7.4 and 1327–1371 in 7.5). There is no key of its own. The tool calls smartctl with `--json=c`, so the value is not in its input at all.
+
+### Pending defects and `--xall`
+
+`smartctl.cpp`: `--xall` is option `x` (line 342 in both), and its case sets `scsiopts.scsi_pending_defects = true` (line 763 in 7.4, 766 in 7.5). `--all` does not set it; only `-l defects` does as well (line 599 in both). `scsiprint.cpp` then reads the page only if the drive lists it as supported (`gPendDefectsLPage`, line 303; call at 3776 in 7.4, 3815 in 7.5).
+
+## What smartctl does with RAID controllers on Linux
+
+From `os_linux.cpp`, unless another file is named:
+
+| Fact | 7.4 | 7.5 |
+| --- | --- | --- |
+| A drive behind MegaRAID gets the type `megaraid,N` and the info name `<device> [megaraid_disk_NN]`, N with two digits | 1106–1107 | 1106–1107 |
+| The scan lists the drives behind MegaRAID only for SCSI hosts whose `proc_name` in `/sys/class/scsi_host` begins with `megaraid_sas` | 3027–3033 | 3019–3025 |
+| Opening a device whose inquiry says `DELL    PERC`, `MegaRAID`, a product beginning with `PERC `, or the vendor `LSI` fails with "DELL or MegaRaid controller, please try adding '-d megaraid,N'". The wording is the same in both versions | 2648–2652 | 2648–2652 |
+| With `--scan-open`, a device that cannot be opened keeps its entry in the scan, with that message in `devices[].open_error` (`smartctl.cpp`) | 1557 | 1561 |
+| A device of the type `cciss,N` has the type `cciss` and the info name `<device> [cciss_disk_NN]` | 1545–1549 | 1545–1549 |
+| `N` of `cciss,N` must be between 0 and 127 | 3591 | 3583 |
+| A `cciss` device is wrapped as `sat,auto`, so a SATA drive behind it is read through SAT | 3592 | 3584 |
+| smartctl checks only the `proc_name` `hpsa`, not `smartpqi`, to say that `-d cciss,N` is missing on a host in RAID mode | 3371–3409, 3485 | 3363–3401, 3477 |
+| The driver `mpi3mr` does not occur in any of these files | – | – |
+
+For a logical volume of MegaRAID, the scan therefore carries no inquiry data, only the message. The vendor and the model of the block device are in `lsblk`, which the tool reads for the enrichment of discovery; this is the structured signal that milestone M6 uses first.
+
+smartmontools issue [313](https://github.com/smartmontools/smartmontools/issues/313), "mpi3mr-based raid controllers are not supported (e.g., PERC H965i)", is still open on 2026-10-16.
+
+## The recordings
+
+### Imported as fixtures
+
+All of them were anonymized by `scripts/make_fixtures.py import` ([ADR 0026](../adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)) and are listed in [`tests/fixtures/SOURCES.md`](../../tests/fixtures/SOURCES.md). A comparison of every fixture with its source file shows changes only in the identifier fields and, where the source had replaced it by the same word as the serial number, in `smartctl.build_info` and `smartctl.platform_info`.
+
+| Source, license | File at the commit | smartmontools | What it shows | Identifiers |
+| --- | --- | --- | --- | --- |
+| [libblockdev](https://github.com/storaged-project/libblockdev), LGPL-2.1-or-later (`License:` of `dist/libblockdev.spec.in`), commit `3c5433aba8c8` | `tests/smart_dumps/HGST_HUSMR3280ASS200.json` | 7.3 | Healthy SAS SSD, endurance indicator 0, **no** `scsi_grown_defect_list` | `serial_number`, `logical_unit_id` |
+| same | `TOSHIBA_KPM5XMUG400G.json` | 7.3 | Healthy SAS SSD, endurance indicator and grown defect list | same |
+| same | `SEAGATE_ST600MP0036.json`, `TOSHIBA_AL15SEB120NY.json` | 7.3 | Healthy SAS hard disks, with the verify counters | same |
+| same | `WD4001FYYG-01SL3.json` | 7.3 | Healthy SAS hard disk, background scan log, no verify counters | same |
+| [smartctl_exporter](https://github.com/prometheus-community/smartctl_exporter), Apache-2.0, commit `952076d119c8` | `testdata/HITACHI_H109060SESUN600G_9.json` | 7.3 | Healthy SAS hard disk | `serial_number`, `logical_unit_id` (replaced by the source with ascending digits) |
+| same | `testdata/SEAGATE_ST373453LC_26.json` | 7.4 | **Parallel SCSI** hard disk with 260 grown defects, 1 uncorrected read error and 535 uncorrected write errors, and `smart_status.passed` true | `serial_number` |
+| same | `testdata/SEAGATE_ST373453LC_27.json` | 7.4 | Healthy parallel SCSI hard disk of the same model | `serial_number` |
+| [Scrutiny](https://github.com/AnalogJ/scrutiny), MIT, commit `ac2056d6c3ce` | `webapp/backend/pkg/models/testdata/smart-scsi.json` | not in the file | SAS hard disk (Seagate ST4000NM0043) with 56 grown defects and no uncorrected errors; old key names | `serial_number` |
+| same | `webapp/backend/pkg/models/testdata/smart-raid.json` | 7.0 | Intel RAID 1 volume read as a SCSI device: `device_type` disk, no `smart_status`, temperature 0 | `serial_number` |
+| same | `collector/pkg/detect/testdata/smartctl_scan_megaraid.json` | 7.1 | Scan with `/dev/bus/0` as `megaraid,0` and `megaraid,1`, protocol SCSI | none |
+| same | `webapp/backend/pkg/models/testdata/smart-megaraid0.json`, `smart-megaraid1.json` | 7.1 | Two SATA hard disks read as `-d megaraid,N /dev/sda`, type `sat+megaraid,N`, exit status 4 | `serial_number` (replaced by the source with one repeated character, the same in both), `wwn` |
+| [Telegraf](https://github.com/influxdata/telegraf), MIT, commit `2bac12a6a682` | `plugins/inputs/smartctl/testcases_scan/megaraid/response.json` | 7.1 | Scan: `/dev/sda` and `/dev/sdb` as `scsi`, `/dev/sdc` as `sat`, `/dev/bus/6` as `megaraid,8` to `megaraid,14` | none |
+| same | `plugins/inputs/smartctl/testcases_device/megaraid/response.json` | 7.1 | SATA hard disk on `/dev/bus/6` read as `sat+megaraid,14` | `serial_number`, `wwn` |
+
+The copyright lines are those of the license files, of the file header of `src/plugins/smart/smartmontools.c` for libblockdev, and of `main.go` for smartctl_exporter, which has no NOTICE file.
+
+That `/dev/sda` and `/dev/sdb` of the Telegraf scan are logical volumes of the MegaRAID controller is **Assumed**: the scan was made without `--scan-open`, and the file says nothing about them.
+
+### Read and not imported
+
+| Source | Why not |
+| --- | --- |
+| Scrutiny `smart-scsi2.json` | Written by smartmontools 6.7, below the baseline of 7.0 ([ADR 0002](../adr/0002-supported-platforms-and-version-baseline.md)) |
+| Telegraf `testcases_device/scsi/response.json` and `scsi_extended/response.json` | The source replaced vendor, product and model by made-up strings such as `XYZZZZZZ`; the values are not those of a real drive |
+| smartctl_exporter `HITACHI_H109060SESUN600G_10.json`, `HP_73.4G_MAS3735NC_25.json`, libblockdev `TOSHIBA_AL15SEB18EQY.json` | Same model or same kind as an imported file; they add nothing |
+
+### Evidence only
+
+| Source | What it shows | Why it is not a fixture |
+| --- | --- | --- |
+| [Starosdev/scrutiny](https://github.com/Starosdev/scrutiny) (MIT fork of Scrutiny), `collector/pkg/detect/testdata/smartctl_info_cciss_sas.json` and `smartctl_info_cciss_sata.json`, added in commit `f5b4b11b03` with the subject "stop sharing the block device WWN across controller drives (#850)" | `--info` output of a SAS drive and of a SATA drive read as `cciss,N` behind an HP Smart Array controller | Taken from user output in issue [850](https://github.com/Starosdev/scrutiny/issues/850), whose body names a P400i and `cciss`. The repository grants MIT; the author of the output did not. No health data and no error counters |
+| smartmontools issue [313](https://github.com/smartmontools/smartmontools/issues/313) | A PERC H965i on `mpi3mr`: the physical drives are not listed | Text in an issue tracker, no license |
+
+### Not found
+
+- smartmontools itself ships no JSON test data: the tree of `RELEASE_7_5` has no `.json` file.
+- No public JSON recording of a SAS drive read as `megaraid,N`, of a MegaRAID enclosure, of a drive behind `smartpqi`, of an empty `cciss` bay, or of any `mpi3mr` host was found.
+- No recording with the SAS phy log, so none with SAS addresses; the key names above are taken from the source code only.
+
+## What follows for milestone M6
+
+- The SAS checks of the catalog can be tested on real healthy SAS recordings, and on a real recording with grown defects of a SAS drive (version unknown) and of a parallel SCSI drive (7.4). A degraded SAS recording of a known version, and every value above the thresholds that no recording shows, are derived and marked as such ([ADR 0016](../adr/0016-test-strategy.md)).
+- The missing `smart_status` of a drive without the IEC mode page must not count as a failed health verdict.
+- MegaRAID can be tested on real SATA drives behind it and on real scans. SAS drives behind it, enclosures, logical volumes with `open_error`, and changed device IDs are derived.
+- HPE Smart Array and `mpi3mr` rest on the source code and on synthetic fixtures. HPE stays "Experimental" ([ADR 0016](../adr/0016-test-strategy.md)); `cciss,N` is limited to N from 0 to 127 by smartctl itself.
+- Q-R5 stays open for recordings from users; the call for recordings arrives at the end of M6.
+
+## Sources
+
+- smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>
+- smartmontools issue 313: <https://github.com/smartmontools/smartmontools/issues/313>
+- libblockdev: <https://github.com/storaged-project/libblockdev/tree/3c5433aba8c87b83a590d9363bf0fc71c205e08a/tests/smart_dumps>
+- smartctl_exporter: <https://github.com/prometheus-community/smartctl_exporter/tree/952076d119c8a17abdb075871348e072263de822/testdata>
+- Scrutiny: <https://github.com/AnalogJ/scrutiny/tree/ac2056d6c3cef4a8dd6fe3e0b8c002d9595da75f>
+- Telegraf: <https://github.com/influxdata/telegraf/tree/2bac12a6a682e02f2ef42a43d40a259083892212/plugins/inputs/smartctl>
+- Starosdev/scrutiny issue 850: <https://github.com/Starosdev/scrutiny/issues/850>

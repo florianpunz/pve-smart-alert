@@ -1,0 +1,37 @@
+{
+  "origin": "Test data of Telegraf: the device scan of a host with two SCSI devices, one SATA drive and seven devices behind a MegaRAID controller, and one SATA hard disk behind it read as sat+megaraid,14, smartmontools 7.1. That scan and drive come from the same host is assumed: the drive is listed in the scan",
+  "license": "MIT",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/influxdata/telegraf",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.1",
+  "controller": "MegaRAID",
+  "files": [
+    {
+      "file": "scan.json",
+      "command": "smartctl --scan --json",
+      "exit_status": 0
+    },
+    {
+      "file": "bus6-megaraid14.json",
+      "device": "/dev/bus/6",
+      "type": "sat+megaraid,14",
+      "protocol": "ATA",
+      "class": "hdd",
+      "model": "ST6000NM0115-1YZ110",
+      "command": "smartctl --json --all /dev/bus/6 --device megaraid,14 --nocheck=standby",
+      "exit_status": 4
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/influxdata/telegraf",
+    "commit": "2bac12a6a682e02f2ef42a43d40a259083892212",
+    "copyright": "Copyright (c) 2015-2025 InfluxData Inc.",
+    "license_file": "tests/fixtures/licenses/telegraf-MIT.txt",
+    "paths": {
+      "scan.json": "plugins/inputs/smartctl/testcases_scan/megaraid/response.json",
+      "bus6-megaraid14.json": "plugins/inputs/smartctl/testcases_device/megaraid/response.json"
+    }
+  }
+}

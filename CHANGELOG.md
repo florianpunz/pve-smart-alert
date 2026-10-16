@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `pve-smart-alert dump-fixture` also replaces the logical unit id and the SAS addresses of SCSI and SAS drives by placeholders, and writes nothing when one of them has a form it does not know ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)).
 - `pve-smart-alert check` shows which drive it reads only on a terminal; a run of the timer logs its summary line and no line per drive (FR-606).
 - `pve-smart-alert doctor` reports a configuration file that does not validate as a warning that says which configuration a run continues with, instead of failing: monitoring does not stop (FR-406).
 

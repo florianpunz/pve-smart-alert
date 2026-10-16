@@ -27,3 +27,66 @@ License: AGPL-3.0-or-later
 Comment: The notification templates carry no license identifier of their own:
  they consist of nothing but the expression they print. Their origin and their
  license are recorded here instead (ADR 0015, NFR-20).
+
+Files: tests/fixtures/smartctl/direct/libblockdev-*/sd*.json
+ tests/fixtures/licenses/libblockdev-LGPL-2.1.txt
+Copyright: 2014-2023 Red Hat, Inc.
+License: LGPL-2.1+
+Comment: Test data of libblockdev, anonymized (ADR 0026). Not installed.
+ The complete text is in /usr/share/common-licenses/LGPL-2.1.
+
+Files: tests/fixtures/smartctl/direct/exporter-*/sd*.json
+ tests/fixtures/licenses/smartctl_exporter-Apache-2.0.txt
+Copyright: The Prometheus Authors
+License: Apache-2.0
+Comment: Test data of smartctl_exporter, anonymized (ADR 0026). Not installed.
+ The complete text is in /usr/share/common-licenses/Apache-2.0.
+
+Files: tests/fixtures/smartctl/*/scrutiny-*/s*.json
+ tests/fixtures/licenses/scrutiny-MIT.txt
+Copyright: 2020 Jason Kulatunga
+License: Expat
+Comment: Test data of Scrutiny, anonymized (ADR 0026). Not installed.
+
+Files: tests/fixtures/smartctl/megaraid/telegraf-megaraid/scan.json
+ tests/fixtures/smartctl/megaraid/telegraf-megaraid/bus6-megaraid14.json
+ tests/fixtures/licenses/telegraf-MIT.txt
+Copyright: 2015-2025 InfluxData Inc.
+License: Expat
+Comment: Test data of Telegraf, anonymized (ADR 0026). Not installed.
+
+License: LGPL-2.1+
+ This library is free software; you can redistribute it and/or modify it
+ under the terms of the GNU Lesser General Public License as published by the
+ Free Software Foundation; either version 2.1 of the License, or (at your
+ option) any later version.
+
+License: Apache-2.0
+ Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ use this file except in compliance with the License. You may obtain a copy of
+ the License at http://www.apache.org/licenses/LICENSE-2.0
+ .
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ License for the specific language governing permissions and limitations under
+ the License.
+
+License: Expat
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.

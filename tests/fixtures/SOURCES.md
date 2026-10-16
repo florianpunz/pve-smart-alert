@@ -5,8 +5,8 @@ No fixture contains a real serial number or WWN; a test checks every fixture for
 
 ## Output of smartctl: `smartctl/`
 
-Recordings of whole hosts, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, `lsblk.json` from `lsblk -J -O`, and `recording.json` with the origin, the license and the smartmontools version, and the command line, exit status, protocol and class of every file.
-They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs, EUI-64s, NGUIDs and UUIDs are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
+Recordings, one directory per recording under the controller of its drives (`direct` for directly attached drives): `scan.json` from `smartctl --scan-open --json=c`, one file per device from `smartctl -x --json=c -d TYPE DEVICE`, `lsblk.json` from `lsblk -J -O`, where the recording has them, and `recording.json` with the origin, the license and the smartmontools version, and the command line, exit status, protocol and class of every file.
+The recordings of the maintainer were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py) from the archives of [`scripts/collect-node-data.sh`](../../scripts/collect-node-data.sh), which stay outside the repository, and are anonymized as [ADR 0023](../../docs/adr/0023-anonymization-of-recordings.md) describes: serial numbers, WWNs, EUI-64s, NGUIDs and UUIDs are replaced by counters in the order of the scan. Nothing else is changed; the JSON is written indented.
 
 | Directory | Origin | Changes | License |
 | --- | --- | --- | --- |
@@ -15,6 +15,26 @@ They were written by [`scripts/make_fixtures.py`](../../scripts/make_fixtures.py
 | `direct/test-cluster-pve7` | Same, node `pve7`. Samsung SSD 850 EVO 250GB, two Samsung MZVLW256HEHP (PM961) | Anonymized | AGPL-3.0-or-later |
 | `direct/standalone-pve1` | [Research 07](../../docs/research/07-standalone-host-pve1.md): the standalone test host `pve1` of the maintainer, not part of the test cluster, recorded on 2026-10-08 by the collection script. Intenso SSD; a USB device that the scan does not list | Anonymized | AGPL-3.0-or-later |
 | `direct/failing-hdd` | Derived by hand from the recording of `test-cluster-pve7`: a hard disk that fails several checks at once, for the tests of the evaluation of milestone M3 and its acceptance step 2. Identity and values replaced, derived on 2026-10-12 | Anonymized and modified | AGPL-3.0-or-later |
+
+### Taken from the test data of other projects
+
+These recordings come from the test data of other projects, read at a pinned commit and anonymized by `scripts/make_fixtures.py import` ([ADR 0026](../../docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)). Each fixture has one file of its source, or the files the source shows to belong together; a scan or drive file the source does not have is not made up. `recording.json` names the repository, the commit, the path of every file, the copyright line and the license text, kept in [`licenses/`](licenses/); [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md) lists the projects. What each file shows, and why other files of the same sources were not taken, is in [Research 08](../../docs/research/08-public-recordings.md).
+
+| Directory | Origin | Changes | License |
+| --- | --- | --- | --- |
+| `direct/libblockdev-hgst-husmr3280ass200` | libblockdev, `tests/smart_dumps/HGST_HUSMR3280ASS200.json`. Healthy SAS SSD, smartmontools 7.3 | Anonymized | LGPL-2.1-or-later |
+| `direct/libblockdev-toshiba-kpm5xmug400g` | libblockdev, `TOSHIBA_KPM5XMUG400G.json`. Healthy SAS SSD, 7.3 | Anonymized | LGPL-2.1-or-later |
+| `direct/libblockdev-seagate-st600mp0036` | libblockdev, `SEAGATE_ST600MP0036.json`. Healthy SAS hard disk, 7.3 | Anonymized | LGPL-2.1-or-later |
+| `direct/libblockdev-toshiba-al15seb120ny` | libblockdev, `TOSHIBA_AL15SEB120NY.json`. Healthy SAS hard disk, 7.3 | Anonymized | LGPL-2.1-or-later |
+| `direct/libblockdev-wd-wd4001fyyg` | libblockdev, `WD4001FYYG-01SL3.json`. Healthy SAS hard disk, 7.3 | Anonymized | LGPL-2.1-or-later |
+| `direct/exporter-hitachi-h109060sesun600g` | smartctl_exporter, `testdata/HITACHI_H109060SESUN600G_9.json`. Healthy SAS hard disk, 7.3 | Serial number, build and platform information and logical unit id replaced by the source; anonymized | Apache-2.0 |
+| `direct/exporter-seagate-st373453lc-defects` | smartctl_exporter, `testdata/SEAGATE_ST373453LC_26.json`. Parallel SCSI hard disk with grown defects and uncorrected errors, 7.4 | Serial number, build and platform information replaced by the source; anonymized | Apache-2.0 |
+| `direct/exporter-seagate-st373453lc` | smartctl_exporter, `testdata/SEAGATE_ST373453LC_27.json`. Healthy parallel SCSI hard disk, 7.4 | Same | Apache-2.0 |
+| `direct/scrutiny-seagate-st4000nm0043` | Scrutiny, `webapp/backend/pkg/models/testdata/smart-scsi.json`. SAS hard disk with grown defects, version not recorded | Anonymized | MIT |
+| `intel-rst/scrutiny-raid1-volume` | Scrutiny, `webapp/backend/pkg/models/testdata/smart-raid.json`. Intel RAID 1 volume read as a SCSI device, 7.0 | Anonymized | MIT |
+| `megaraid/scrutiny-megaraid-scan` | Scrutiny, `collector/pkg/detect/testdata/smartctl_scan_megaraid.json`. Device scan with two drives behind MegaRAID, 7.1; no drive files | None: the scan has no identifier | MIT |
+| `megaraid/scrutiny-megaraid-wd4000fyyx` | Scrutiny, `smart-megaraid0.json` and `smart-megaraid1.json`. Two SATA hard disks behind MegaRAID, 7.1; no scan | Serial numbers replaced by the source with the same value, so both have the same placeholder; anonymized | MIT |
+| `megaraid/telegraf-megaraid` | Telegraf, `plugins/inputs/smartctl/testcases_scan/megaraid/response.json` and `testcases_device/megaraid/response.json`. Scan of a MegaRAID host and one SATA hard disk behind it, 7.1 | Anonymized | MIT |
 
 ## Scenarios: `../scenarios.py`
 
@@ -42,3 +62,7 @@ The routing check of [ADR 0020](../../docs/adr/0020-routing-check.md) is tested 
 | `builtin-default` | Derived, not recorded: the built-in default configuration of Proxmox VE, `DEFAULT_CONFIG` in `proxmox-notify/src/context/pve.rs` (`master` on 2026-10-06, [Research 01](../../docs/research/01-notification-integration.md)), written in the form of the recorded answers. That an unchanged built-in entry has the origin `builtin` is assumed (Research 06) | Derived | AGPL-3.0-or-later |
 
 The names of targets that the maintainer chose are replaced by `smtp-relay` and `smtp-provider`. The built-in names `default-matcher` and `mail-to-root` are kept.
+
+## License texts: `licenses/`
+
+The license texts of the projects whose test data is taken above, copied unchanged from their repositories at the commits named in each `recording.json` ([ADR 0026](../../docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)).
