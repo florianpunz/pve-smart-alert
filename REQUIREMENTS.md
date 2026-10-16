@@ -70,6 +70,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | FR-405 | The configuration shall be validated completely before use. Unknown keys, wrong types, out-of-range values and unknown check identifiers shall be reported with the key name. | T |
 | FR-406 | If the configuration file is invalid at run time, the run shall continue with the last configuration that passed validation, or with the built-in defaults if none exists, and shall raise a tool-level warning. | T |
 | FR-407 | `pve-smart-alert config check` shall validate the file and exit non-zero on errors. `pve-smart-alert config show` shall print the effective configuration and the origin of each value. | T |
+| FR-408 | The enabled state of every condition of the tool itself shall be overridable globally in `/etc/pve-smart-alert/config.toml`, in the same table as the checks of a drive and with the same meaning; such a condition shall take no threshold. | T |
 
 ### Notification
 
@@ -151,7 +152,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | --- | --- |
 | 1. One-command installation, no care afterwards | FR-701 to FR-705, NFR-01, NFR-05, NFR-06 |
 | 2. Automatic discovery | FR-101 to FR-110 |
-| 3. Sensible defaults, overridable | FR-301 to FR-312, FR-401 to FR-407 |
+| 3. Sensible defaults, overridable | FR-301 to FR-312, FR-401 to FR-408 |
 | 4. No alert flood | FR-306, FR-308, FR-509 to FR-517, NFR-10 |
 | 5. Messages that identify host, drive and value | FR-507, FR-508 |
 | 6. Single host and cluster node alike | FR-502, NFR-17 |
