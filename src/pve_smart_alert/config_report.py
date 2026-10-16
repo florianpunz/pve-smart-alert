@@ -7,7 +7,8 @@ of the one check that differs per drive class are shown per class, as the
 global configuration leaves them for each class; the per-drive overrides
 are listed as they are configured, because which of them applies is known
 only for a concrete drive. What a run uses for one drive is named by
-`effective_checks`.
+`effective_checks`. The conditions of the tool follow the checks of a
+drive; they have no threshold, only their enabled state (FR-408, ADR 0031).
 """
 
 from __future__ import annotations
@@ -17,7 +18,13 @@ from datetime import timedelta
 from typing import Final
 
 from pve_smart_alert.checks import CATALOG, Check
-from pve_smart_alert.config import Config, ConfigError, effective_check
+from pve_smart_alert.config import (
+    TOOL_CHECK_IDS,
+    Config,
+    ConfigError,
+    effective_check,
+    tool_conditions_enabled,
+)
 
 #: The words after a value that say where it comes from.
 _FROM_FILE: Final = "file"
@@ -120,6 +127,22 @@ def _checks(config: Config, document: Mapping[str, object]) -> list[str]:
                 _value("confirm_runs", str(item.confirm_runs), _origin(raw_check, "confirm_runs"))
             )
         lines.append(f'  "{check.id}"  ' + ", ".join(parts))
+    lines.extend(_tool_checks(config, file_checks))
+    return lines
+
+
+def _tool_checks(config: Config, file_checks: Mapping[str, object]) -> list[str]:
+    """Return the lines of the conditions of the tool (FR-408, ADR 0031).
+
+    A condition of the tool has a fixed severity and takes no threshold, so
+    one line per condition, with its enabled state.
+    """
+    enabled = tool_conditions_enabled(config)
+    lines: list[str] = []
+    for name in sorted(TOOL_CHECK_IDS):
+        raw_check = _table_of(file_checks.get(name))
+        state = _boolean(name in enabled)
+        lines.append(f'  "{name}"  ' + _value("enabled", state, _origin(raw_check, "enabled")))
     return lines
 
 

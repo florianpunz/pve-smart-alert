@@ -10,7 +10,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from pve_smart_alert.config import ConfigError, NotifySettings, SmartctlSettings, TransportName
+from pve_smart_alert.config import (
+    TOOL_CHECK_IDS,
+    ConfigError,
+    NotifySettings,
+    SmartctlSettings,
+    TransportName,
+)
 from pve_smart_alert.model import CheckKind, Severity
 from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.tool_conditions import (
@@ -64,6 +70,12 @@ def test_the_conditions_have_the_severities_of_the_catalog() -> None:
         "tool.unsupported_controller": Severity.NOTICE,
     }
     assert TOOL_CONDITIONS["tool.state_reset"].kind is CheckKind.EVENT
+
+
+def test_the_configuration_knows_every_condition_of_the_tool() -> None:
+    # config.py cannot import this module without a cycle, so it repeats the
+    # identifiers as the ones it accepts in [checks] (ADR 0031).
+    assert frozenset(TOOL_CONDITIONS) == TOOL_CHECK_IDS
 
 
 def test_a_missing_smartctl(tmp_path: Path) -> None:

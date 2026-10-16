@@ -8,13 +8,14 @@ This module reads the keys that are implemented: `[notify]` with the
 transport and the settings of the notification policy (FR-404),
 `[smartctl]` with `path`, `timeout` and `detail`, the manual devices of
 `[[discovery.device]]`, the exclude rules of `[discovery]`, the global
-overrides of `[checks."<check-id>"]` and the per-drive overrides of
-`[[drive]]`, which can exclude a drive, set its smartctl detail level and
-override any check for it. The validation is strict: an unknown section, an
-unknown key, a wrong type and a value out of range are errors that name the
-place (FR-405). An override that repeats the built-in default is dropped, so
-that the reference file, which lists every key with its default, changes
-nothing when it is loaded.
+overrides of `[checks."<check-id>"]`, which cover the checks of a drive and
+the conditions of the tool itself (FR-408, ADR 0031), and the per-drive
+overrides of `[[drive]]`, which can exclude a drive, set its smartctl detail
+level and override any check for it. The validation is strict: an unknown
+section, an unknown key, a wrong type and a value out of range are errors
+that name the place (FR-405). An override that repeats the built-in default is
+dropped, so that the reference file, which lists every key with its default,
+changes nothing when it is loaded.
 
 An invalid file never stops a run: `load_effective` returns the last
 configuration that passed validation, saved as `last-good-config.json` by
@@ -94,6 +95,24 @@ _DYNAMIC_SECTIONS: Final = ("checks", "drive")
 
 # The keys of a table that overrides one check (ADR 0011).
 _CHECK_KEYS: Final = ("enabled", "notice", "warning", "critical")
+
+#: The conditions of the tool itself, which the configuration may switch off
+#: with `[checks."<id>"] enabled = false` (FR-408, ADR 0031). Their severity is
+#: fixed and they have no thresholds, no confirmation count and no per-class
+#: values, so `enabled` is the only key they take. The list is repeated here
+#: because `tool_conditions.py` imports this module and the import of it would
+#: be a cycle; a test keeps both lists in step.
+TOOL_CHECK_IDS: Final = frozenset(
+    {
+        "tool.smartctl_missing",
+        "tool.smartctl_too_old",
+        "tool.scan_failed",
+        "tool.config_invalid",
+        "tool.state_reset",
+        "tool.transport_degraded",
+        "tool.unsupported_controller",
+    }
+)
 
 # The keys of `[notify.reminder]`: one interval per severity (ADR 0009).
 _REMINDER_KEYS: Final = ("critical", "warning", "notice")
@@ -620,6 +639,20 @@ def drive_override(config: Config, identity: DriveIdentity) -> DriveOverride | N
     return next((entry for entry in config.drives if entry.selector.matches(identity)), None)
 
 
+def tool_conditions_enabled(config: Config) -> frozenset[str]:
+    """Return the conditions of the tool that the configuration leaves on (FR-408, ADR 0031).
+
+    The conditions of the tool are not checks of a drive, but their `enabled`
+    state is set the same way: only `[checks."<id>"] enabled = false` switches
+    one off. A switched-off condition is not raised, and one that is active in
+    the state is dropped without a recovery, like a check of a drive that is
+    switched off (ADR 0009).
+    """
+    return TOOL_CHECK_IDS - frozenset(
+        name for name, override in config.checks.items() if override.enabled is False
+    )
+
+
 def effective_checks(
     config: Config, identity: DriveIdentity, drive_class: DriveClass
 ) -> dict[str, EffectiveCheck]:
@@ -758,18 +791,39 @@ def _build(data: Mapping[str, object], *, source: Path, text: str) -> Config:
         notify=_notify(_table(data.get("notify")), text),
         smartctl=_smartctl(_table(data.get("smartctl")), text),
         discovery=_discovery(_table(data.get("discovery")), text),
-        checks=_checks(_table(data.get("checks")), text),
+        checks=_checks(_table(data.get("checks")), text, tool_conditions=True),
         drives=_drives(data.get("drive"), text),
         source=source,
     )
 
 
 def _checks(
-    section: Mapping[str, object], text: str, *, where: str = "checks"
+    section: Mapping[str, object],
+    text: str,
+    *,
+    where: str = "checks",
+    tool_conditions: bool = False,
 ) -> dict[str, CheckOverride]:
-    """Return the check overrides of one table, validated and without no-op entries."""
+    """Return the check overrides of one table, validated and without no-op entries.
+
+    The global table covers the checks of a drive and the conditions of the
+    tool itself (ADR 0031). A per-drive table takes only checks of a drive: a
+    condition of the tool is about the host, not about one drive, so setting
+    one there would silently do nothing.
+    """
     result: dict[str, CheckOverride] = {}
     for name, table in section.items():
+        if name in TOOL_CHECK_IDS:
+            if not tool_conditions:
+                raise ConfigError(
+                    f'"{name}" is a condition of the tool and cannot be set in [{where}]',
+                    key=f'{where}."{name}"',
+                    line=_find_line(text, name),
+                )
+            override = _tool_check_override(_table_of(table), where=f'{where}."{name}"', text=text)
+            if override != CheckOverride():
+                result[name] = override
+            continue
         check = CATALOG.get(name)
         if check is None:
             raise ConfigError(
@@ -787,6 +841,23 @@ def _checks(
         if override != CheckOverride():
             result[name] = override
     return result
+
+
+def _tool_check_override(table: Mapping[str, object], *, where: str, text: str) -> CheckOverride:
+    """Return one table that switches a condition of the tool off (ADR 0031).
+
+    Only `enabled = false` is kept: the reference of the configuration lists
+    every key with its default, and loading it must change nothing (ADR 0011).
+    """
+    for key in table:
+        if key != "enabled":
+            raise ConfigError(
+                f'unknown key "{key}" in [{where}], a condition of the tool accepts only "enabled"',
+                key=f"{where}.{key}",
+                line=_find_line(text, key),
+            )
+    enabled = _boolean(table, "enabled", f"{where}.enabled", text)
+    return CheckOverride(enabled=False) if enabled is False else CheckOverride()
 
 
 def _check_override(
