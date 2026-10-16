@@ -12,7 +12,7 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 | [05 Prior art](05-prior-art.md) | Which existing projects solve something similar, and what follows for PVE SMART Alert? |
 | [06 Recordings from the test cluster](06-test-cluster-recordings.md) | What do the drives, the wear values and the matcher configuration of the test cluster look like? Recorded 2026-10-05 |
 | [07 Acceptance run on the standalone host pve1](07-standalone-host-pve1.md) | What did the M2 steps show on a host outside the cluster: routing, the line `fallback`, the wear value, and the USB device that the scan omits? Run 2026-10-08 |
-| [08 Public recordings of SAS and RAID drives](08-public-recordings.md) | Which public smartctl recordings of SAS drives and RAID controllers can become fixtures, and what does smartctl 7.4 and 7.5 write for SCSI drives and RAID controllers? Researched 2026-10-16 |
+| [08 Public recordings of SAS and RAID drives](08-public-recordings.md) | Which public smartctl recordings of SAS drives and RAID controllers can become fixtures, and what does smartctl 7.4 and 7.5 write for SCSI drives and RAID controllers? Researched 2026-10-16; additions on the maintainer's TrueNAS host and on the SCSI hosts of the maintainer's hosts |
 
 ## Scope of validity
 

@@ -165,6 +165,24 @@ From the source code of smartmontools 7.4 and 7.5, **Verified**; no recording sh
 
 [ADR 0028](../adr/0028-logical-volumes-and-enclosures.md) builds on these facts.
 
+## Addition 2026-10-16, evening: the SCSI hosts of the maintainer's hosts
+
+Recorded on 2026-10-16 at 20:04 UTC through the command `hosts` of the read-only wrapper on each host, which prints every SCSI host with its `proc_name` from `/sys/class/scsi_host/hostN/proc_name`, and then the storage controllers that `lspci` lists. The output holds no serial number. Everything here is **Verified** on these hosts.
+
+| Host | SCSI hosts and drivers | Storage controllers in `lspci` |
+| --- | --- | --- |
+| `truenas` (TrueNAS SCALE) | `host0` `mpt2sas`; `host1` to `host6` `ahci`; `host7` `ahciem` | Intel Cannon Lake PCH SATA AHCI controller `[8086:a352]`; Broadcom / LSI SAS2308 PCI-Express Fusion-MPT SAS-2 `[1000:0087]` |
+| `pve5` | `host0`, `host1` `ahci` | Intel Celeron/Pentium Silver SATA controller `[8086:31e3]` |
+| `pve6` | `host0`, `host1` `ahci` | Intel 200 Series PCH SATA controller in AHCI mode `[8086:a282]`; SanDisk / WD NVMe SSD `[15b7:5002]` |
+| `pve7` | `host0` to `host5` `ahci` | Intel 5 Series/3400 Series 6 port SATA AHCI controller `[8086:3b22]`; two Samsung SM961/PM961 NVMe SSDs `[144d:a804]` |
+
+- **One SCSI host per AHCI port.** The number of `ahci` hosts follows the ports of the controller, not the drives attached.
+- **`ahciem` is a SCSI host of its own** next to the `ahci` hosts of the TrueNAS host: the enclosure management pseudo-host of AHCI that newer kernels add. It is no drive controller.
+- **The HBA is one SCSI host with `mpt2sas`**, whose drives smartctl reads directly (the addition on the TrueNAS host above).
+- **NVMe controllers have no SCSI host.** The NVMe drives of `pve6` and `pve7` appear only in `lspci`.
+
+No host shows an `mpi3mr` controller, and no recording of one exists. [ADR 0030](../adr/0030-controllers-whose-drives-cannot-be-queried.md) builds on these facts: none of these drivers is reported as a controller whose drives cannot be queried. The tests use sysfs trees built from the TrueNAS host and from `pve7` (`tests/unit/hosts.py`).
+
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>
