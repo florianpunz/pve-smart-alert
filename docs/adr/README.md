@@ -35,6 +35,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0028](0028-logical-volumes-and-enclosures.md) | Recognize logical volumes and enclosures by structured fields first | Accepted | How discovery tells a RAID logical volume and an enclosure from a drive, and what the location of a drive behind MegaRAID is |
 | [0029](0029-notification-field-device-id.md) | The notification field `device-id` for drives behind a controller | Accepted | Which field lets a matcher select one drive behind a RAID controller, and when it is present |
 | [0030](0030-controllers-whose-drives-cannot-be-queried.md) | Detect controllers whose drives cannot be queried from the driver of the SCSI host | Accepted | Which controllers `scan`, `doctor` and `tool.unsupported_controller` report, and which drivers they never report |
+| [0031](0031-switching-tool-conditions-off.md) | Switch a condition of the tool off, and name the monitored drives of the notice | Accepted | The key that switches a condition of the tool off, and what the notice about an unsupported controller names |
 
 ## Confirmed by the maintainer
 
