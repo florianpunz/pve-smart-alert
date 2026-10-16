@@ -1,4 +1,7 @@
 Subject: [pve-smart-alert] WARNING pve1: monitoring 2 drives, 1 finding
+Field event: first-run
+Field hostname: pve1
+Field type: pve-smart-alert
 
 PVE SMART Alert now monitors the drives of pve1. This summary lists what it
 found. From now on a problem is reported once, again when it gets worse, and

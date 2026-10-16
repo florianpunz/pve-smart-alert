@@ -1,4 +1,10 @@
 Subject: [pve-smart-alert] INFO pve1: /dev/sdb Samsung SSD 870 EVO 1TB (ANON-SN-0001): recovered: pending sectors
+Field device: /dev/sdb
+Field event: recovered
+Field hostname: pve1
+Field model: Samsung SSD 870 EVO 1TB
+Field serial: ANON-SN-0001
+Field type: pve-smart-alert
 
 A drive in pve1 has recovered.
 

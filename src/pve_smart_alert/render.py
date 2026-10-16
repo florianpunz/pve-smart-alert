@@ -26,6 +26,7 @@ from pve_smart_alert.checks import CATALOG, Thresholds
 from pve_smart_alert.config import Config, effective_checks
 from pve_smart_alert.model import (
     FIELD_DEVICE,
+    FIELD_DEVICE_ID,
     FIELD_EVENT,
     FIELD_MODEL,
     FIELD_SERIAL,
@@ -33,6 +34,7 @@ from pve_smart_alert.model import (
     EventType,
     Notification,
     Severity,
+    pass_through_id,
 )
 from pve_smart_alert.paths import CONFIG_PATH, COROSYNC_CONF_PATH
 from pve_smart_alert.planner import RANK, DriveInfo, DriveMessage, Item, MessageKind, Planned
@@ -339,6 +341,12 @@ def _drive(planned: Planned, context: RenderContext) -> Notification:
         FIELD_SERIAL: _clean(drive.serial or ""),
         FIELD_MODEL: _clean(drive.model or ""),
     }
+    # `device-id` comes from the type of the current read, or of the last one
+    # for a missing drive. A drive read without a pass-through type has no
+    # such field at all, not an empty one (ADR 0029).
+    device_id = pass_through_id(drive.type)
+    if device_id is not None:
+        fields[FIELD_DEVICE_ID] = device_id
     return Notification(
         event=message.event,
         severity=planned.severity,

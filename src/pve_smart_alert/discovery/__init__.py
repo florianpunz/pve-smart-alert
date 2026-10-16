@@ -37,7 +37,6 @@ from pve_smart_alert.discovery.enrichment import (
     HostPaths,
     details_of,
     is_remote,
-    pass_through_id,
     read_block_devices,
 )
 from pve_smart_alert.discovery.sources import (
@@ -52,7 +51,13 @@ from pve_smart_alert.discovery.volumes import (
     inquiry_text,
     logical_volume,
 )
-from pve_smart_alert.model import Collection, DeviceAccess, DriveIdentity, Snapshot
+from pve_smart_alert.model import (
+    Collection,
+    DeviceAccess,
+    DriveIdentity,
+    Snapshot,
+    pass_through_id,
+)
 from pve_smart_alert.parsers import ParseError, inquiry_of, parse, protocol_of
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 

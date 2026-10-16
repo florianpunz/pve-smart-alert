@@ -17,7 +17,14 @@ from frame import RUN_INTERVAL, START, Clock, RecordingTransport, ScenarioHost
 
 from pve_smart_alert.checks import evaluate
 from pve_smart_alert.discovery import Outcome, SkipReason
-from pve_smart_alert.model import FIELD_DEVICE, EventType, Notification, Severity
+from pve_smart_alert.model import (
+    FIELD_DEVICE,
+    FIELD_DEVICE_ID,
+    FIELD_SERIAL,
+    EventType,
+    Notification,
+    Severity,
+)
 from scenarios import SCENARIOS, main
 
 
@@ -108,6 +115,7 @@ def test_the_megaraid_jbod_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     first = only(host.run("01-first"))
     assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 2 drives, no findings"
+    assert FIELD_DEVICE_ID not in first.fields_for()
     assert "/dev/sdc [sat] ST6000NM0115-1YZ110 (ANON-SN-0001)  no findings" in first.body
     assert "/dev/bus/6 [megaraid,8] SEAGATE ST600MP0036 (ANON-SN-0002)  no findings" in first.body
     assert "/dev/sda [scsi]: logical-volume (lsblk vendor DELL, model PERC H730P Mini)" in (
@@ -125,6 +133,7 @@ def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.Mon
     warning = only(host.run("02-pending-8"))
     assert warning.event is EventType.PROBLEM
     assert "Location:   /dev/bus/6 (megaraid_sas), device 14" in warning.body
+    assert warning.fields_for()[FIELD_DEVICE_ID] == "14"
     keys = set(json.loads(host.state_path.read_text(encoding="utf-8"))["drives"])
 
     assert host.run("03-moved") == []
@@ -151,6 +160,16 @@ def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.Mon
     assert sas["missing_runs"] == 0
     assert host.exit_status == 0
 
+    # A missing drive carries the device ID of its last read, from the state;
+    # `serial` is what still selects it (ADR 0029).
+    assert host.run("05-gone") == []
+    missing = only(host.run("06-gone"))
+    assert missing.event is EventType.MISSING
+    fields = missing.fields_for()
+    assert fields[FIELD_DEVICE] == "/dev/bus/6"
+    assert fields[FIELD_DEVICE_ID] == "9"
+    assert fields[FIELD_SERIAL] == "ANON-SN-0002"
+
 
 def test_the_megaraid_degraded_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Result 2 of M6: a degraded drive behind the controller produces a
@@ -174,6 +193,9 @@ def test_the_megaraid_degraded_scenario(tmp_path: Path, monkeypatch: pytest.Monk
     assert "Drive:      /dev/bus/6 [megaraid,8]\n" in sas.body
     assert "Location:   /dev/bus/6 (megaraid_sas), device 8\n" in sas.body
     assert sata.fields_for()[FIELD_DEVICE] == sas.fields_for()[FIELD_DEVICE] == "/dev/bus/6"
+    # The device ID tells the two apart (ADR 0029).
+    assert sata.fields_for()[FIELD_DEVICE_ID] == "14"
+    assert sas.fields_for()[FIELD_DEVICE_ID] == "8"
 
 
 def test_the_steps_can_be_built_for_a_real_host(tmp_path: Path) -> None:

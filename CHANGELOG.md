@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A notification about a drive behind a MegaRAID controller, read as `megaraid,N` or `sat+megaraid,N`, carries the field `device-id` with the device ID `N`, so that a matcher can select one drive behind the controller; the field `device` stays the node of the controller ([ADR 0029](docs/adr/0029-notification-field-device-id.md)). Every other notification has no such field.
 - `pve-smart-alert --version` prints the version of the tool.
 - `pve-smart-alert test-notification` sends one test notification with a selectable severity and reports what the notification system did with it (FR-520).
 - Notifications reach the Proxmox VE notification system through a Perl bridge that calls `PVE::Notify`, with mail to root as the automatic fallback when that route fails ([ADR 0008](docs/adr/0008-notification-integration.md)).

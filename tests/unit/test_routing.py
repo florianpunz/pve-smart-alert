@@ -260,6 +260,24 @@ def test_a_rule_on_a_field_that_differs_between_notifications_is_undecided() -> 
     )
 
 
+def test_a_rule_on_the_device_id_is_undecided() -> None:
+    # Only a drive read through a pass-through type carries `device-id`, and a
+    # rule on a field a notification lacks does not match it (Research 01):
+    # whether the rule matches depends on the notification (ADR 0029).
+    result = routing(config(matcher(match_field=["exact:device=/dev/bus/6", "exact:device-id=8"])))
+
+    assert result.verdict is Verdict.UNKNOWN
+    assert result.reasons == (
+        "matcher test: the rule exact:device=/dev/bus/6 depends on device,"
+        " which differs between notifications",
+        "matcher test: the rule exact:device-id=8 depends on device-id,"
+        " which differs between notifications",
+    )
+    alone = routing(config(matcher(match_field=["exact:device-id=8"])))
+    assert alone.verdict is Verdict.UNKNOWN
+    assert verdict(config(matcher(match_field=["regex:device-id=.*"]))) is Verdict.UNKNOWN
+
+
 def test_a_time_rule_is_undecided() -> None:
     result = routing(config(matcher(match_calendar=["mon..fri 8-17"])))
 
@@ -366,8 +384,8 @@ def test_the_notifications_of_the_tool() -> None:
         fields={"type": "pve-smart-alert", "hostname": NODE},
         varying=VARYING_FIELDS,
     )
-    # The fields of a single drive (FR-503).
-    assert {"event", "device", "serial", "model"} <= VARYING_FIELDS
+    # The fields of a single drive (FR-503, ADR 0029).
+    assert {"event", "device", "device-id", "serial", "model"} <= VARYING_FIELDS
 
 
 def test_a_single_notification_is_seen_completely() -> None:
@@ -382,6 +400,9 @@ def test_a_single_notification_is_seen_completely() -> None:
     # Its event is known, so a rule on it is decided.
     configuration = config(matcher(match_field=["exact:event=test"]))
     assert evaluate(configuration, metadata).verdict is Verdict.ROUTED
+    # It carries no device ID, so a rule on that does not match it (ADR 0029).
+    on_the_id = config(matcher(match_field=["exact:device-id=8"]))
+    assert evaluate(on_the_id, metadata).verdict is Verdict.NOT_ROUTED
 
 
 # Matchers that match but route nowhere
