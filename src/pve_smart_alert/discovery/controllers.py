@@ -6,12 +6,14 @@ The SCSI hosts of the host are the directories `hostN` below
 `scsi_host_driver` of enrichment. A driver is reported only when it is on
 the list of drivers whose drives cannot be queried, with the reason and the
 source of each entry. Every other driver is not reported: the HBAs whose
-drives smartctl reads directly, the enclosure management pseudo-host of
-AHCI, the controllers whose drives a probe or a manual entry can reach, and
-every driver the tool does not know. Unknown is not unsupported.
+drives smartctl reads directly, `ahciem`, seen next to the ahci hosts on
+the TrueNAS SCALE kernel, the controllers whose drives a probe or a manual
+entry can reach, and every driver the tool does not know. Unknown is not
+unsupported.
 
 Reading sysfs is best effort: a directory that is missing means no SCSI
-host, one that cannot be read is reported as such and is no error of a run.
+host. One that cannot be read is reported as such, is no error of a run,
+and leaves the condition of the tool as it was.
 """
 
 from __future__ import annotations
@@ -44,6 +46,10 @@ class Limitation:
 
     hardware: str
     reason: str
+    # Which drives behind the driver the limitation is known for, as a
+    # message names them, and what is known about the others.
+    affected: str
+    others: str
     # The short citation a message names.
     source: str
     url: str
@@ -55,10 +61,16 @@ class Limitation:
 UNSUPPORTED_DRIVERS: Final[Mapping[str, Limitation]] = {
     "mpi3mr": Limitation(
         hardware="Broadcom MegaRAID 96xx, Dell PERC 12 such as the H965i",
+        # Issue 313 shows the RAID personality only: a PERC H965i with one
+        # virtual drive. The same driver runs Broadcom 9600 cards in an
+        # "Enhanced HBA Personality" that exposes the drives to the system;
+        # whether smartctl reads them there is not recorded (Q-R7).
         reason=(
-            "smartctl neither lists nor queries the physical drives behind it,"
+            "in RAID mode smartctl neither lists nor queries the physical drives behind it,"
             " only the virtual drive"
         ),
+        affected="the drives behind it in RAID mode",
+        others="drives it exposes directly are monitored if scan lists them",
         source="smartmontools issue 313",
         url="https://github.com/smartmontools/smartmontools/issues/313",
     ),
@@ -79,13 +91,14 @@ NEVER_REPORTED: Final[Mapping[str, tuple[Support, str]]] = {
     ),
     "ahciem": (
         Support.NOT_A_CONTROLLER,
-        "the enclosure management pseudo-host of AHCI in newer kernels, next to the"
-        " ahci hosts of the same controller (Research 08)",
+        "taken for the enclosure management of AHCI, next to the ahci hosts of the"
+        " same controller; seen on the TrueNAS SCALE kernel, where it comes from was"
+        " not checked in kernel source (Research 08)",
     ),
 }
 
 # The directory of a SCSI host in sysfs.
-_HOST_DIRECTORY: Final = re.compile(r"host([0-9]+)")
+_HOST_DIRECTORY: Final = re.compile(r"host(0|[1-9][0-9]*)")
 
 
 @dataclass(frozen=True)
@@ -109,14 +122,17 @@ class ScsiHost:
 
     def describe(self) -> str:
         """Return what a message says about a host whose drives cannot be read."""
-        text = (
-            f"SCSI host {self.name} has the driver {self.driver}: smartctl cannot read the"
-            " drives behind it, so they are not monitored"
-        )
         limitation = self.limitation
-        if limitation is not None:
-            text += f" (upstream limitation, {limitation.source})"
-        return text
+        if limitation is None:
+            return (
+                f"SCSI host {self.number} has the driver {self.driver}: smartctl cannot read"
+                " the drives behind it, so they are not monitored"
+            )
+        return (
+            f"SCSI host {self.number} has the driver {self.driver}: smartctl cannot read"
+            f" {limitation.affected}, so they are not monitored (upstream limitation,"
+            f" {limitation.source}); {limitation.others}"
+        )
 
 
 @dataclass(frozen=True)

@@ -158,7 +158,10 @@ class SkippedSeen:
 class Observation:
     """What one run saw (ARCHITECTURE.md section 3, steps 4 to 8).
 
-    `tool` are the conditions of the tool that hold now. `state_reset` says
+    `tool` are the conditions of the tool that hold now, and
+    `tool_not_evaluated` those that this run could not look at, such as
+    `tool.unsupported_controller` when sysfs cannot be read: they are frozen,
+    neither recovered nor raised (ADR 0030). `state_reset` says
     why the state was set aside, when it was. When the device scan failed,
     `presence_known` is false: drives that were not found were not looked
     for, so their absence is not counted.
@@ -167,6 +170,7 @@ class Observation:
     drives: tuple[DriveSeen, ...] = ()
     skipped: tuple[SkippedSeen, ...] = ()
     tool: tuple[Finding, ...] = ()
+    tool_not_evaluated: frozenset[str] = frozenset()
     state_reset: str | None = None
     presence_known: bool = True
 
@@ -637,11 +641,15 @@ class _Planner:
     def _tool(self) -> Planned | None:
         """Plan the conditions of the tool, on its pseudo-device (ADR 0009, FR-518)."""
         present = {finding.check: finding for finding in self.observation.tool}
+        frozen = self.observation.tool_not_evaluated
+        scope = None
+        if frozen:
+            scope = {check for check in self.work.tool.conditions if check not in frozen}
         outcome = self._conditions(
             self.work.tool,
             present,
             locate=lambda state: state.tool,
-            scope=None,
+            scope=scope,
             confirm=lambda _c: 1,
         )
         if not outcome.items:

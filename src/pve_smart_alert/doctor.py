@@ -552,8 +552,8 @@ def check_controllers(paths: HostPaths = HOST) -> CheckResult:
     """Name the SCSI hosts whose drives smartctl cannot read (FR-109, ADR 0030).
 
     Such a controller is a warning, not a failure: the tool works, it only
-    cannot see the drives behind it. HBAs, the enclosure management host of
-    AHCI and every driver not on the list are not reported.
+    cannot see the drives behind it. HBAs, `ahciem` and every driver not on
+    the list are not reported.
     """
     scsi = read_scsi_hosts(paths)
     if scsi.error is not None:

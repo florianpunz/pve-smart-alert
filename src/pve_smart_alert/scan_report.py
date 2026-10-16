@@ -35,6 +35,8 @@ def render(discovery: Discovery, *, smartctl_path: Path) -> list[str]:
         lines.append(
             f"Without lsblk: {discovery.enrichment_error}; transport, links and use are missing"
         )
+    if discovery.scsi_hosts.error is not None:
+        lines.append(f"Without SCSI hosts: {discovery.scsi_hosts.error}")
     for host in discovery.scsi_hosts.unsupported:
         lines.append(f"Unsupported controller: {host.describe()}")
     for found in discovery.devices:

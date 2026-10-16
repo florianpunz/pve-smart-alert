@@ -57,6 +57,7 @@ The trees below `/sys/class/scsi_host` that the tests of the controllers whose d
 | --- | --- |
 | `TRUENAS_SCSI_HOSTS` | Recorded on 2026-10-16 at 20:04 UTC on the maintainer's TrueNAS host through the command `hosts` of the read-only wrapper ([Research 08](../../docs/research/08-public-recordings.md)): `mpt2sas`, six `ahci`, `ahciem` |
 | `CLUSTER_NODE_SCSI_HOSTS` | Recorded in the same session on `pve7` of the test cluster: six `ahci`; `pve5` and `pve6` have two |
+| `STANDALONE_SCSI_HOSTS` | Recorded on 2026-10-16 at about 20:40 UTC on `pve-test` from `/sys/class/scsi_host`: two `ahci` and `usb-storage` |
 | `MPI3MR_SCSI_HOSTS`, `MIXED_SCSI_HOSTS` | Synthetic: no recording of an `mpi3mr` host exists. `mpi3mr` next to `ahci`, and next to an `mpt3sas` HBA |
 
 ## Rendered notifications: `golden/`

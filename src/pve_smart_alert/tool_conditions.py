@@ -29,6 +29,7 @@ __all__ = [
     "MINIMUM_SMARTCTL",
     "PSEUDO_DEVICE",
     "TOOL_CONDITIONS",
+    "UNSUPPORTED_CONTROLLER",
     "ToolCondition",
     "config_invalid",
     "scan_failed",
@@ -57,6 +58,9 @@ class ToolCondition:
     severity: Severity
     kind: CheckKind = CheckKind.CONDITION
 
+
+#: The condition of the controllers whose drives cannot be read (ADR 0030).
+UNSUPPORTED_CONTROLLER: Final = "tool.unsupported_controller"
 
 #: Every condition of the tool, by its stable identifier.
 TOOL_CONDITIONS: Final[Mapping[str, ToolCondition]] = {
@@ -159,7 +163,7 @@ def unsupported_controller(hosts: Sequence[ScsiHost]) -> Finding | None:
     """
     if not hosts:
         return None
-    return finding("tool.unsupported_controller", describe_all(hosts))
+    return finding(UNSUPPORTED_CONTROLLER, describe_all(hosts))
 
 
 def _bridge_problem(path: Path, runner: ProcessRunner) -> str | None:

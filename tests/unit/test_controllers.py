@@ -18,6 +18,7 @@ from hosts import (
     CLUSTER_NODE_SCSI_HOSTS,
     MIXED_SCSI_HOSTS,
     MPI3MR_SCSI_HOSTS,
+    STANDALONE_SCSI_HOSTS,
     TRUENAS_SCSI_HOSTS,
     Host,
     write_scsi_hosts,
@@ -35,11 +36,19 @@ from pve_smart_alert.discovery.controllers import (
 )
 from pve_smart_alert.discovery.enrichment import MAX_DRIVER_NAME, HostPaths
 from pve_smart_alert.doctor import Status, check_controllers
-from pve_smart_alert.model import CheckKind, EventType, Severity
+from pve_smart_alert.model import CheckKind, EventType, Notification, Severity
 from pve_smart_alert.scan_report import render
 from pve_smart_alert.tool_conditions import unsupported_controller
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "smartctl"
+
+# What every message says about SCSI host 2 with mpi3mr. Issue 313 covers
+# the RAID personality only, so the text claims no more (ADR 0030, Q-R7).
+MPI3MR_HOST_2 = (
+    "SCSI host 2 has the driver mpi3mr: smartctl cannot read the drives behind it in"
+    " RAID mode, so they are not monitored (upstream limitation, smartmontools issue 313);"
+    " drives it exposes directly are monitored if scan lists them"
+)
 
 
 def paths_with(tmp_path: Path, drivers: dict[int, str]) -> HostPaths:
@@ -58,7 +67,7 @@ def paths_with(tmp_path: Path, drivers: dict[int, str]) -> HostPaths:
         # HBAs whose drives smartctl reads directly.
         ("mpt2sas", Support.DIRECT),
         ("mpt3sas", Support.DIRECT),
-        # The enclosure management pseudo-host of AHCI.
+        # Seen next to the ahci hosts on the TrueNAS SCALE kernel.
         ("ahciem", Support.NOT_A_CONTROLLER),
         ("ahci", Support.NOT_REPORTED),
         ("megaraid_sas", Support.NOT_REPORTED),
@@ -92,8 +101,9 @@ def test_every_unsupported_driver_names_its_source() -> None:
 
 def test_the_hosts_are_read_in_the_order_of_their_numbers(tmp_path: Path) -> None:
     paths = paths_with(tmp_path, {10: "ahci", 2: "mpt3sas", 0: "ahci"})
-    # Not a SCSI host directory.
-    (paths.sysfs / "class" / "scsi_host" / "power").mkdir()
+    # Not SCSI host directories.
+    for name in ("power", "host01", "host", "hostx"):
+        (paths.sysfs / "class" / "scsi_host" / name).mkdir()
 
     scsi = read_scsi_hosts(paths)
 
@@ -144,7 +154,9 @@ def test_a_driver_name_from_sysfs_is_sanitized(tmp_path: Path) -> None:
     assert host.support is Support.NOT_REPORTED
 
 
-@pytest.mark.parametrize("drivers", [TRUENAS_SCSI_HOSTS, CLUSTER_NODE_SCSI_HOSTS])
+@pytest.mark.parametrize(
+    "drivers", [TRUENAS_SCSI_HOSTS, CLUSTER_NODE_SCSI_HOSTS, STANDALONE_SCSI_HOSTS]
+)
 def test_the_recorded_hosts_have_no_unsupported_controller(
     tmp_path: Path, drivers: dict[int, str]
 ) -> None:
@@ -169,10 +181,7 @@ def test_next_to_an_hba_only_the_mpi3mr_host_is_unsupported(tmp_path: Path) -> N
 def test_the_message_names_host_driver_and_the_upstream_limitation() -> None:
     text = ScsiHost(2, "mpi3mr").describe()
 
-    assert text == (
-        "SCSI host host2 has the driver mpi3mr: smartctl cannot read the drives behind it,"
-        " so they are not monitored (upstream limitation, smartmontools issue 313)"
-    )
+    assert text == MPI3MR_HOST_2
 
 
 # The tool condition
@@ -189,8 +198,8 @@ def test_the_condition_names_every_unsupported_host() -> None:
     assert finding.check == "tool.unsupported_controller"
     assert finding.kind is CheckKind.CONDITION
     assert finding.severity is Severity.NOTICE
-    assert "SCSI host host2 has the driver mpi3mr" in finding.text
-    assert "SCSI host host5 has the driver mpi3mr" in finding.text
+    assert MPI3MR_HOST_2 in finding.text
+    assert "SCSI host 5 has the driver mpi3mr" in finding.text
 
 
 # Discovery and scan
@@ -236,11 +245,7 @@ def test_scan_names_an_mpi3mr_controller(tmp_path: Path, monkeypatch: pytest.Mon
 
     lines = render(host.discover(), smartctl_path=Path("/usr/sbin/smartctl"))
 
-    assert lines[1] == (
-        "Unsupported controller: SCSI host host2 has the driver mpi3mr: smartctl cannot read"
-        " the drives behind it, so they are not monitored (upstream limitation,"
-        " smartmontools issue 313)"
-    )
+    assert lines[1] == f"Unsupported controller: {MPI3MR_HOST_2}"
     assert sum(line.startswith("Unsupported controller") for line in lines) == 1
 
 
@@ -257,6 +262,10 @@ def test_scan_names_an_mpi3mr_controller(tmp_path: Path, monkeypatch: pytest.Mon
         (
             CLUSTER_NODE_SCSI_HOSTS,
             "6 SCSI hosts (ahci), none whose drives smartctl cannot read",
+        ),
+        (
+            STANDALONE_SCSI_HOSTS,
+            "3 SCSI hosts (ahci, usb-storage), none whose drives smartctl cannot read",
         ),
         ({0: "ahci"}, "1 SCSI host (ahci), none whose drives smartctl cannot read"),
     ],
@@ -339,7 +348,7 @@ def test_an_mpi3mr_controller_raises_the_condition_and_recovers(
         "[pve-smart-alert] NOTICE pve1: pve-smart-alert: unsupported controller"
     )
     assert "tool.unsupported_controller" in problem.body
-    assert "host8" in problem.body
+    assert "SCSI host 8" in problem.body
     assert "mpi3mr" in problem.body
     assert "smartmontools issue 313" in problem.body
     assert "mpt2sas" not in problem.body
@@ -371,7 +380,7 @@ def test_the_first_run_names_an_mpi3mr_controller(
 
     assert first.event is EventType.FIRST_RUN
     assert "tool.unsupported_controller" in first.body
-    assert "host2" in first.body
+    assert "SCSI host 2" in first.body
     assert host.run("02-healthy") == []
 
 
@@ -389,6 +398,91 @@ def test_the_scan_command_names_the_controller_and_succeeds(
     monkeypatch.setattr(cli, "discover", discover_here)
 
     assert cli.main(["scan"]) == cli.EXIT_OK
-    assert "Unsupported controller: SCSI host host2 has the driver mpi3mr" in (
-        capsys.readouterr().out
+    assert "Unsupported controller: SCSI host 2 has the driver mpi3mr" in (capsys.readouterr().out)
+
+
+def test_scan_says_when_the_scsi_hosts_cannot_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = truenas(tmp_path, monkeypatch)
+    host.break_scsi_hosts()
+
+    lines = render(host.discover(), smartctl_path=Path("/usr/sbin/smartctl"))
+
+    assert lines[1].startswith("Without SCSI hosts: ")
+    assert "scsi_host cannot be read" in lines[1]
+    assert not any(line.startswith("Unsupported controller") for line in lines)
+
+
+# The condition is frozen while it cannot be evaluated (ADR 0030)
+
+
+def notified_with_mpi3mr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ScenarioHost:
+    """An installed host whose mpi3mr controller was notified."""
+    host = installed(tmp_path, monkeypatch)
+    host.scsi_hosts(MPI3MR_SCSI_HOSTS)
+    (first,) = host.run("01-healthy")
+    assert "tool.unsupported_controller" in first.body
+    return host
+
+
+def items_of(sent: list[Notification], check: str) -> list[str]:
+    """Return the finding lines of a check in what was sent, without the active list."""
+    return [
+        line.strip()
+        for notification in sent
+        for line in notification.body.splitlines()
+        if line.split()[1:2] == [check]
+    ]
+
+
+def test_a_missing_smartctl_does_not_clear_the_condition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = notified_with_mpi3mr(tmp_path, monkeypatch)
+    working = host.config_path.read_text(encoding="utf-8")
+    host.config_path.write_text(
+        f'[smartctl]\npath = "{tmp_path / "no-smartctl"}"\n', encoding="utf-8"
     )
+
+    sent = [notification for _ in range(4) for notification in host.run("02-healthy")]
+
+    assert items_of(sent, "tool.smartctl_missing")
+    assert items_of(sent, "tool.unsupported_controller") == []
+
+    host.config_path.write_text(working, encoding="utf-8")
+    back = [notification for _ in range(3) for notification in host.run("02-healthy")]
+
+    assert [line.split()[0] for line in items_of(back, "tool.smartctl_missing")] == ["RECOVERED"]
+    assert items_of(back, "tool.unsupported_controller") == []
+
+
+def test_an_unreadable_sysfs_does_not_clear_the_condition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = notified_with_mpi3mr(tmp_path, monkeypatch)
+    host.break_scsi_hosts()
+
+    assert [n for _ in range(4) for n in host.run("02-healthy")] == []
+
+    host.mend_scsi_hosts(MPI3MR_SCSI_HOSTS)
+    assert [n for _ in range(3) for n in host.run("02-healthy")] == []
+
+    # Still evaluated afterwards: gone for good, it recovers.
+    host.remove_scsi_host(2)
+    recovered = [n for _ in range(2) for n in host.run("02-healthy")]
+    assert [line.split()[0] for line in items_of(recovered, "tool.unsupported_controller")] == [
+        "RECOVERED"
+    ]
+
+
+def test_an_unreadable_sysfs_raises_nothing_on_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = installed(tmp_path, monkeypatch)
+    host.break_scsi_hosts()
+
+    (first,) = host.run("01-healthy")
+
+    assert "tool.unsupported_controller" not in first.body
+    assert host.run("02-healthy") == []

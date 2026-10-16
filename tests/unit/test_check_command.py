@@ -18,7 +18,7 @@ from pve_smart_alert import cli
 from pve_smart_alert import config as config_module
 from pve_smart_alert import run as run_module
 from pve_smart_alert.config import Config
-from pve_smart_alert.discovery import Discovery, discover
+from pve_smart_alert.discovery import Discovery, HostPaths, discover
 
 
 def fake_smartctl_config(content: str = "") -> str:
@@ -55,6 +55,8 @@ def paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     monkeypatch.setattr(cli, "LOCK_PATH", tmp_path / "lock")
     monkeypatch.setattr(cli, "BRIDGE_PATH", tmp_path / "notify-bridge")
     monkeypatch.setattr(cli, "COROSYNC_CONF_PATH", tmp_path / "corosync.conf")
+    # So is its sysfs, which a run reads also without smartctl.
+    monkeypatch.setattr(cli, "HOST_PATHS", HostPaths(sysfs=tmp_path / "sys"))
     return config, last_good
 
 
