@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -120,9 +120,27 @@ class Host:
 
     def scsi_host(self, number: int, driver: str) -> None:
         """Give the host a SCSI host with this driver in its sysfs."""
-        path = self.paths.sysfs / "class" / "scsi_host" / f"host{number}" / "proc_name"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"{driver}\n", encoding="utf-8")
+        write_scsi_hosts(self.paths.sysfs, {number: driver})
+
+    def scsi_hosts(self, drivers: Mapping[int, str]) -> None:
+        """Give the host these SCSI hosts in its sysfs, such as `TRUENAS_SCSI_HOSTS`."""
+        write_scsi_hosts(self.paths.sysfs, drivers)
+
+    def break_scsi_hosts(self) -> None:
+        """Make /sys/class/scsi_host unreadable: a file where the directory belongs."""
+        directory = self.paths.sysfs / "class" / "scsi_host"
+        shutil.rmtree(directory, ignore_errors=True)
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        directory.write_text("", encoding="utf-8")
+
+    def mend_scsi_hosts(self, drivers: Mapping[int, str]) -> None:
+        """Make /sys/class/scsi_host readable again, with these SCSI hosts."""
+        (self.paths.sysfs / "class" / "scsi_host").unlink()
+        write_scsi_hosts(self.paths.sysfs, drivers)
+
+    def remove_scsi_host(self, number: int) -> None:
+        """Take a SCSI host away, as when its controller is removed."""
+        shutil.rmtree(self.paths.sysfs / "class" / "scsi_host" / f"host{number}")
 
     def drive(self, file: str) -> dict[str, object]:
         loaded: dict[str, object] = json.loads((self.recording / file).read_text("utf-8"))
@@ -138,6 +156,42 @@ class Host:
         else:
             document["blockdevices"].append({"name": name, "kname": name, **values})
         path.write_text(json.dumps(document), encoding="utf-8")
+
+
+# The SCSI hosts of sysfs, as `/sys/class/scsi_host/hostN/proc_name` names
+# their drivers. The first three are built from recordings of 2026-10-16
+# (Research 08, addition of that day); the others are synthetic.
+
+#: The maintainer's TrueNAS host: the LSI SAS2308 HBA, six AHCI ports and
+#: `ahciem`. Recorded at 20:04 UTC through the command `hosts` of the
+#: read-only wrapper.
+TRUENAS_SCSI_HOSTS: Final = {0: "mpt2sas", **dict.fromkeys(range(1, 7), "ahci"), 7: "ahciem"}
+
+#: The cluster node pve7: six AHCI ports and nothing else, like pve5 and pve6
+#: with two. Recorded in the same session.
+CLUSTER_NODE_SCSI_HOSTS: Final = dict.fromkeys(range(6), "ahci")
+
+#: The standalone test host pve-test (pve1), Proxmox VE kernel 7.0.6-2-pve:
+#: two AHCI ports and the USB device of a KVM-over-IP device, which is a
+#: SCSI host as well; no ahciem. Recorded on 2026-10-16 at about 20:40 UTC
+#: from /sys/class/scsi_host (Research 08).
+STANDALONE_SCSI_HOSTS: Final = {0: "ahci", 1: "ahci", 2: "usb-storage"}
+
+#: A host with a controller of the driver mpi3mr. Synthetic: no recording of
+#: such a host exists (Research 08).
+MPI3MR_SCSI_HOSTS: Final = {0: "ahci", 1: "ahci", 2: "mpi3mr"}
+
+#: A host with an HBA of the driver mpt3sas next to an mpi3mr controller.
+#: Synthetic.
+MIXED_SCSI_HOSTS: Final = {0: "ahci", 1: "mpt3sas", 2: "mpi3mr"}
+
+
+def write_scsi_hosts(sysfs: Path, drivers: Mapping[int, str]) -> None:
+    """Write SCSI hosts with these drivers into a sysfs tree of a test."""
+    for number, driver in drivers.items():
+        path = sysfs / "class" / "scsi_host" / f"host{number}" / "proc_name"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{driver}\n", encoding="utf-8")
 
 
 # A host with identifiers in the form of real ones, made up for the tests.

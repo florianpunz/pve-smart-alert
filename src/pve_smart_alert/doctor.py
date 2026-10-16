@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The self-diagnosis of `pve-smart-alert doctor` (FR-603).
 
-Every check answers one line with a status. What this version cannot check
-yet is named as one skipped line instead of staying silent, so that the
-output never looks more complete than it is.
+Every check answers one line with a status. What a check cannot decide on
+this host is a skipped line instead of staying silent, so that the output
+never looks more complete than it is.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ from pve_smart_alert.config import (
     load_config,
     load_last_good,
 )
+from pve_smart_alert.discovery.controllers import describe_all, read_scsi_hosts
+from pve_smart_alert.discovery.enrichment import HOST, HostPaths
 from pve_smart_alert.discovery.sources import parse_scan
 from pve_smart_alert.model import NOTIFICATION_TYPE, PveSeverity, node_name
 from pve_smart_alert.paths import (
@@ -68,9 +70,6 @@ from pve_smart_alert.transports.pve_notify import reason_for_refusal
 
 # The two files the notification system renders (ADR 0008).
 TEMPLATES: Final = (SUBJECT_TEMPLATE, BODY_TEMPLATE)
-
-# What FR-603 asks for and what arrives with its own milestone.
-PENDING: Final = "unsupported controllers are checked once milestone M6 is built"
 
 # The unit of smartd, which the self-diagnosis only asks about (ADR 0012).
 SMARTD_UNIT: Final = "smartmontools.service"
@@ -156,6 +155,7 @@ def run_doctor(
     systemctl_path: Path = SYSTEMCTL_PATH,
     pveversion_path: Path = PVEVERSION_PATH,
     smartd_conf_path: Path = SMARTD_CONF_PATH,
+    host_paths: HostPaths = HOST,
     node: str | None = None,
     runner: ProcessRunner = run_with_timeout,
 ) -> list[CheckResult]:
@@ -179,7 +179,7 @@ def run_doctor(
         check_timer(systemctl_path, runner=runner),
         check_pve(pveversion_path, runner=runner),
         check_smartd(systemctl_path, smartd_conf_path, runner=runner),
-        CheckResult("pending", Status.SKIP, PENDING),
+        check_controllers(host_paths),
     ]
 
 
@@ -546,6 +546,44 @@ def _mails(directive: str) -> bool:
         if word == "-m" and words[index + 1] != "<nomailer>":
             return True
     return False
+
+
+def check_controllers(paths: HostPaths = HOST) -> CheckResult:
+    """Name the SCSI hosts whose drives smartctl cannot read (FR-109, ADR 0030).
+
+    Such a controller is a warning, not a failure: the tool works, it only
+    cannot see the drives behind it. HBAs, `ahciem` and every driver not on
+    the list are not reported.
+    """
+    scsi = read_scsi_hosts(paths)
+    if scsi.error is not None:
+        return CheckResult("controllers", Status.SKIP, scsi.error)
+    unsupported = scsi.unsupported
+    if unsupported:
+        sources = dict.fromkeys(
+            limitation.url
+            for limitation in (host.limitation for host in unsupported)
+            if limitation is not None
+        )
+        return CheckResult(
+            "controllers",
+            Status.WARN,
+            describe_all(unsupported),
+            advice=(
+                "check these drives with the tool of the controller's vendor;"
+                " the limitation of smartmontools is described in " + ", ".join(sources)
+            ),
+        )
+    if not scsi.hosts:
+        return CheckResult("controllers", Status.OK, "no SCSI host")
+    drivers = sorted({host.driver for host in scsi.hosts if host.driver is not None})
+    count = len(scsi.hosts)
+    detail = f"{count} SCSI host{'' if count == 1 else 's'}"
+    if drivers:
+        detail += f" ({', '.join(drivers)})"
+    return CheckResult(
+        "controllers", Status.OK, detail + ", none whose drives smartctl cannot read"
+    )
 
 
 def check_templates(template_dir: Path, *, override_dir: Path) -> CheckResult:

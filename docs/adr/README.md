@@ -34,6 +34,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0027](0027-pre-release-versions-for-test-builds.md) | Pre-release versions for test builds | Accepted | Which version a build for a test host carries until its release |
 | [0028](0028-logical-volumes-and-enclosures.md) | Recognize logical volumes and enclosures by structured fields first | Accepted | How discovery tells a RAID logical volume and an enclosure from a drive, and what the location of a drive behind MegaRAID is |
 | [0029](0029-notification-field-device-id.md) | The notification field `device-id` for drives behind a controller | Accepted | Which field lets a matcher select one drive behind a RAID controller, and when it is present |
+| [0030](0030-controllers-whose-drives-cannot-be-queried.md) | Detect controllers whose drives cannot be queried from the driver of the SCSI host | Accepted | Which controllers `scan`, `doctor` and `tool.unsupported_controller` report, and which drivers they never report |
 
 ## Confirmed by the maintainer
 

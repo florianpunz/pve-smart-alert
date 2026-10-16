@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pve-smart-alert scan`, `pve-smart-alert doctor` and a notice `tool.unsupported_controller` name a controller whose drives smartctl cannot read, such as one with the driver `mpi3mr` (Broadcom MegaRAID 96xx, Dell PERC 12): its drives in RAID mode are not monitored, an upstream limitation of smartmontools (issue 313). The notice clears with a recovery when the controller is gone; a missing smartctl or an unreadable `/sys` does not clear it. HBAs such as `mpt2sas` and `mpt3sas`, `ahciem` and unknown drivers are not reported ([ADR 0030](docs/adr/0030-controllers-whose-drives-cannot-be-queried.md)). `doctor` reports this in a line `controllers` and no longer ends with a line `pending`.
 - A notification about a drive behind a MegaRAID controller, read as `megaraid,N` or `sat+megaraid,N`, carries the field `device-id` with the device ID `N`, so that a matcher can select one drive behind the controller; the field `device` stays the node of the controller ([ADR 0029](docs/adr/0029-notification-field-device-id.md)). Every other notification has no such field.
 - `pve-smart-alert --version` prints the version of the tool.
 - `pve-smart-alert test-notification` sends one test notification with a selectable severity and reports what the notification system did with it (FR-520).

@@ -1,50 +1,9 @@
-pve-smart-alert (0.5.0~dev2) unstable; urgency=medium
+pve-smart-alert (0.5.0~dev3) unstable; urgency=medium
 
-  * Pre-release of 0.5.0 for test hosts (ADR 0027): of milestone M6 the
-    drives behind MegaRAID controllers with their controller and device
-    ID, and logical volumes and enclosures skipped (ADR 0028).
+  * Pre-release of 0.5.0 for test hosts (ADR 0027): the notification field
+    device-id (ADR 0029), and of milestone M6 the controllers whose drives
+    smartctl cannot read, in scan, doctor and tool.unsupported_controller
+    (ADR 0030).
 
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Fri, 16 Oct 2026 15:18:39 +0000
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Fri, 16 Oct 2026 20:37:17 +0000
 
-pve-smart-alert (0.5.0~dev1) unstable; urgency=medium
-
-  * Pre-release of 0.5.0 for test hosts (ADR 0027): of milestone M5 the
-    systemd units, the failure reporter, the sandboxing of the check
-    service, install.sh and the release workflow, and of milestone M6 the
-    anonymization of SCSI identifiers and the monitoring of SAS and
-    parallel SCSI drives.
-
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Fri, 16 Oct 2026 13:13:40 +0000
-
-pve-smart-alert (0.4.0) unstable; urgency=medium
-
-  * Milestone M4: the state store, the notification planner with the rules
-    of ADR 0009, the event checks against their baselines, the missing and
-    unreadable drive checks, the conditions of the tool itself, the renderer
-    of the notifications, and the commands check and status.
-
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Mon, 12 Oct 2026 21:02:24 +0000
-
-pve-smart-alert (0.3.0) unstable; urgency=medium
-
-  * Milestone M3: the check catalog with the evaluation of every drive, the
-    configuration sections for check thresholds and per-drive overrides with
-    the last-good fallback, and the commands check --dry-run, config check
-    and config show.
-
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Mon, 12 Oct 2026 18:10:35 +0000
-
-pve-smart-alert (0.2.0) unstable; urgency=medium
-
-  * Milestone M2: discovery and collection of SATA and NVMe drives, the
-    parsers and the wear value, the commands scan and dump-fixture, and the
-    lines smartctl, routing and fallback of doctor.
-
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Wed, 07 Oct 2026 21:00:00 +0000
-
-pve-smart-alert (0.1.0) unstable; urgency=medium
-
-  * Initial release: the notify bridge, the two notification templates, the
-    transports, the commands test-notification and doctor.
-
- -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Sun, 04 Oct 2026 12:05:35 +0000

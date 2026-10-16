@@ -116,6 +116,7 @@ class ScenarioHost(Host):
         patch.setattr(cli, "LOCK_PATH", self.lock_path)
         patch.setattr(cli, "BRIDGE_PATH", bridge)
         patch.setattr(cli, "COROSYNC_CONF_PATH", root / "corosync.conf")
+        patch.setattr(cli, "HOST_PATHS", self.paths)
         patch.setattr(cli, "clock", self.clock)
         patch.setattr(cli, "node_name", lambda: "pve1")
         patch.setattr(cli, "build_transport", lambda _settings: self.transport)

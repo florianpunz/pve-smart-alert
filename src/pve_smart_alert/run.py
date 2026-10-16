@@ -33,6 +33,7 @@ from pve_smart_alert.config import (
     save_last_good,
 )
 from pve_smart_alert.discovery import Candidate, Discovery, HostPaths, Outcome, discover
+from pve_smart_alert.discovery.controllers import read_scsi_hosts
 from pve_smart_alert.discovery.enrichment import HOST
 from pve_smart_alert.model import Finding, Notification, Severity, node_name
 from pve_smart_alert.paths import (
@@ -64,11 +65,13 @@ from pve_smart_alert.state import (
     save_state,
 )
 from pve_smart_alert.tool_conditions import (
+    UNSUPPORTED_CONTROLLER,
     config_invalid,
     scan_failed,
     smartctl_missing,
     smartctl_too_old,
     transport_degraded,
+    unsupported_controller,
 )
 from pve_smart_alert.transports import Transport, TransportOutcome, build_transport
 
@@ -186,11 +189,25 @@ def _run(env: Environment, *, dry_run: bool) -> RunResult:
             failed = scan_failed(discovery.scan_error)
             if failed is not None:
                 tool.append(failed)
+    # The SCSI hosts need no smartctl: they are read in every run, so that a
+    # missing smartctl does not clear the condition (ADR 0030). Discovery
+    # has read them already when it ran.
+    scsi_hosts = discovery.scsi_hosts if discovery is not None else read_scsi_hosts(env.host_paths)
+    not_evaluated: frozenset[str] = frozenset()
+    if scsi_hosts.error is not None:
+        # sysfs could not be read: the condition stays as it is.
+        not_evaluated = frozenset({UNSUPPORTED_CONTROLLER})
+    else:
+        unsupported = unsupported_controller(scsi_hosts.unsupported)
+        if unsupported is not None:
+            tool.append(unsupported)
     degraded = transport_degraded(config.notify, env.bridge_path, runner=env.runner)
     if degraded is not None:
         tool.append(degraded)
 
-    observation, findings = _observe(discovery, config, state, tool, state_reset)
+    observation, findings = _observe(
+        discovery, config, state, tool, state_reset, not_evaluated=not_evaluated
+    )
     result_plan = plan(state, observation, config, now=started, host=node)
     context = RenderContext(
         node=node,
@@ -248,6 +265,8 @@ def _observe(
     state: State,
     tool: list[Finding],
     state_reset: str | None,
+    *,
+    not_evaluated: frozenset[str] = frozenset(),
 ) -> tuple[Observation, dict[str, list[Finding]]]:
     """Return what this run saw, for the planner, and the findings per device."""
     drives: list[DriveSeen] = []
@@ -289,6 +308,7 @@ def _observe(
         drives=tuple(drives),
         skipped=tuple(skipped),
         tool=tuple(tool),
+        tool_not_evaluated=not_evaluated,
         state_reset=state_reset,
         presence_known=presence_known,
     )

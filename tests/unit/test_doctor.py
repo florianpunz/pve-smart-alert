@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from hosts import CLUSTER_NODE_SCSI_HOSTS, write_scsi_hosts
 
 from pve_smart_alert import cli
 from pve_smart_alert.config import (
@@ -22,6 +23,7 @@ from pve_smart_alert.config import (
     load_config,
     save_last_good,
 )
+from pve_smart_alert.discovery import HostPaths
 from pve_smart_alert.doctor import (
     FALLBACK_ADVICE,
     TEMPLATES,
@@ -954,6 +956,7 @@ def doctor_on(tmp_path: Path, bridge: Path, vendor_dir: Path, sendmail: Path) ->
         systemctl_path=executable(tmp_path / "systemctl"),
         pveversion_path=tmp_path / "pveversion",
         smartd_conf_path=tmp_path / "smartd.conf",
+        host_paths=HostPaths(sysfs=tmp_path / "sys"),
         node="pve1",
         runner=HostRunner(),
     )
@@ -977,19 +980,23 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "timer",
         "pve",
         "smartd",
-        "pending",
+        "controllers",
     ]
     assert all(result.status is not Status.FAIL for result in results)
     assert results[1].detail.endswith("smartctl 7.5")
 
 
-def test_what_is_not_checked_yet_is_named(tmp_path: Path, bridge: Path, vendor_dir: Path) -> None:
-    results = doctor_on(tmp_path, bridge, vendor_dir, tmp_path / "sendmail")
+def test_the_controllers_are_read_from_the_sysfs_it_is_given(
+    tmp_path: Path, bridge: Path, vendor_dir: Path
+) -> None:
+    # Every part of FR-603 is checked; the last line is the controllers.
+    write_scsi_hosts(tmp_path / "sys", CLUSTER_NODE_SCSI_HOSTS)
 
-    pending = results[-1]
-    assert pending.status is Status.SKIP
-    assert "unsupported controllers" in pending.detail
-    assert "smartd" not in pending.detail
+    controllers = doctor_on(tmp_path, bridge, vendor_dir, tmp_path / "sendmail")[-1]
+
+    assert controllers.name == "controllers"
+    assert controllers.status is Status.OK
+    assert controllers.detail == "6 SCSI hosts (ahci), none whose drives smartctl cannot read"
 
 
 # The command

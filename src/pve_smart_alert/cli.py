@@ -30,7 +30,8 @@ from pve_smart_alert.config import (
     save_last_good,
 )
 from pve_smart_alert.config_report import render as render_config_report
-from pve_smart_alert.discovery import Candidate, Found, discover
+from pve_smart_alert.discovery import Candidate, Found, HostPaths, discover
+from pve_smart_alert.discovery.enrichment import HOST
 from pve_smart_alert.doctor import CheckResult, Status, run_doctor
 from pve_smart_alert.dump import DumpError, dump_fixture
 from pve_smart_alert.model import (
@@ -83,6 +84,10 @@ EXIT_PROBLEM = 1
 EXIT_USAGE = 2
 # Another run holds the lock. Not an error of the run that holds it (FR-605).
 EXIT_LOCKED = 3
+
+# Where a run reads lsblk, the links below /dev/disk and sysfs. The tests
+# point it at a temporary tree (ADR 0016).
+HOST_PATHS: HostPaths = HOST
 
 SEVERITY_CHOICES = [severity.value for severity in PveSeverity]
 TRANSPORT_CHOICES = [transport.value for transport in TransportName]
@@ -386,6 +391,7 @@ def _environment() -> Environment:
         transport=build_transport,
         discover=discover,
         on_device=_reading,
+        host_paths=HOST_PATHS,
     )
 
 
