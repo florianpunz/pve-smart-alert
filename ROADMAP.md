@@ -12,8 +12,9 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
-| M5: Packaging, timer and installation | In progress, waits for the acceptance on the test cluster |
-| M6 and M7 | Planned |
+| M5: Packaging, timer and installation | Built, waits for the remaining checks on a real Proxmox VE host and the acceptance on the test cluster |
+| M6: SAS and hardware RAID on recorded data | In progress, being planned |
+| M7 | Planned |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -215,7 +216,7 @@ From here on the tool runs permanently on the maintainer's cluster. Version tag:
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 
-State: in progress. The units, the failure reporter and the line `timer` of `doctor` are on `main` (pull request #3). The branch `feature/m5-packaging` was built in parallel and tested on `pve1`; `feature/m5-merge-units` merges it onto `main`.
+State: the development of M5 is on `main` since pull request #4, which merged the host-tested work of `feature/m5-packaging` onto the units of pull request #3; CI is green there. What is left needs a real Proxmox VE host (checklist below), and 0.5.0 is tagged only after it passed.
 
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well.
 - Done: the sandboxing of the check service, [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) (Q-P1).
