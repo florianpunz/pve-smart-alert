@@ -163,9 +163,11 @@ jobs:
             fi
           done
 
-          version=$(dpkg-deb --field dist/*.deb Version)
+          # A pre-release is 0.5.0~devN in the package and 0.5.0.devN in the
+          # program (ADR 0027).
+          version=$(dpkg-deb --field dist/*.deb Version | sed 's/~dev/.dev/')
           PYTHONPATH="$root/usr/share/pve-smart-alert" python3 -B -m pve_smart_alert --version \
-            | grep -qF "$version"
+            | grep -qxF "pve-smart-alert $version"
 
           # The tool never writes byte code, and this is where that would show.
           if find "$root/usr/share/pve-smart-alert" -name '__pycache__' | grep -q .; then
