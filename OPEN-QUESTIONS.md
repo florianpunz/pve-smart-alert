@@ -10,13 +10,12 @@ None at the moment.
 
 ## Notification route
 
-The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4, how long a slow target blocks the call, was answered on `pve1` on 2026-10-13, with the answer in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N5 needs a degraded cluster and is answered in milestone M5; Q-N6 needs the Proxmox developers. Q-N9, whether `/etc/pve/corosync.conf` names the cluster, was answered on the test cluster on 2026-10-12; the answer is in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routing check of [ADR 0020](docs/adr/0020-routing-check.md) answered Q-N8, whether the tool can tell that no matcher matched; the answers are in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N4, how long a slow target blocks the call, was answered on `pve1` on 2026-10-13, with the answer in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N5 needs a degraded cluster and is answered in milestone M5; Q-N6 needs the Proxmox developers. Q-N9, whether `/etc/pve/corosync.conf` names the cluster, was answered on the test cluster on 2026-10-12; the answer is in [ARCHITECTURE.md](ARCHITECTURE.md) section 10. Q-N10, how a matcher selects one drive behind a RAID controller, was decided by the maintainer on 2026-10-16: a new field `device-id`, built next ([ROADMAP.md](ROADMAP.md), M6).
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
 | Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used. Without quorum, `/etc/pve/corosync.conf` stays readable, so notifications keep the cluster name |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
-| Q-N10 | Should the field `device` of a notification about a drive behind a RAID controller carry the device ID, such as `/dev/bus/6 [megaraid,14]`? | Two drives behind one controller have the same `device`, `/dev/bus/6`, so a matcher on `device` cannot tell them apart | No: `device` stays the node smartctl reads, a stable field (NFR-21); the drives differ in `serial` and `model`, and the text names the device ID |
 
 ## smartctl output and discovery
 
