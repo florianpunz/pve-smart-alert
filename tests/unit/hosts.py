@@ -65,7 +65,10 @@ class Host:
         if str(command[0]) == str(LSBLK):
             if self.lsblk_fails:
                 return ProcessResult(returncode=1, stdout="", stderr="", timed_out=False)
-            stdout = (self.recording / "lsblk.json").read_text(encoding="utf-8")
+            # A recording of another project has no lsblk: a host without
+            # block devices then, which lsblk answers with an empty list.
+            path = self.recording / "lsblk.json"
+            stdout = path.read_text(encoding="utf-8") if path.exists() else '{"blockdevices": []}'
             return ProcessResult(returncode=0, stdout=stdout, stderr="", timed_out=False)
         return run_with_timeout(command, input_text=input_text, timeout=timeout)
 
@@ -101,6 +104,25 @@ class Host:
             {"file": file, "device": device, "type": device_type, "exit_status": 0}
         )
         (self.recording / "recording.json").write_text(json.dumps(recording), encoding="utf-8")
+
+    def set_scan(self, *devices: dict[str, object]) -> None:
+        """Make the device scan list these devices, also for a recording without a scan."""
+        scan = {
+            "json_format_version": [1, 0],
+            "smartctl": {"version": [7, 5], "argv": ["smartctl", "--scan-open", "--json=c"]},
+            "devices": list(devices),
+        }
+        (self.recording / "scan.json").write_text(json.dumps(scan), encoding="utf-8")
+        recording = json.loads((self.recording / "recording.json").read_text(encoding="utf-8"))
+        files = [entry for entry in recording["files"] if entry["file"] != "scan.json"]
+        recording["files"] = [{"file": "scan.json", "exit_status": 0}, *files]
+        (self.recording / "recording.json").write_text(json.dumps(recording), encoding="utf-8")
+
+    def scsi_host(self, number: int, driver: str) -> None:
+        """Give the host a SCSI host with this driver in its sysfs."""
+        path = self.paths.sysfs / "class" / "scsi_host" / f"host{number}" / "proc_name"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{driver}\n", encoding="utf-8")
 
     def drive(self, file: str) -> dict[str, object]:
         loaded: dict[str, object] = json.loads((self.recording / file).read_text("utf-8"))

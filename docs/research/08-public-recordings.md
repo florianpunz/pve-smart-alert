@@ -149,6 +149,16 @@ Recorded on 2026-10-16 through the read-only wrapper of the host `truenas` of th
 
 These drives are SAS and reached through an HBA in IT mode. They are no evidence for MegaRAID or any other RAID controller.
 
+## Addition 2026-10-16: how smartctl treats a MegaRAID logical volume in the scan and when it is read
+
+From the source code of smartmontools 7.4 and 7.5, **Verified**; no recording shows it (Q-R1):
+
+- Without `-d`, the scan creates a device for every `/dev/sdX` without a type (`autodetect_smart_device`; the scan without types, `os_linux.cpp` line 3109 in 7.4 and 3101 in 7.5, and the call at line 2973 in 7.4 and 2965 in 7.5). `--scan-open` opens it with `autodetect_open`, which reads the inquiry data and refuses a MegaRAID controller with the message of line 2652, so the entry of a logical volume carries that message in `open_error` and keeps the type `scsi`.
+- When a type is given, as the tool does with `--device=scsi`, `autodetect_open` returns before that check (`os_linux.cpp` lines 2600–2605 in both versions). The drive output of a logical volume then has its inquiry data and no message.
+- smartctl takes these inquiry data for a MegaRAID controller: the vendor `DELL` with a product beginning with `PERC`, the vendor `MegaRAID`, a product beginning with `PERC `, and a vendor field of `LSI` followed by a zero byte (lines 2648–2650).
+
+[ADR 0028](../adr/0028-logical-volumes-and-enclosures.md) builds on these facts.
+
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>

@@ -39,12 +39,15 @@ These recordings come from the test data of other projects, read at a pinned com
 
 ## Scenarios: `../scenarios.py`
 
-The scenario tests of the notification policy replay a host whose drives change from run to run ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recording.
+The scenario tests of the notification policy replay a host whose drives change from run to run ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recordings.
 
 | Scenario | Base | Changes |
 | --- | --- | --- |
 | `pending-sectors` | `direct/standalone-pve1` | The raw value of attribute 197 set to 3 and to 20, an attribute 197 entry with made-up flags added where the drive has none, and the drive removed from the scan and the recording |
 | `five-hot` | `direct/standalone-pve1` | Four copies of the drive as `/dev/sdb` to `/dev/sde` with the serial numbers `ANON-SN-0002` to `ANON-SN-0005` and without WWN, and the temperature of all five set to 65 °C |
+| `megaraid-jbod` | `megaraid/telegraf-megaraid` (MIT) and `direct/libblockdev-seagate-st600mp0036` (LGPL-2.1-or-later) | A MegaRAID host in which only the SATA drive is recorded; everything else is **derived**. The scan, recorded without `--scan-open`, replaced by what `--scan-open` lists: a logical volume `/dev/sda` with the `open_error` of smartmontools 7.4 and 7.5, the SATA drive as `sat+megaraid,14` and a SAS drive as `megaraid,8`, both on `/dev/bus/6`. The SAS drive is the libblockdev SAS hard disk, **derived**: its device changed to `/dev/bus/6` with type `megaraid,8`, its serial number and logical unit id renumbered to `ANON-SN-0002` and `0x5000c50000000002`. A made-up lsblk answer with the logical volume (vendor `DELL`, model `PERC H730P Mini`). In this scenario the SATA drive is also a block device `/dev/sdc`, a copy of the recorded output, as in JBOD mode |
+| `megaraid-id-change` | Same | The same host without `/dev/sdc`; the raw value of attribute 197 of the SATA drive set to 8, then the device IDs changed to `sat+megaraid,15` and `megaraid,9` |
+| `megaraid-degraded` | Same | The same host without `/dev/sdc`; the raw value of attribute 197 of the SATA drive set to 3 and the grown defect list of the derived SAS drive set to 150 |
 
 ## Rendered notifications: `golden/`
 

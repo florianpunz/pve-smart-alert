@@ -9,6 +9,13 @@ smartctl replays when FAKE_SMARTCTL_RECORDING names it. The steps are
 derived, not recorded; the base recordings are listed in
 `fixtures/SOURCES.md`.
 
+The MegaRAID scenarios combine two public recordings into one host, because
+no public recording has a SAS drive read as `megaraid,N`: the SATA drive of
+the Telegraf recording, and a SAS drive of libblockdev moved behind the
+controller. The SAS drive behind the controller, the logical volume, the
+answer of the scan with `--scan-open` and lsblk are derived, not recorded
+(Research 08, Q-R1).
+
 The scenario tests build the steps in a temporary directory. For the
 acceptance on a real host the same steps are written with
 
@@ -36,7 +43,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-RECORDINGS: Final = Path(__file__).resolve().parent / "fixtures" / "smartctl" / "direct"
+RECORDINGS: Final = Path(__file__).resolve().parent / "fixtures" / "smartctl"
+
+# The host of the MegaRAID scenarios: the controller is SCSI host 6, as in
+# the Telegraf recording.
+MEGARAID_BASE: Final = "megaraid/telegraf-megaraid"
+MEGARAID_NODE: Final = "/dev/bus/6"
+MEGARAID_SATA: Final = "bus6-megaraid14.json"
+MEGARAID_SAS: Final = "bus6-megaraid8.json"
+# The SAS hard disk that is moved behind the controller.
+DERIVED_SAS_SOURCE: Final = ("direct/libblockdev-seagate-st600mp0036", "sdb.json")
+# What the scan writes to `open_error` for a logical volume of a MegaRAID
+# controller, in 7.4 and 7.5 alike (`os_linux.cpp` line 2652, ADR 0028).
+LOGICAL_VOLUME_ERROR: Final = "DELL or MegaRaid controller, please try adding '-d megaraid,N'"
 
 # A recording in memory: file name to JSON document. `recording.json` and
 # `scan.json` are documents like the others.
@@ -158,14 +177,136 @@ def copies(file: str, count: int) -> Edit:
     return edit
 
 
+def megaraid_host(*, jbod: bool = False) -> Edit:
+    """Make the MegaRAID host of the scenarios from the Telegraf recording.
+
+    The host has, behind the controller on `/dev/bus/6`, the recorded SATA
+    hard disk as `sat+megaraid,14` and a derived SAS hard disk as
+    `megaraid,8`, and a logical volume `/dev/sda` that lsblk shows with the
+    inquiry data of a PERC controller and the scan with its `open_error`.
+    The SAS drive is the libblockdev recording of a SEAGATE ST600MP0036
+    with its device changed, and its serial number and logical unit id
+    renumbered to the second placeholder (ADR 0023). With `jbod`, the SATA
+    drive is also a block device of the host, `/dev/sdc`, as a drive in
+    JBOD mode is.
+
+    The recorded scan was made without `--scan-open` and lists every drive
+    as `megaraid,N`; it is replaced by what `--scan-open` lists, which
+    opens each drive and names a SATA drive `sat+megaraid,N`. That answer
+    and lsblk are derived from the source code of smartmontools, not
+    recorded (Research 08, Q-R1).
+    """
+
+    def edit(documents: Documents) -> None:
+        sata = documents[MEGARAID_SATA]
+        directory, file = DERIVED_SAS_SOURCE
+        sas = json.loads((RECORDINGS / directory / file).read_text(encoding="utf-8"))
+        sas["serial_number"] = "ANON-SN-0002"
+        sas["logical_unit_id"] = "0x5000c50000000002"
+        _place(sas, MEGARAID_NODE, "megaraid,8")
+        documents[MEGARAID_SAS] = sas
+
+        devices: list[dict[str, object]] = [
+            {
+                "name": "/dev/sda",
+                "info_name": "/dev/sda",
+                "type": "scsi",
+                "protocol": "SCSI",
+                "open_error": LOGICAL_VOLUME_ERROR,
+            },
+            _scan_entry(sata),
+            _scan_entry(sas),
+        ]
+        files: list[dict[str, object]] = [
+            {"file": "scan.json", "command": "smartctl --scan-open --json=c", "exit_status": 0},
+            _recording_entry(MEGARAID_SATA, sata, exit_status=4),
+            _recording_entry(MEGARAID_SAS, sas, exit_status=0),
+        ]
+        disks: list[dict[str, object]] = [
+            {
+                "name": "sda",
+                "kname": "sda",
+                "type": "disk",
+                "tran": None,
+                "vendor": "DELL    ",
+                "model": "PERC H730P Mini",
+            }
+        ]
+        if jbod:
+            block = copy.deepcopy(sata)
+            _place(block, "/dev/sdc", "sat")
+            documents["sdc.json"] = block
+            devices.insert(1, _scan_entry(block))
+            files.insert(1, _recording_entry("sdc.json", block, exit_status=4))
+            disks.append(
+                {
+                    "name": "sdc",
+                    "kname": "sdc",
+                    "type": "disk",
+                    "tran": None,
+                    "vendor": "ATA     ",
+                    "model": sata["model_name"],
+                }
+            )
+
+        scan = documents["scan.json"]
+        scan["devices"] = devices
+        smartctl = scan["smartctl"]
+        assert isinstance(smartctl, dict)
+        smartctl["argv"] = ["smartctl", "--scan-open", "--json=c"]
+        recording = documents["recording.json"]
+        recording["origin"] = (
+            "Derived for the MegaRAID scenarios of tests/scenarios.py: the SATA drive of the"
+            " Telegraf recording, a SAS drive of libblockdev moved behind the controller, a"
+            " logical volume, the scan of --scan-open and lsblk; only the SATA drive is recorded"
+        )
+        recording["files"] = files
+        documents["lsblk.json"] = {"blockdevices": disks}
+
+    return edit
+
+
+def device_id(file: str, number: int) -> Edit:
+    """Give a drive behind the controller another device ID, as after a rebuild or a reboot."""
+
+    def edit(documents: Documents) -> None:
+        document = documents[file]
+        device = _device_of(document)
+        old = device["type"]
+        new = f"{old.rpartition(',')[0]},{number}"
+        _place(document, device["name"], new)
+        devices = documents["scan.json"]["devices"]
+        files = documents["recording.json"]["files"]
+        assert isinstance(devices, list)
+        assert isinstance(files, list)
+        for entry in devices:
+            if entry["name"] == device["name"] and entry["type"] == old:
+                entry.update(_scan_entry(document))
+        for entry in files:
+            if entry["file"] == file:
+                entry["type"] = new
+
+    return edit
+
+
+def grown_defects(file: str, count: int) -> Edit:
+    """Set the elements of the grown defect list of a SCSI drive."""
+
+    def edit(documents: Documents) -> None:
+        documents[file]["scsi_grown_defect_list"] = count
+
+    return edit
+
+
 #: The scenarios, by name. The steps of `pending-sectors` and `five-hot`
-#: follow the acceptance steps of milestone M4 in ROADMAP.md.
+#: follow the acceptance steps of milestone M4 in ROADMAP.md, those of the
+#: MegaRAID scenarios the deliverables of milestone M6.
 SCENARIOS: Final = {
     scenario.name: scenario
     for scenario in (
         Scenario(
             name="pending-sectors",
-            base="standalone-pve1",
+            base="direct/standalone-pve1",
             description=(
                 "One SATA SSD that gets pending sectors, gets worse, recovers and disappears"
             ),
@@ -199,7 +340,7 @@ SCENARIOS: Final = {
         ),
         Scenario(
             name="five-hot",
-            base="standalone-pve1",
+            base="direct/standalone-pve1",
             description="Five SATA SSDs that get too hot at the same time",
             prepare=(copies("sda.json", 5),),
             steps=(
@@ -213,6 +354,72 @@ SCENARIOS: Final = {
                     "03-hot",
                     tuple(temperature(f"sd{letter}.json", 65) for letter in "abcde"),
                     "confirmed: one summary instead of five",
+                ),
+            ),
+        ),
+        Scenario(
+            name="megaraid-jbod",
+            base=MEGARAID_BASE,
+            description=(
+                "A MegaRAID host whose SATA drive in JBOD mode is a block device as well,"
+                " next to a logical volume and a derived SAS drive"
+            ),
+            prepare=(megaraid_host(jbod=True),),
+            steps=(
+                Step("01-first", description="first run: one summary with two drives"),
+                Step("02-again", description="no change: nothing"),
+            ),
+        ),
+        Scenario(
+            name="megaraid-id-change",
+            base=MEGARAID_BASE,
+            description=(
+                "Two drives behind a MegaRAID controller whose device IDs change while one"
+                " has a finding"
+            ),
+            prepare=(megaraid_host(),),
+            steps=(
+                Step("01-first", description="first run: one summary"),
+                Step(
+                    "02-pending-8",
+                    (attribute(MEGARAID_SATA, 197, 8),),
+                    "8 pending sectors on the SATA drive: one warning",
+                ),
+                Step(
+                    "03-moved",
+                    (
+                        attribute(MEGARAID_SATA, 197, 8),
+                        device_id(MEGARAID_SATA, 15),
+                        device_id(MEGARAID_SAS, 9),
+                    ),
+                    "device IDs 15 and 9 instead of 14 and 8: nothing",
+                ),
+                Step(
+                    "04-moved",
+                    (
+                        attribute(MEGARAID_SATA, 197, 8),
+                        device_id(MEGARAID_SATA, 15),
+                        device_id(MEGARAID_SAS, 9),
+                    ),
+                    "the same again: nothing, no drive missing",
+                ),
+            ),
+        ),
+        Scenario(
+            name="megaraid-degraded",
+            base=MEGARAID_BASE,
+            description=(
+                "A SATA and a derived SAS drive behind a MegaRAID controller that degrade"
+                " at the same time"
+            ),
+            prepare=(megaraid_host(),),
+            steps=(
+                Step("01-healthy", description="first run: one summary"),
+                Step(
+                    "02-degraded",
+                    (attribute(MEGARAID_SATA, 197, 3), grown_defects(MEGARAID_SAS, 150)),
+                    "3 pending sectors and 150 grown defects: one warning per drive,"
+                    " naming controller and device ID",
                 ),
             ),
         ),
@@ -282,6 +489,42 @@ def _attribute_table(document: dict[str, object]) -> list[dict[str, object]]:
     table = attributes.get("table")
     assert isinstance(table, list)
     return table
+
+
+def _place(document: dict[str, object], name: str, device_type: str) -> None:
+    """Make a drive output one of a drive reached through `name` with `device_type`."""
+    device = _device_of(document)
+    device["name"] = name
+    device["type"] = device_type
+    device["info_name"] = _info_name(name, device_type)
+    smartctl = document.get("smartctl")
+    assert isinstance(smartctl, dict)
+    smartctl["argv"] = ["smartctl", "--json=c", "--xall", f"--device={device_type}", name]
+
+
+def _info_name(name: str, device_type: str) -> str:
+    """Return the name smartctl shows for a device, as in the Telegraf recording."""
+    number = device_type.rpartition(",")[2]
+    behind = f" [megaraid_disk_{int(number):02d}]" if "megaraid" in device_type else ""
+    return f"{name}{behind}" + (" [SAT]" if device_type.startswith("sat") else "")
+
+
+def _scan_entry(document: dict[str, object]) -> dict[str, object]:
+    device = _device_of(document)
+    return {key: device[key] for key in ("name", "info_name", "type", "protocol")}
+
+
+def _recording_entry(
+    file: str, document: dict[str, object], *, exit_status: int
+) -> dict[str, object]:
+    device = _device_of(document)
+    return {
+        "file": file,
+        "device": device["name"],
+        "type": device["type"],
+        "protocol": device["protocol"],
+        "exit_status": exit_status,
+    }
 
 
 def _device_of(document: dict[str, object]) -> dict[str, str]:

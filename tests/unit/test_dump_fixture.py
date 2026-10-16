@@ -86,7 +86,7 @@ def test_the_archive_records_what_the_tool_runs(host: Host, tmp_path: Path) -> N
     assert recording["license"] == "AGPL-3.0-or-later"
     commands = {entry["file"]: entry["command"] for entry in recording["files"]}
     assert commands["lsblk.json"] == (
-        "lsblk --json --output NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL"
+        "lsblk --json --output NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL,VENDOR,MODEL"
     )
     assert [entry["file"] for entry in recording["files"]] == [
         "scan.json",

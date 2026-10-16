@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Final
 
 from pve_smart_alert.model import Collection, DeviceAccess, DriveIdentity, Snapshot
@@ -50,6 +51,36 @@ _SELF_TEST_FAILED: Final = frozenset({3, 4, 5, 6, 7})
 # A logical unit id that is a WWN: NAA 5, 16 hexadecimal digits (ADR 0026,
 # Q-R6).
 _WWN_NAME: Final = re.compile(r"0x(5[0-9a-f]{15})", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Inquiry:
+    """What a SCSI device says about itself in its inquiry data.
+
+    Discovery reads it before the output becomes a snapshot, to skip a
+    logical volume or a device that is not a disk (ADR 0028).
+    """
+
+    vendor: str | None = None
+    product: str | None = None
+    # The peripheral device type: 0 a disk, 13 an enclosure, and so on.
+    peripheral_type: int | None = None
+    peripheral_name: str | None = None
+
+
+def inquiry_of(document: Mapping[str, object]) -> Inquiry:
+    """Return the inquiry data of a SCSI drive output.
+
+    The keys are `scsi_vendor` and `scsi_product` from smartmontools 7.3 on,
+    and `vendor` and `product` in 7.0 to 7.2 (Research 08).
+    """
+    device_type = section(document, "device_type")
+    return Inquiry(
+        vendor=_first_text(document, "scsi_vendor", "vendor"),
+        product=_first_text(document, "scsi_product", "product"),
+        peripheral_type=integer(device_type, "scsi_value"),
+        peripheral_name=text(device_type, "name"),
+    )
 
 
 def parse(

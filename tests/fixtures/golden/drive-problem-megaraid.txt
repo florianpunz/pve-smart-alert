@@ -1,0 +1,28 @@
+Subject: [pve-smart-alert] WARNING pve1: /dev/bus/6 SEAGATE ST600MP0036 (ANON-SN-0002): 150 grown defects
+
+A drive in pve1 needs attention.
+
+Host:       pve1 (cluster: lab)
+Drive:      /dev/bus/6 [megaraid,8]
+Model:      SEAGATE ST600MP0036
+Serial:     ANON-SN-0002
+WWN:        5000c50000000002
+Firmware:   KT3A
+Capacity:   600.13 GB, HDD
+Location:   /dev/bus/6 (megaraid_sas), device 8
+Powered on: 4665 hours
+
+Findings:
+  WARNING   scsi.grown_defects  new
+            Grown defects: 150
+            Thresholds: notice 1, warning 100
+
+What to do:
+  A counter that keeps increasing indicates a failing drive. Plan a
+  replacement of the drive and make sure its data is backed up.
+
+This is the first notification for this problem. Without a change, the next
+reminder follows in 7 days. To adjust or silence this check for this drive,
+see /etc/pve-smart-alert/config.toml.
+
+pve-smart-alert 0.4.0 on pve1

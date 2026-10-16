@@ -32,6 +32,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0025](0025-sandboxing-of-the-check-service.md) | Sandboxing options of the check service | Accepted | Which systemd options restrict the check without breaking drives, mail or notification targets |
 | [0026](0026-recordings-of-scsi-drives-and-of-other-projects.md) | Anonymize the names of SCSI drives, and import the test data of other projects | Accepted | How logical unit ids and SAS addresses are anonymized, and which recordings of other projects become fixtures |
 | [0027](0027-pre-release-versions-for-test-builds.md) | Pre-release versions for test builds | Accepted | Which version a build for a test host carries until its release |
+| [0028](0028-logical-volumes-and-enclosures.md) | Recognize logical volumes and enclosures by structured fields first | Accepted | How discovery tells a RAID logical volume and an enclosure from a drive, and what the location of a drive behind MegaRAID is |
 
 ## Confirmed by the maintainer
 

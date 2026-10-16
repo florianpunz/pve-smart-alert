@@ -13,8 +13,9 @@ from collections.abc import Mapping
 from pve_smart_alert.model import Collection, DeviceAccess, Snapshot
 from pve_smart_alert.parsers import ata, nvme, scsi
 from pve_smart_alert.parsers.common import ParseError, protocol_of
+from pve_smart_alert.parsers.scsi import Inquiry, inquiry_of
 
-__all__ = ["ParseError", "parse"]
+__all__ = ["Inquiry", "ParseError", "inquiry_of", "parse", "protocol_of"]
 
 
 def parse(

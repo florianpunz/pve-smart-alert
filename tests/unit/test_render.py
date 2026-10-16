@@ -100,6 +100,37 @@ def test_a_new_problem() -> None:
     assert notification.event is EventType.PROBLEM
 
 
+def test_a_drive_behind_a_raid_controller_names_controller_and_device_id() -> None:
+    # FR-507, ADR 0028: a SAS drive read as `megaraid,8` on SCSI host 6.
+    sas = DriveInfo(
+        key="SEAGATE ST600MP0036|ANON-SN-0002",
+        name="/dev/bus/6",
+        type="megaraid,8",
+        model="SEAGATE ST600MP0036",
+        serial="ANON-SN-0002",
+        wwn="5000c50000000002",
+        firmware="KT3A",
+        capacity_bytes=600_127_266_816,
+        drive_class=DriveClass.HDD,
+        location="/dev/bus/6 (megaraid_sas), device 8",
+        power_on_hours=4665,
+    )
+    defects = Item(
+        event=EventType.PROBLEM,
+        check="scsi.grown_defects",
+        severity=Severity.WARNING,
+        text="150 defects, at or above the warning threshold of 100",
+        value=150,
+        threshold=100,
+        since=SINCE,
+    )
+
+    notification = render(drive_message(defects, drive=sas), CONTEXT)
+
+    golden("drive-problem-megaraid", notification)
+    assert "Location:   /dev/bus/6 (megaraid_sas), device 8\n" in notification.body
+
+
 def test_an_escalation_names_the_previous_value_and_severity() -> None:
     escalated = Item(
         event=EventType.ESCALATED,

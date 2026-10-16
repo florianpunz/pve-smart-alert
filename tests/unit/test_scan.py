@@ -18,6 +18,7 @@ from pve_smart_alert import cli
 from pve_smart_alert.config import Config, ConfigError, DriveSelector, ManualDevice, SelectorKind
 from pve_smart_alert.discovery import Discovery, discover
 from pve_smart_alert.scan_report import render
+from scenarios import SCENARIOS, build
 
 SMARTCTL = Path("/usr/sbin/smartctl")
 
@@ -231,3 +232,35 @@ def test_a_sas_drive_behind_an_hba_is_shown_with_its_endurance_indicator(
     assert "  Class:     ssd, transport sas" in block
     assert "  Wear:      0 % (endurance indicator)" in block
     assert text.endswith("\n4 monitored, 0 in standby, 0 unreadable, 0 skipped\n")
+
+
+def test_drives_behind_megaraid_show_controller_and_device_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Result 2 of M6 on the MegaRAID scenario: the physical drives behind
+    # the controller, and the logical volume skipped with a reason
+    # (ADR 0028).
+    steps = build(SCENARIOS["megaraid-degraded"], tmp_path / "steps")
+    host = Host(tmp_path, monkeypatch, steps[0])
+    host.scsi_host(6, "megaraid_sas")
+
+    blocks = report(host.discover()).split("\n\n")
+
+    assert blocks[1].splitlines() == [
+        "/dev/sda [scsi], from the scan: skipped, logical-volume"
+        " (lsblk vendor DELL, model PERC H730P Mini)",
+        "  Reason:    lsblk vendor DELL, model PERC H730P Mini",
+    ]
+    assert blocks[2].startswith("/dev/bus/6 [sat+megaraid,14], from the scan: monitored\n")
+    assert "\n  Location:  /dev/bus/6 (megaraid_sas), device 14\n" in blocks[2]
+    assert blocks[3].startswith("/dev/bus/6 [megaraid,8], from the scan: monitored\n")
+    assert "\n  Location:  /dev/bus/6 (megaraid_sas), device 8\n" in blocks[3]
+    assert blocks[-1] == "2 monitored, 0 in standby, 0 unreadable, 1 skipped\n"
+
+
+def test_a_drive_without_a_controller_has_no_location_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = report(Host.of_node(tmp_path, monkeypatch, "pve7").discover())
+
+    assert "Location:" not in text

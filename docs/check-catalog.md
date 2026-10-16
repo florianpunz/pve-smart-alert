@@ -94,7 +94,7 @@ Notes:
 - Corrected errors are normal on SAS drives and are not evaluated.
 - No public failure-rate data was found for these values. The defaults are the weakest in the catalog.
 - `scsi.pending_defects` needs the pending defects log page, which smartctl reads with `--xall` and not with `--all`: with `smartctl.detail = "basic"` the check is never applicable, and many drives do not have the page ([Research 08](research/08-public-recordings.md)).
-- Parsed since milestone M6 (`parsers/scsi.py`), for SAS and parallel SCSI drives. The defaults rest on no failure-rate data and were checked only against recordings ([Research 08](research/08-public-recordings.md)): the healthy SAS drives stay below every threshold, a SAS drive with 56 grown defects gets a notice, and a parallel SCSI drive with 260 grown defects and 536 uncorrected errors gets two warnings, although its own health verdict passes. They are assumptions for the review in M7 (Q-T3, Q-T5).
+- Parsed since milestone M6 (`parsers/scsi.py`), for SAS and parallel SCSI drives, also behind a MegaRAID controller as `megaraid,N`. The defaults rest on no failure-rate data and were checked only against recordings ([Research 08](research/08-public-recordings.md)): the healthy SAS drives stay below every threshold, a SAS drive with 56 grown defects gets a notice, and a parallel SCSI drive with 260 grown defects and 536 uncorrected errors gets two warnings, although its own health verdict passes. They are assumptions for the review in M7 (Q-T3, Q-T5).
 - `scsi.uncorrected_errors` adds up the read, write and verify parts that the drive reports; a drive without the error counter log has no value, not zero.
 
 ## Conditions of the tool itself

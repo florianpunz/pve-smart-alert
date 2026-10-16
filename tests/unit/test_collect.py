@@ -207,3 +207,11 @@ def test_the_command_takes_name_and_type_as_found() -> None:
         "--nocheck=standby",
         "/dev/bus/0",
     ]
+
+
+def test_a_sas_drive_behind_megaraid_is_read_without_the_standby_check() -> None:
+    # The standby check is an ATA command; a SAS drive behind the
+    # controller is read as `megaraid,N` (ADR 0004, ADR 0028).
+    command = drive_command("/dev/bus/6", "megaraid,8", settings=settings(), protocol="SCSI")
+
+    assert command == [str(FAKE), "--json=c", "--xall", "--device=megaraid,8", "/dev/bus/6"]

@@ -111,6 +111,9 @@ Change = Callable[[State], None]
 
 # Why a skipped device takes a known drive out of monitoring.
 _UNMONITORED: Final = frozenset({"excluded", "no-smart"})
+# Why a skipped device was never a drive: a record of it, kept by a build
+# that took it for one, is forgotten without a notification (ADR 0028).
+_NOT_DRIVES: Final = frozenset({"logical-volume", "not-a-disk"})
 
 
 class Presence(StrEnum):
@@ -429,6 +432,7 @@ class _Planner:
                 messages[key] = message
                 changes[key] = drive_changes
 
+        self._forget_non_drives()
         for key in list(self.work.drives):
             if key in seen_keys:
                 continue
@@ -590,6 +594,25 @@ class _Planner:
         active = tuple(_active(check, condition) for check, condition in record.conditions.items())
         message = DriveMessage(_info_of_record(key, record), (item,), active)
         return message, [_mark_missing(key, self.now)]
+
+    def _forget_non_drives(self) -> None:
+        """Forget the records of devices that discovery now knows are no drives (ADR 0028).
+
+        Such a device has no identity of its own in this run, so its record
+        is found by the path it was last read through. It goes before the
+        drives that are absent are counted, so that it is never reported as
+        missing.
+        """
+        for skipped in self.observation.skipped:
+            if skipped.reason not in _NOT_DRIVES:
+                continue
+            key = (
+                identity_key(skipped.identity, skipped.access)
+                if skipped.identity is not None
+                else self._find_by_access(skipped.access)
+            )
+            if key is not None:
+                self.work.drives.pop(key, None)
 
     def _apply_skipped(self) -> None:
         """Keep the skipped devices for `status`; forget drives that are no longer monitored."""
@@ -1028,9 +1051,7 @@ def _info_of_record(key: str, record: DriveRecord, *, present: bool = False) -> 
 def _location_text(snapshot: Snapshot) -> str | None:
     """Return where a drive sits: controller and device ID, or the bus path (FR-507)."""
     location = snapshot.location
-    if location.controller is not None and location.device_id is not None:
-        return f"{location.controller}, device {location.device_id}"
-    return location.by_path
+    return location.controller_text or location.by_path
 
 
 def _used_by_text(snapshot: Snapshot) -> str | None:

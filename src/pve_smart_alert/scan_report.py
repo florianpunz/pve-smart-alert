@@ -3,8 +3,9 @@
 
 One block per device found, in the order of discovery: its name, type and
 source, what became of it, and for a drive that was read what the tool knows
-about it: identity, class, what uses it, the wear value with its source, and
-how long smartctl took. A wear value that differs by 10 percentage points or
+about it: identity, class, the controller and device ID of a drive behind a
+RAID controller (ADR 0028), what uses it, the wear value with its source,
+and how long smartctl took. A wear value that differs by 10 percentage points or
 more from what the web interface of Proxmox VE shows names both (ADR 0021).
 """
 
@@ -54,8 +55,12 @@ def _device(found: Found) -> Iterator[str]:
     snapshot = found.snapshot
     if snapshot is not None:
         yield from _drive(snapshot)
-    elif found.detail is not None and found.outcome is not Outcome.STANDBY:
-        yield _labelled("Reason", found.detail)
+    else:
+        if found.detail is not None and found.outcome is not Outcome.STANDBY:
+            yield _labelled("Reason", found.detail)
+        location = found.details.location.controller_text
+        if location is not None:
+            yield _labelled("Location", location)
     if found.collected is not None:
         yield _labelled("Read in", f"{found.collected.duration_seconds:.2f} s")
 
@@ -83,6 +88,9 @@ def _drive(snapshot: Snapshot) -> Iterator[str]:
     yield _labelled(
         "Class", snapshot.drive_class.value + (f", transport {transport}" if transport else "")
     )
+    location = snapshot.location.controller_text
+    if location is not None:
+        yield _labelled("Location", location)
     yield _labelled("Used by", _membership(snapshot.membership))
     wear = _wear(snapshot)
     if wear is not None:
