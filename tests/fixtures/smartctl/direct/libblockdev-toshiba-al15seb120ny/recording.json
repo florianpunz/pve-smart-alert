@@ -1,0 +1,31 @@
+{
+  "origin": "Test data of libblockdev: a healthy SAS hard disk of 10000 rpm, smartmontools 7.3",
+  "license": "LGPL-2.1-or-later",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/storaged-project/libblockdev",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.3",
+  "controller": "unknown; the drive answers as a SCSI block device",
+  "files": [
+    {
+      "file": "sdd.json",
+      "device": "/dev/sdd",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "hdd",
+      "model": "TOSHIBA AL15SEB120NY",
+      "command": "smartctl -a --json /dev/sdd",
+      "exit_status": 0
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/storaged-project/libblockdev",
+    "commit": "3c5433aba8c87b83a590d9363bf0fc71c205e08a",
+    "copyright": "Copyright (C) 2014-2023 Red Hat, Inc.",
+    "license_file": "tests/fixtures/licenses/libblockdev-LGPL-2.1.txt",
+    "paths": {
+      "sdd.json": "tests/smart_dumps/TOSHIBA_AL15SEB120NY.json"
+    }
+  }
+}

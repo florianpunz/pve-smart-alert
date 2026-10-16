@@ -1,0 +1,31 @@
+{
+  "origin": "Test data of libblockdev: a healthy SAS hard disk with the background scan log, smartmontools 7.3",
+  "license": "LGPL-2.1-or-later",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/storaged-project/libblockdev",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.3",
+  "controller": "unknown; the drive answers as a SCSI block device",
+  "files": [
+    {
+      "file": "sdq.json",
+      "device": "/dev/sdq",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "hdd",
+      "model": "WD WD4001FYYG-01SL3",
+      "command": "smartctl --info --health --attributes --log=error --log=background --json --device=scsi /dev/sdq",
+      "exit_status": 0
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/storaged-project/libblockdev",
+    "commit": "3c5433aba8c87b83a590d9363bf0fc71c205e08a",
+    "copyright": "Copyright (C) 2014-2023 Red Hat, Inc.",
+    "license_file": "tests/fixtures/licenses/libblockdev-LGPL-2.1.txt",
+    "paths": {
+      "sdq.json": "tests/smart_dumps/WD4001FYYG-01SL3.json"
+    }
+  }
+}

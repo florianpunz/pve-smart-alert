@@ -29,6 +29,16 @@ EUI_TEXT: Final = re.compile(r"eui\.([0-9a-f]{16})", re.IGNORECASE)
 NGUID_TEXT: Final = re.compile(r"eui\.([0-9a-f]{16})([0-9a-f]{16})", re.IGNORECASE)
 # The fields of lsblk that hold a UUID of a file system, partition or table.
 UUID_KEYS: Final = ("uuid", "partuuid", "ptuuid")
+# The fields in which smartctl writes an NAA name of a SCSI drive (ADR 0026).
+NAA_TEXT_KEYS: Final = ("logical_unit_id", "sas_address", "attached_sas_address")
+NAA_TEXT: Final = re.compile(r"0x([0-9a-f]+)")
+REPOSITORY: Final = FIXTURES.parent.parent
+# The name part of the license text kept for each license of an import.
+LICENSE_TEXTS: Final = {
+    "Apache-2.0": "Apache-2.0",
+    "LGPL-2.1-or-later": "LGPL-2.1",
+    "MIT": "MIT",
+}
 
 
 def fixture_files() -> list[Path]:
@@ -64,7 +74,26 @@ def _holds_a_real_identifier(key: str, value: object) -> bool:
         return not (isinstance(value, dict) and _small(value.get("ext_id")))
     if key in UUID_KEYS:
         return not _placeholder_uuid(value)
+    if key in NAA_TEXT_KEYS:
+        return not _placeholder_naa(value)
     return False
+
+
+def _placeholder_naa(value: object) -> bool:
+    """Whether an NAA name has a counter as its number (ADR 0026).
+
+    An NAA 5 name is a WWN, an NAA 6 name keeps its first 7 digits, and any
+    other name is a counter in all its digits. Zero names nothing.
+    """
+    match = NAA_TEXT.fullmatch(value) if isinstance(value, str) else None
+    if match is None:
+        return False
+    digits = match.group(1)
+    if len(digits) == 16 and digits[0] == "5":
+        return int(digits, 16) & (2**36 - 1) <= COUNTER_LIMIT
+    if len(digits) == 32 and digits[0] == "6":
+        return int(digits[7:], 16) <= COUNTER_LIMIT
+    return int(digits, 16) <= COUNTER_LIMIT
 
 
 def _placeholder_uuid(value: object) -> bool:
@@ -124,6 +153,11 @@ def test_there_are_fixtures_to_check() -> None:
         {"blockdevices": [{"wwn": "eui.e8238fa6bf530001001b448b4a1b2c3d"}]},
         {"blockdevices": [{"uuid": "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31"}]},
         {"blockdevices": [{"ptuuid": "abcd1234"}]},
+        {"logical_unit_id": "0x5000cca04eb1c2d4"},
+        {"logical_unit_id": "0x600508b1001c4d3e2f1a0b9c8d7e6f50"},
+        {"logical_unit_id": "0x1234567890abcdef"},
+        {"logical_unit_id": "naa.5000cca000000001"},
+        {"scsi_sas_port_0": {"phy_0": {"attached_sas_address": "0x500605b00c1d2e30"}}},
     ],
 )
 def test_the_guard_finds_real_identifiers(document: object) -> None:
@@ -141,6 +175,11 @@ def test_the_guard_finds_real_identifiers(document: object) -> None:
         {"blockdevices": [{"wwn": "eui.0000000000000001001b440000000001"}]},
         {"blockdevices": [{"uuid": "00000000-0000-0000-0000-000000000001", "ptuuid": None}]},
         {"blockdevices": [{"partuuid": "00000001-23"}]},
+        {"logical_unit_id": "0x5000cca000000001"},
+        {"logical_unit_id": "0x600508b0000000000000000000000002"},
+        {"logical_unit_id": "0x0000000000000003"},
+        {"scsi_sas_port_0": {"phy_0": {"sas_address": "0x5000cca000000004"}}},
+        {"scsi_sas_port_0": {"phy_1": {"attached_sas_address": "0x0"}}},
     ],
 )
 def test_the_guard_accepts_placeholders(document: object) -> None:
@@ -155,3 +194,37 @@ def test_every_fixture_has_a_recorded_source() -> None:
         parts = path.parent.relative_to(FIXTURES).parts
         assert f"`{parts[0]}/`" in sources, parts[0]
         assert "`" + "/".join(parts[1:]) + "`" in sources, path
+
+
+def imported_recordings() -> list[Path]:
+    """Return the `recording.json` of every fixture taken from another project."""
+    return [
+        path
+        for path in sorted(FIXTURES.rglob("recording.json"))
+        if "source" in json.loads(path.read_text(encoding="utf-8"))
+    ]
+
+
+def test_there_are_imported_recordings_to_check() -> None:
+    assert len(imported_recordings()) >= 10
+
+
+@pytest.mark.parametrize(
+    "path", imported_recordings(), ids=lambda path: str(path.parent.relative_to(FIXTURES))
+)
+def test_an_imported_recording_keeps_the_license_of_its_source(path: Path) -> None:
+    # MIT and Apache-2.0 ask that the license text goes with the data
+    # (ADR 0026); it is kept below tests/fixtures/licenses.
+    recording = json.loads(path.read_text(encoding="utf-8"))
+    source = recording["source"]
+
+    license_file = REPOSITORY / source["license_file"]
+    assert license_file.is_file(), source["license_file"]
+    assert license_file.parent == FIXTURES / "licenses"
+    # The file is named after the project and the license it holds.
+    assert license_file.name.endswith(f"-{LICENSE_TEXTS[recording['license']]}.txt")
+    assert source["repository"].startswith("https://")
+    assert re.fullmatch(r"[0-9a-f]{40}", source["commit"])
+    assert source["copyright"].startswith("Copyright")
+    # Every file of the fixture names the file of the source it was made of.
+    assert set(source["paths"]) == {entry["file"] for entry in recording["files"]}

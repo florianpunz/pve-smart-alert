@@ -1,0 +1,31 @@
+{
+  "origin": "Test data of Scrutiny: a RAID 1 volume of an Intel RAID controller read as a SCSI device, smartmontools 7.0",
+  "license": "MIT",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/AnalogJ/scrutiny",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.0",
+  "controller": "Intel RAID, the logical volume",
+  "files": [
+    {
+      "file": "sdb.json",
+      "device": "/dev/sdb",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "hdd",
+      "model": "Intel Raid 1 Volume",
+      "command": "smartctl --all -j /dev/sdb",
+      "exit_status": 4
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/AnalogJ/scrutiny",
+    "commit": "ac2056d6c3cef4a8dd6fe3e0b8c002d9595da75f",
+    "copyright": "Copyright (c) 2020 Jason Kulatunga",
+    "license_file": "tests/fixtures/licenses/scrutiny-MIT.txt",
+    "paths": {
+      "sdb.json": "webapp/backend/pkg/models/testdata/smart-raid.json"
+    }
+  }
+}

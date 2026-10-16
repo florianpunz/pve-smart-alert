@@ -196,3 +196,180 @@ def test_the_archive_is_read_where_it_is(tmp_path: Path) -> None:
 
     # Nothing is unpacked next to it.
     assert sorted(entry.name for entry in tmp_path.iterdir()) == ["out", path.name]
+
+
+# The test data of other projects (ADR 0026)
+
+
+def run_import(tmp_path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "import",
+            "--output",
+            str(tmp_path / "out"),
+            "--origin",
+            "A test",
+            "--repository",
+            "https://example.org/project",
+            "--commit",
+            "0123abcd",
+            "--copyright",
+            "Copyright (c) 2026 Someone",
+            "--license-file",
+            str(license_text(tmp_path)),
+            *arguments,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def license_text(tmp_path: Path) -> Path:
+    path = tmp_path / "LICENSE.txt"
+    path.write_text("MIT License\n", encoding="utf-8")
+    return path
+
+
+def sas() -> dict[str, object]:
+    return {
+        "smartctl": {"version": [7, 3], "argv": ["smartctl", "-a", "--json", "/dev/sdc"]},
+        "device": {"name": "/dev/sdc", "type": "scsi", "protocol": "SCSI"},
+        "scsi_model_name": "HGST HUSMR3280ASS200",
+        "serial_number": "0HWZ3X1A",
+        "logical_unit_id": "0x5000cca04eb1c2d4",
+        "rotation_rate": 0,
+    }
+
+
+def written(tmp_path: Path, name: str, document: object) -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
+def test_a_drive_of_another_project_becomes_a_fixture_without_a_scan(tmp_path: Path) -> None:
+    source = written(tmp_path, "HGST.json", sas())
+
+    result = run_import(tmp_path, "--license", "MIT", "--drive", f"sdc=tests/HGST.json:{source}")
+
+    assert result.returncode == 0, result.stderr
+    directory = tmp_path / "out"
+    # No scan is made up where the source has none.
+    assert sorted(path.name for path in directory.iterdir()) == ["recording.json", "sdc.json"]
+    sdc = json.loads((directory / "sdc.json").read_text(encoding="utf-8"))
+    assert sdc["serial_number"] == "ANON-SN-0001"
+    assert sdc["logical_unit_id"] == "0x5000cca000000001"
+    recording = json.loads((directory / "recording.json").read_text(encoding="utf-8"))
+    assert recording["license"] == "MIT"
+    assert recording["smartmontools"] == "7.3"
+    assert recording["files"] == [
+        {
+            "file": "sdc.json",
+            "device": "/dev/sdc",
+            "type": "scsi",
+            "protocol": "SCSI",
+            "class": "ssd",
+            "model": "HGST HUSMR3280ASS200",
+            "command": "smartctl -a --json /dev/sdc",
+            "exit_status": None,
+        }
+    ]
+    assert recording["source"] == {
+        "repository": "https://example.org/project",
+        "commit": "0123abcd",
+        "copyright": "Copyright (c) 2026 Someone",
+        "license_file": (tmp_path / "LICENSE.txt").as_posix(),
+        "paths": {"sdc.json": "tests/HGST.json"},
+    }
+
+
+def test_a_scan_alone_becomes_a_fixture(tmp_path: Path) -> None:
+    source = written(tmp_path, "scan.json", scan())
+
+    result = run_import(
+        tmp_path, "--license", "Apache-2.0", "--scan", f"testdata/scan.json:{source}"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(path.name for path in (tmp_path / "out").iterdir()) == [
+        "recording.json",
+        "scan.json",
+    ]
+
+
+def test_an_import_without_the_license_text_is_refused(tmp_path: Path) -> None:
+    source = written(tmp_path, "HGST.json", sas())
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "import",
+            "--output",
+            str(tmp_path / "out"),
+            "--origin",
+            "A test",
+            "--license",
+            "MIT",
+            "--repository",
+            "https://example.org/project",
+            "--commit",
+            "0123abcd",
+            "--copyright",
+            "Copyright (c) 2026 Someone",
+            "--license-file",
+            str(tmp_path / "missing.txt"),
+            "--drive",
+            f"sdc=tests/HGST.json:{source}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "no license text at" in result.stderr
+    assert not (tmp_path / "out").exists()
+
+
+def test_what_the_source_changed_is_recorded(tmp_path: Path) -> None:
+    source = written(tmp_path, "HGST.json", sas())
+
+    run_import(
+        tmp_path,
+        "--license",
+        "MIT",
+        "--changes",
+        "The source shortened the self-test log",
+        "--drive",
+        f"sdc=tests/HGST.json:{source}",
+    )
+
+    recording = json.loads((tmp_path / "out" / "recording.json").read_text(encoding="utf-8"))
+    assert recording["source"]["changes"] == "The source shortened the self-test log"
+
+
+def test_an_incompatible_license_is_refused(tmp_path: Path) -> None:
+    source = written(tmp_path, "HGST.json", sas())
+
+    result = run_import(
+        tmp_path, "--license", "GPL-2.0-only", "--drive", f"sdc=tests/HGST.json:{source}"
+    )
+
+    assert result.returncode == 1
+    assert "GPL-2.0-only is not a compatible license" in result.stderr
+    assert not (tmp_path / "out").exists()
+
+
+def test_an_import_that_would_leave_a_real_value_writes_nothing(tmp_path: Path) -> None:
+    drive = sas()
+    drive["logical_unit_id"] = "naa.5000cca04eb1c2d4"
+    source = written(tmp_path, "HGST.json", drive)
+
+    result = run_import(tmp_path, "--license", "MIT", "--drive", f"sdc=tests/HGST.json:{source}")
+
+    assert result.returncode == 1
+    assert "logical_unit_id in an unknown form" in result.stderr
+    assert not (tmp_path / "out").exists()

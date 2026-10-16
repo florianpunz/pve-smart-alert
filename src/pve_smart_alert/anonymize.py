@@ -8,7 +8,11 @@ scan, and the same real value gets the same placeholder in every file:
 
 - serial number: `ANON-SN-0001`;
 - WWN: `naa` and `oui` stay, `id` becomes the counter;
-- EUI-64: `oui` stays, `ext_id` becomes the counter.
+- EUI-64: `oui` stays, `ext_id` becomes the counter;
+- the logical unit id and the SAS addresses of a SCSI drive, which smartctl
+  writes as `0x` and hexadecimal digits: an NAA 5 name is a WWN and shares
+  its counter, an NAA 6 name keeps its authority and vendor, and any other
+  name becomes a counter in its own number of digits (ADR 0026).
 
 Where a WWN or an EUI-64 is written as 16 hexadecimal digits in a text, the
 digits of its placeholder replace it. In the output of `lsblk`, drives that
@@ -49,6 +53,14 @@ UUID_KEYS: Final = ("uuid", "partuuid", "ptuuid")
 _LSBLK_WWN: Final = re.compile(r"0x([0-9a-f]{16})", re.IGNORECASE)
 _LSBLK_EUI: Final = re.compile(r"eui\.([0-9a-f]{16})", re.IGNORECASE)
 _LSBLK_NGUID: Final = re.compile(r"eui\.([0-9a-f]{16})([0-9a-f]{16})", re.IGNORECASE)
+
+# The fields in which smartctl writes an NAA name of a SCSI drive as text:
+# the logical unit id from the device identification page, and the address
+# of each SAS port and of what it is attached to (ADR 0026).
+NAA_TEXT_KEYS: Final = ("logical_unit_id", "sas_address", "attached_sas_address")
+_NAA_TEXT: Final = re.compile(r"0x([0-9a-f]+)", re.IGNORECASE)
+# An NAA 6 name has 32 digits; its first 7 are the authority and the vendor.
+_NAA6_VENDOR_DIGITS: Final = 7
 
 # A real value shorter than this is replaced only in its own field: in a
 # text it could stand for something else, and it carries no identity anyway
@@ -100,6 +112,9 @@ class Anonymizer:
         self._uuids: dict[str, str] = {}
         # An NGUID by its 32 lowercase digits, with the digits of its placeholder.
         self._nguids: dict[str, str] = {}
+        # An NAA name that is not a WWN, by its lowercase digits, with the
+        # digits of its placeholder (ADR 0026).
+        self._names: dict[str, str] = {}
 
     def learn(self, drive: Mapping[str, object]) -> None:
         """Number the identifiers of one drive output that are new.
@@ -116,6 +131,9 @@ class Anonymizer:
         for eui in _euis(drive):
             if eui not in self._euis:
                 self._euis[eui] = Eui64(eui.oui, _next(self._euis))
+        for key, value in _fields(drive):
+            if key in NAA_TEXT_KEYS and isinstance(value, str):
+                self._learn_naa_text(key, value)
 
     def drive(self, drive: Mapping[str, object]) -> dict[str, object]:
         """Return an anonymized copy of one drive output of smartctl."""
@@ -132,6 +150,11 @@ class Anonymizer:
             eui = _eui(namespace.get("eui64"))
             if eui is not None:
                 namespace["eui64"] = _eui_object(self._euis[eui])
+        for node in _dicts(result):
+            for key in NAA_TEXT_KEYS:
+                value = node.get(key)
+                if isinstance(value, str):
+                    node[key] = self._naa_placeholder(value)
 
         replaced = self._replace_text(result)
         assert isinstance(replaced, dict)
@@ -177,10 +200,7 @@ class Anonymizer:
     def _learn_lsblk_wwn(self, text: str) -> None:
         wwn = _LSBLK_WWN.fullmatch(text)
         if wwn is not None:
-            value = int(wwn.group(1), 16)
-            real = Wwn(value >> 60, (value >> 36) & 0xFFFFFF, value & (2**36 - 1))
-            if real not in self._wwns:
-                self._wwns[real] = Wwn(real.naa, real.oui, _next(self._wwns))
+            self._learn_wwn(wwn.group(1))
         eui = _LSBLK_EUI.fullmatch(text)
         if eui is not None:
             self._learn_eui(eui.group(1))
@@ -190,6 +210,51 @@ class Anonymizer:
             anonymized_eui = self._learn_eui(nguid.group(2))
             if digits not in self._nguids:
                 self._nguids[digits] = f"{_next(self._nguids):016x}{anonymized_eui.hex}"
+
+    def _learn_wwn(self, digits: str) -> Wwn:
+        """Number a WWN written as 16 digits, if it is new, and return its placeholder."""
+        real = _wwn_of(digits)
+        if real not in self._wwns:
+            self._wwns[real] = Wwn(real.naa, real.oui, _next(self._wwns))
+        return self._wwns[real]
+
+    def _learn_naa_text(self, key: str, text: str) -> None:
+        """Number an NAA name that smartctl writes as text, if it is new (ADR 0026).
+
+        Raises `AnonymizationError` for a form the anonymizer does not know,
+        so that it fails closed instead of keeping a real value.
+        """
+        match = _NAA_TEXT.fullmatch(text)
+        if match is None:
+            raise AnonymizationError(f"a {key} in an unknown form")
+        digits = match.group(1).lower()
+        if int(digits, 16) == 0 or digits in self._names:
+            # A zero address, such as that of a phy attached to nothing,
+            # names nothing.
+            return
+        if _is_wwn_digits(digits):
+            self._learn_wwn(digits)
+        elif len(digits) == 32 and digits[0] == "6":
+            number = _next(self._names)
+            vendor = digits[:_NAA6_VENDOR_DIGITS]
+            self._names[digits] = f"{vendor}{number:0{32 - _NAA6_VENDOR_DIGITS}x}"
+        else:
+            number = _next(self._names)
+            if len(f"{number:x}") > len(digits):
+                raise AnonymizationError(f"a {key} too short for its placeholder")
+            self._names[digits] = f"{number:0{len(digits)}x}"
+
+    def _naa_placeholder(self, text: str) -> str:
+        """Return the placeholder of an NAA name written as text, learned before."""
+        match = _NAA_TEXT.fullmatch(text)
+        if match is None:
+            raise AnonymizationError("an NAA name in an unknown form")
+        digits = match.group(1).lower()
+        if int(digits, 16) == 0:
+            return text
+        if _is_wwn_digits(digits):
+            return f"0x{self._wwns[_wwn_of(digits)].hex}"
+        return f"0x{self._names[digits]}"
 
     def _learn_eui(self, digits: str) -> Eui64:
         """Number an EUI-64 written as 16 digits, if it is new, and return its placeholder."""
@@ -229,6 +294,8 @@ class Anonymizer:
             yield "UUID", uuid
         for nguid in self._nguids:
             yield "NGUID", nguid
+        for name in self._names:
+            yield "NAA name", name
 
     def _unreplaced_fields(self, document: object) -> Iterator[str]:
         """Return the kinds of identifier fields that do not hold a placeholder."""
@@ -249,7 +316,17 @@ class Anonymizer:
             return None if value in self._anonymized_wwn_texts() else "WWN"
         if key == "eui64" and isinstance(value, dict):
             return None if _eui(value) in set(self._euis.values()) else "EUI-64"
+        if key in NAA_TEXT_KEYS and isinstance(value, str):
+            if _is_zero_name(value) or value.lower() in self._anonymized_naa_texts():
+                return None
+            return "NAA name"
         return None
+
+    def _anonymized_naa_texts(self) -> set[str]:
+        """Return the forms in which smartctl writes the placeholders of NAA names."""
+        texts = {f"0x{wwn.hex}" for wwn in self._wwns.values()}
+        texts |= {f"0x{digits}" for digits in self._names.values()}
+        return texts
 
     def _anonymized_wwn_texts(self) -> set[str]:
         """Return the forms in which lsblk writes the placeholders of WWNs and EUI-64s."""
@@ -277,6 +354,11 @@ class Anonymizer:
                 text = text.replace(real, placeholder)
         # An NGUID before the EUI-64 inside it.
         pairs = list(self._nguids.items())
+        pairs += [
+            (real, placeholder)
+            for real, placeholder in self._names.items()
+            if len(real) >= MIN_SEARCHED_LENGTH
+        ]
         pairs += [(real.hex, anonymized.hex) for real, anonymized in self._wwns.items()]
         pairs += [(real.hex, anonymized.hex) for real, anonymized in self._euis.items()]
         for real_hex, anonymized_hex in pairs:
@@ -290,6 +372,23 @@ def _next(numbered: Sized) -> int:
     if number > COUNTER_LIMIT:
         raise AnonymizationError(f"more than {COUNTER_LIMIT} values of one kind")
     return number
+
+
+def _is_zero_name(text: str) -> bool:
+    """Whether an NAA name written as text is zero, which names nothing (ADR 0026)."""
+    match = _NAA_TEXT.fullmatch(text)
+    return match is not None and int(match.group(1), 16) == 0
+
+
+def _is_wwn_digits(digits: str) -> bool:
+    """Whether an NAA name of 16 digits is a WWN: authority 5, IEEE registered."""
+    return len(digits) == 16 and digits[0] == "5"
+
+
+def _wwn_of(digits: str) -> Wwn:
+    """Return the WWN written as 16 hexadecimal digits."""
+    value = int(digits, 16)
+    return Wwn(value >> 60, (value >> 36) & 0xFFFFFF, value & (2**36 - 1))
 
 
 def _wwn(value: object) -> Wwn | None:
@@ -360,6 +459,17 @@ def _counter_like(value: str, number: int) -> str:
     for position, digit in zip(positions[-len(digits) :], digits, strict=True):
         characters[position] = digit
     return "".join(characters)
+
+
+def _dicts(node: object) -> Iterator[dict[str, object]]:
+    """Return every object of a document, at any depth, the document included."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _dicts(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _dicts(item)
 
 
 def _fields(node: object) -> Iterator[tuple[str, object]]:

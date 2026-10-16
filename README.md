@@ -153,6 +153,7 @@ A fresh clone needs only `make check`, which creates the virtual environment on 
 ## License
 
 AGPL-3.0-or-later. Copyright (C) 2026 Florian Punz. See [LICENSE](LICENSE) and [ADR 0015](docs/adr/0015-license.md).
+Some test fixtures come from the test data of other projects and keep their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Affiliation
 

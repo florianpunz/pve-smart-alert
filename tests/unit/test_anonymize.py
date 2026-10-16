@@ -260,3 +260,91 @@ def test_a_real_uuid_left_in_a_text_fails_the_check() -> None:
 
     with pytest.raises(AnonymizationError, match="UUID"):
         anonymizer.check({"note": "4f8c2c1e-0b3a-4b6e-9d2f-1c0a5e7b9d31"}, name="other.json")
+
+
+# SCSI drives: the logical unit id and the SAS addresses (ADR 0026)
+
+SAS: Final[dict[str, object]] = {
+    "device": {"name": "/dev/sdc", "type": "scsi", "protocol": "SCSI"},
+    "scsi_model_name": "HGST HUSMR3280ASS200",
+    "serial_number": "0HWZ3X1A",
+    "logical_unit_id": "0x5000cca04eb1c2d4",
+    "scsi_sas_port_0": {
+        "phy_0": {
+            "sas_address": "0x5000cca04eb1c2d5",
+            "attached_sas_address": "0x500605b00c1d2e30",
+        },
+        "phy_1": {"sas_address": "0x5000cca04eb1c2d6", "attached_sas_address": "0x0"},
+    },
+}
+
+
+def test_a_logical_unit_id_of_naa_5_is_a_wwn() -> None:
+    anonymizer = anonymizer_of(SAS)
+
+    sas = anonymizer.drive(SAS)
+    # lsblk writes the same name as the WWN of the block device, so both get
+    # the same placeholder.
+    lsblk = anonymizer.lsblk({"blockdevices": [{"name": "sdc", "wwn": "0x5000cca04eb1c2d4"}]})
+
+    assert sas["logical_unit_id"] == "0x5000cca000000001"
+    assert lsblk == {"blockdevices": [{"name": "sdc", "wwn": "0x5000cca000000001"}]}
+
+
+def test_the_sas_addresses_continue_the_counter_and_a_zero_address_stays() -> None:
+    sas = anonymizer_of(SAS).drive(SAS)
+
+    port = sas["scsi_sas_port_0"]
+    assert isinstance(port, dict)
+    assert port["phy_0"] == {
+        "sas_address": "0x5000cca000000002",
+        "attached_sas_address": "0x500605b000000003",
+    }
+    assert port["phy_1"] == {"sas_address": "0x5000cca000000004", "attached_sas_address": "0x0"}
+
+
+def test_a_drive_with_a_zero_sas_address_passes_the_check() -> None:
+    # A phy that is attached to nothing is common on a SAS drive; its zero
+    # address must not stop dump-fixture.
+    anonymizer = anonymizer_of(SAS)
+
+    anonymizer.check(anonymizer.drive(SAS), name="sdc.json")
+
+
+def test_an_naa_6_name_keeps_its_authority_and_vendor() -> None:
+    drive = {**SAS, "logical_unit_id": "0x600508b1001c4d3e2f1a0b9c8d7e6f50"}
+
+    anonymized = anonymizer_of(drive).drive(drive)
+
+    assert anonymized["logical_unit_id"] == "0x600508b" + "1".zfill(25)
+
+
+def test_a_name_of_another_form_becomes_a_counter_in_its_digits() -> None:
+    drive = {**SAS, "logical_unit_id": "0x1234567890abcdef"}
+
+    anonymized = anonymizer_of(drive).drive(drive)
+
+    assert anonymized["logical_unit_id"] == "0x0000000000000001"
+
+
+def test_the_logical_unit_id_is_replaced_in_texts() -> None:
+    anonymizer = anonymizer_of(SAS)
+
+    note = anonymizer.document({"note": "Logical Unit id: 0x5000CCA04EB1C2D4"})
+
+    assert note == {"note": "Logical Unit id: 0x5000cca000000001"}
+
+
+def test_a_logical_unit_id_in_an_unknown_form_is_refused() -> None:
+    drive = {**SAS, "logical_unit_id": "naa.5000cca04eb1c2d4"}
+
+    with pytest.raises(AnonymizationError, match="logical_unit_id in an unknown form"):
+        anonymizer_of(drive)
+
+
+def test_a_real_logical_unit_id_that_is_left_fails_the_check() -> None:
+    anonymizer = anonymizer_of(SAS)
+    leak = {**anonymizer.drive(SAS), "logical_unit_id": "0x5000cca04eb1c2d4"}
+
+    with pytest.raises(AnonymizationError, match="real value: WWN, NAA name"):
+        anonymizer.check(leak, name="sdc.json")

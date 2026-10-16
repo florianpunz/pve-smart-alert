@@ -1,0 +1,32 @@
+{
+  "origin": "Test data of smartctl_exporter: a parallel SCSI hard disk with 260 grown defects and uncorrected read and write errors whose health still passes, smartmontools 7.4",
+  "license": "Apache-2.0",
+  "node": "unknown",
+  "collected": null,
+  "collected_with": "the test data of https://github.com/prometheus-community/smartctl_exporter",
+  "anonymized_with": "scripts/make_fixtures.py import (ADR 0023, ADR 0026)",
+  "smartmontools": "7.4",
+  "controller": "unknown; the drive answers as a SCSI block device",
+  "files": [
+    {
+      "file": "sdb.json",
+      "device": "/dev/sdb",
+      "type": "scsi",
+      "protocol": "SCSI",
+      "class": "hdd",
+      "model": "SEAGATE ST373453LC",
+      "command": "smartctl --json --info --health --attributes --tolerance=verypermissive --nocheck=standby --format=brief --log=error /dev/sdb",
+      "exit_status": 0
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/prometheus-community/smartctl_exporter",
+    "commit": "952076d119c8a17abdb075871348e072263de822",
+    "copyright": "Copyright The Prometheus Authors",
+    "license_file": "tests/fixtures/licenses/smartctl_exporter-Apache-2.0.txt",
+    "paths": {
+      "sdb.json": "testdata/SEAGATE_ST373453LC_26.json"
+    },
+    "changes": "The source replaced the serial number, smartctl.build_info and smartctl.platform_info with one fixed word. The anonymizer treats that word as the serial number and replaced it in all three fields"
+  }
+}

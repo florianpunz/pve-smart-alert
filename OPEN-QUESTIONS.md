@@ -44,15 +44,16 @@ None at the moment. Milestone M5 answered Q-P1 in [ADR 0025](docs/adr/0025-sandb
 
 ## Hardware RAID
 
-Narrowed in milestone M6. Some of these stay open until users with the hardware contribute recordings.
+Narrowed in milestone M6. Some of these stay open until users with the hardware contribute recordings. [Research 08](docs/research/08-public-recordings.md) (2026-10-16) narrowed Q-R1 and Q-R2 from the source code of smartmontools and from public recordings, and answered which public recordings have a usable license, the second half of the former Q-R5.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-R1 | How do SATA drives, enclosures and logical volumes behind a MegaRAID controller appear in `--scan-open` and in the drive output, exactly? | Classification and skipping rules | SATA drives as `sat+megaraid,N`; logical volumes and enclosures recognizable by device type and missing SMART capability |
-| Q-R2 | For HPE Smart Array with the `hpsa` and `smartpqi` drivers: which device node is used, what is the valid range of `N`, can the numbering have gaps, and how does an empty bay answer? | Rules of the probe | Probe from 0 upwards on the controller's device and stop after several consecutive failures |
+| Q-R1 | How do enclosures and logical volumes behind a MegaRAID controller, and SAS drives read as `megaraid,N`, appear in `--scan-open` and in the drive output, exactly? SATA drives as `sat+megaraid,N` are seen in public recordings of smartmontools 7.1 | Classification and skipping rules | A logical volume has an `open_error` that asks for `-d megaraid,N` and the vendor and model of the controller in `lsblk`; an enclosure has the peripheral device type 13; both read from the source code of 7.4 and 7.5, not from recordings |
+| Q-R2 | For HPE Smart Array with the `hpsa` and `smartpqi` drivers: which device node is used, can the numbering have gaps within the range 0 to 127 that smartctl accepts, and how does an empty bay answer? | Rules of the probe | Probe from 0 upwards on the controller's device, stop after several consecutive failures, never above 127 |
 | Q-R3 | Can NVMe drives behind tri-mode RAID controllers be queried with smartctl 7.4? | Coverage statement in the documentation | Unknown; documented as unknown |
 | Q-R4 | When will smartmontools support controllers that use the `mpi3mr` driver (issue 313)? | Dell PERC 12 and Broadcom 96xx are current hardware | Not supported; the tool reports the controller as not queryable |
-| Q-R5 | Who can contribute recordings from MegaRAID, HPE, Adaptec and Areca systems, and which public recordings have a usable license? | Evidence level of the hardware support | Scrutiny's test data as a start; a call for recordings with M6 |
+| Q-R5 | Who can contribute recordings from MegaRAID, HPE, Adaptec and Areca systems? | Evidence level of the hardware support | The public recordings of Research 08 as a start; a call for recordings with M6 |
+| Q-R6 | Is the WWN that `lsblk` shows for a SAS drive the same name as its `logical_unit_id`? | The anonymizer gives both the same placeholder, and de-duplication may compare them | Yes: udev and smartctl read the same device identification page ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)); no recording shows both |
 
 ## Upstream developments to watch
 

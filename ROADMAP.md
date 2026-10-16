@@ -262,7 +262,20 @@ Result you can test:
 3. The same for a SAS drive scenario.
 4. The hardware support table states for every family how it was verified.
 
-Open questions this milestone answers or narrows: Q-R1 to Q-R5.
+Open questions this milestone answers or narrows: Q-R1 to Q-R6.
+
+State: in progress. The work is split into six slices, one branch `feature/m6-<slice>` each, built one after the other and merged into `main` by pull request:
+
+1. `recordings`: the public recordings of [Research 08](docs/research/08-public-recordings.md) as fixtures, and the anonymization of SCSI names and the import of other projects' test data ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)).
+2. `scsi`: the parser for SCSI and SAS drives and the checks `scsi.*` of the catalog. Thresholds that rest only on recordings are listed in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) for the review in M7.
+3. `megaraid`: pass-through types, logical volumes and enclosures skipped with a reason, de-duplication in JBOD mode, changing device IDs, and notifications that name controller and device ID. A logical volume is recognized by structured fields first and by the message of smartctl only as a second signal.
+4. `unsupported-controllers`: controllers whose drives cannot be queried, such as `mpi3mr`, in `scan`, `doctor` and `tool.unsupported_controller`.
+5. `hpe-probe`: the experimental `cciss,N` probe with its configuration key, on synthetic fixtures only.
+6. `support-table`: scenarios per controller family, the hardware support table with evidence labels, manual entries for the other pass-through types, and the call for recordings.
+
+Decided for M6 (2026-10-16): the non-medium error count of SCSI drives is not checked, because smartctl writes it only as text (Research 08); the recordings of HPE controllers that were found are evidence only, so HPE Smart Array is built on synthetic fixtures and labeled "Experimental".
+
+- In progress: slice 1, `feature/m6-recordings`.
 
 ## M7: Hardening, documentation, release 1.0 (M)
 
