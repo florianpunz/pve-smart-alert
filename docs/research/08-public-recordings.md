@@ -149,6 +149,12 @@ Recorded on 2026-10-16 through the read-only wrapper of the host `truenas` of th
 
 These drives are SAS and reached through an HBA in IT mode. They are no evidence for MegaRAID or any other RAID controller.
 
+## Addition 2026-10-16, later: the TrueNAS host recorded with the call of the tool
+
+The first recording of the TrueNAS host was made with `smartctl -x --json=c -n standby -d TYPE DEVICE` for every drive. The tool passes `--nocheck=standby` only for ATA types, and for a SCSI drive `-n standby` makes smartctl check the power condition first and end without data if the drive is in standby (`scsiprint.cpp` lines 3514–3578 in 7.5), so that recording did not show what the tool reads. The wrapper of the maintainer was changed to make the call of the tool: `smartctl --json=c --xall --device=TYPE DEVICE`, with `--nocheck=standby` for `ata`, `sat` and `sat+…` only.
+
+The host was recorded again at 14:52 UTC; this recording replaces the first one in `tests/fixtures/smartctl/hba/maintainer-truenas/`. The SAS SSDs answer as before: no grown defects, no uncorrected errors, health passed, endurance indicator 0 to 5 %, the WWN in `lsblk` equal to the logical unit id. Between the two recordings the power-on hours rose by 3 and the temperature of one drive by 1 °C. Replayed through `scan`, `check --dry-run` and the renderer, the host shows four monitored drives without findings.
+
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>

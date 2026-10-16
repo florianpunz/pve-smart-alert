@@ -268,11 +268,11 @@ def test_a_sas_ssd_behind_an_hba() -> None:
     assert snapshot.health_passed is True
     assert snapshot.smart_available is True
     assert snapshot.smart_enabled is True
-    assert snapshot.power_on_hours == 37532
+    assert snapshot.power_on_hours == 37535
     assert snapshot.power_cycles == 100
     assert snapshot.metrics == {
         "wear.percent_used": 0,
-        "temperature.current": 42,
+        "temperature.current": 43,
         "scsi.grown_defects": 0,
         "scsi.uncorrected_errors": 0,
     }
