@@ -53,6 +53,14 @@ The scenario tests of the notification policy replay a host whose drives change 
 
 The subject, the metadata fields and the body of every kind of notification, written by the renderer from plans that the tests in `tests/unit/test_render.py` build by hand ([ADR 0016](../../docs/adr/0016-test-strategy.md): rendering is compared with golden files). The drives in them are made up, with the placeholder serial numbers of the anonymization. A change to the text or the fields of a notification updates these files: `PVE_SMART_ALERT_UPDATE_GOLDEN=1 make test` writes them, and the diff is reviewed with the change. License AGPL-3.0-or-later.
 
+## State files: `state/`
+
+State files that earlier builds wrote, so that a test reads them with the current code ([ADR 0007](../../docs/adr/0007-state-storage.md)). License AGPL-3.0-or-later.
+
+| File | Origin |
+| --- | --- |
+| `dev2-megaraid-id-change.json` | Written on 2026-10-16 by the code of 0.5.0~dev2 (commit `299acc2`) in the test frame, after the steps `01-first` to `04-moved` of the scenario `megaraid-id-change`, with the clock of the frame. Schema 1. The drives are those of the scenario, with its placeholder serial numbers and WWNs; written indented with sorted keys, nothing else changed |
+
 ## Notification configuration: `pvesh/`
 
 The answers of `pvesh get /cluster/notifications/matchers --output-format json` and `pvesh get /cluster/notifications/targets --output-format json`, one directory per configuration, as `matchers.json` and `targets.json`.

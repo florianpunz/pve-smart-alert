@@ -324,7 +324,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
 - A condition with `last_notified` set to `null` is active but was not notified yet, because its notification was not handed over; the next run plans it again. `pending` holds conditions that were seen but still wait for their confirmation count. `last_notified` of the drive is the time of the last notification about it, for the worsening cool-down; `event_notified` holds the same per event check, for the event cool-down.
 - `details` keeps what a notification about the drive shows while it cannot be read, for example when it is missing.
 - Atomic replacement: the file is written to a temporary file in the same directory with mode 0600, flushed to disk, renamed over the old file, and the directory is flushed.
-- A file that does not parse or validate, and one with a newer schema version than the program reads, is renamed to `state.json.corrupt-<timestamp>`; the run continues with empty state. A timestamp that lies in the future is read as the current time. Each schema version gets a migration function to the next one; version 1 is the first.
+- A file that does not parse or validate, and one with a newer schema version than the program reads, is renamed to `state.json.corrupt-<timestamp>`; the run continues with empty state. A timestamp that lies in the future is read as the current time. Each schema version gets a migration function to the next one; version 1 is the first. A state file written by an earlier build is kept in `tests/fixtures/state/`, and a test continues it with the current code; a change of the schema adds such a file of the old version next to its migration.
 
 ## 10. Notification integration
 
