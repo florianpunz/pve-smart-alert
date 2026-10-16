@@ -12,6 +12,10 @@ import pytest
 
 from pve_smart_alert.process import run_with_timeout
 
+# These tests are about the runner itself, so they start harmless programs
+# of the host on purpose (tests/guard.py).
+pytestmark = pytest.mark.real_programs
+
 # Long enough for any program of these tests, short enough to end a hanging
 # test run. The tests of the timeout itself use a shorter one.
 TIMEOUT = 10.0
