@@ -249,18 +249,23 @@ def test_a_snapshot_knows_only_what_it_is_given() -> None:
         ("megaraid,8", "8"),
         ("sat+megaraid,14", "14"),
         ("megaraid,0", "0"),
+        # The drives behind an HPE Smart Array controller (ADR 0032).
+        ("cciss,0", "0"),
+        ("cciss,127", "127"),
+        ("sat+cciss,2", "2"),
         ("sat", None),
         ("scsi", None),
         ("nvme", None),
         ("megaraid", None),
         ("megaraid,", None),
         ("sat+megaraid,x", None),
-        ("cciss,2", None),
+        ("cciss", None),
+        ("cciss,", None),
     ],
 )
 def test_the_device_id_is_read_from_a_pass_through_type(
     device_type: str, device_id: str | None
 ) -> None:
     # One function for `scan`, the location of a message and the field
-    # `device-id` (ADR 0028, ADR 0029). `cciss,N` follows with slice 5 of M6.
+    # `device-id` (ADR 0028, ADR 0029, ADR 0032).
     assert pass_through_id(device_type) == device_id
