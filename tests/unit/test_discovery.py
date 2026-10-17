@@ -646,8 +646,9 @@ def test_a_drive_in_jbod_mode_is_kept_once_as_its_block_device(megaraid: Host) -
         "hpt,1/3",
         "3ware,2",
         "areca,1/1",
-        # smartctl takes `sat` with its options before any of these types,
-        # and before MegaRAID and cciss as well (dev_interface.cpp of 7.5).
+        # smartctl takes `sat` with its options before the SCSI types among
+        # them, aacraid and sssraid, and MegaRAID and cciss (dev_interface.cpp
+        # of 7.5).
         "sat,12+megaraid,2",
         "sat,16+cciss,0",
         "sat,auto+sssraid,0,1",
