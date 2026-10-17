@@ -4,8 +4,8 @@
 The scan is `smartctl --scan-open --json=c`. For every device it writes the
 name, the type and the protocol, and for a device it could not open also
 `open_error`, in 7.4 and 7.5 alike (Research 03). Name and type are always
-kept together (ADR 0005). Probes for controllers the scan cannot see arrive
-with milestone M6.
+kept together (ADR 0005). The probes for controllers the scan cannot see
+build their devices in `probes.py` (ADR 0032).
 """
 
 from __future__ import annotations
@@ -30,6 +30,9 @@ class Source(StrEnum):
     """What found a device (FR-108)."""
 
     SCAN = "scan"
+    # The probe for the drives behind an HPE Smart Array controller (FR-103,
+    # ADR 0032).
+    PROBE = "probe"
     MANUAL = "manual"
 
 

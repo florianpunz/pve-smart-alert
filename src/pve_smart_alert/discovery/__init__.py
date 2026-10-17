@@ -3,8 +3,9 @@
 
 A pipeline of four steps:
 
-1. Sources: the device scan of smartctl, then the manual entries of the
-   configuration (FR-104).
+1. Sources: the device scan of smartctl, then the probe for the drives behind
+   an HPE Smart Array controller (FR-103, ADR 0032), then the manual entries
+   of the configuration (FR-104).
 2. Enrichment from lsblk, the links below /dev/disk and sysfs, best effort.
 3. Filtering. A device on a remote transport, one that is not a disk, and a
    logical volume that lsblk or the scan names as one are skipped before
@@ -42,6 +43,7 @@ from pve_smart_alert.discovery.enrichment import (
     is_remote,
     read_block_devices,
 )
+from pve_smart_alert.discovery.probes import HpeController, Probing, probe_hpe
 from pve_smart_alert.discovery.sources import (
     Candidate,
     Source,
@@ -69,7 +71,9 @@ __all__ = [
     "Discovery",
     "Found",
     "HostPaths",
+    "HpeController",
     "Outcome",
+    "Probing",
     "ScsiHost",
     "ScsiHosts",
     "SkipReason",
@@ -127,8 +131,12 @@ class Discovery:
     scan_error: str | None = None
     enrichment_error: str | None = None
     # The SCSI hosts of sysfs, for the controllers whose drives cannot be
-    # read (FR-109, ADR 0030).
+    # read (FR-109, ADR 0030) and for the HPE Smart Array probe (FR-103,
+    # ADR 0032).
     scsi_hosts: ScsiHosts = field(default_factory=ScsiHosts)
+    # The HPE Smart Array controllers this run looked at, and what the probe
+    # read behind them.
+    probe: Probing = field(default_factory=Probing)
 
     @property
     def monitored(self) -> tuple[Found, ...]:
@@ -150,25 +158,53 @@ def discover(
     settings = config.smartctl
     scan = run_scan(settings, runner=runner)
     block_devices = read_block_devices(paths, runner=runner)
-    candidates = list(scan.candidates) + list(manual_candidates(config.discovery.devices))
+    scsi_hosts = read_scsi_hosts(paths)
+    # The probe comes after the scan and before the manual entries
+    # (ARCHITECTURE.md section 5). It reads its devices itself, so that a drive
+    # it finds is read once in the run, and every answer goes through the same
+    # examination as the devices of the other sources.
+    probing = probe_hpe(
+        scsi_hosts.hosts,
+        probe_cciss=config.discovery.probe_cciss,
+        smartctl=settings,
+        paths=paths,
+        runner=runner,
+        on_device=on_device,
+    )
 
     found: list[Found] = []
     seen: set[tuple[str, str]] = set()
-    for candidate in candidates:
-        if (candidate.name, candidate.type) in seen:
-            found.append(
-                Found(
-                    candidate,
-                    Outcome.SKIPPED,
-                    reason=SkipReason.DUPLICATE,
-                    detail="listed twice",
-                )
+    for candidate in scan.candidates:
+        found.append(
+            _read_or_skip(
+                candidate,
+                config,
+                block_devices,
+                seen,
+                paths=paths,
+                runner=runner,
+                on_device=on_device,
             )
-            continue
+        )
+    for candidate, collected in probing.readings:
         seen.add((candidate.name, candidate.type))
-        if on_device is not None:
-            on_device(candidate)
-        found.append(_examine(candidate, config, block_devices, paths=paths, runner=runner))
+        found.append(
+            _examine(
+                candidate, config, block_devices, paths=paths, runner=runner, collected=collected
+            )
+        )
+    for candidate in manual_candidates(config.discovery.devices):
+        found.append(
+            _read_or_skip(
+                candidate,
+                config,
+                block_devices,
+                seen,
+                paths=paths,
+                runner=runner,
+                on_device=on_device,
+            )
+        )
 
     version = scan.smartctl_version or next(
         (item.collected.smartctl_version for item in found if item.collected is not None), ()
@@ -178,8 +214,33 @@ def discover(
         smartctl_version=version,
         scan_error=scan.error,
         enrichment_error=block_devices.error,
-        scsi_hosts=read_scsi_hosts(paths),
+        scsi_hosts=scsi_hosts,
+        probe=probing,
     )
+
+
+def _read_or_skip(
+    candidate: Candidate,
+    config: Config,
+    block_devices: BlockDevices,
+    seen: set[tuple[str, str]],
+    *,
+    paths: HostPaths,
+    runner: ProcessRunner,
+    on_device: Callable[[Candidate], None] | None,
+) -> Found:
+    """Read one candidate, or report it as a device that was already found."""
+    if (candidate.name, candidate.type) in seen:
+        return Found(
+            candidate,
+            Outcome.SKIPPED,
+            reason=SkipReason.DUPLICATE,
+            detail="listed twice",
+        )
+    seen.add((candidate.name, candidate.type))
+    if on_device is not None:
+        on_device(candidate)
+    return _examine(candidate, config, block_devices, paths=paths, runner=runner)
 
 
 def _examine(
@@ -189,8 +250,13 @@ def _examine(
     *,
     paths: HostPaths,
     runner: ProcessRunner,
+    collected: Collected | None = None,
 ) -> Found:
-    """Return what one device is, reading it unless it is skipped before."""
+    """Return what one device is, reading it unless it is skipped before.
+
+    `collected` is the answer of a read that happened already, which is how a
+    device of the probe reaches this examination without a second call.
+    """
     if not candidate.valid:
         return Found(
             candidate,
@@ -225,13 +291,14 @@ def _examine(
             details=details,
         )
 
-    collected = collect_drive(
-        candidate.name,
-        candidate.type,
-        settings=config.smartctl,
-        protocol=candidate.protocol,
-        runner=runner,
-    )
+    if collected is None:
+        collected = collect_drive(
+            candidate.name,
+            candidate.type,
+            settings=config.smartctl,
+            protocol=candidate.protocol,
+            runner=runner,
+        )
     if collected.status is Status.STANDBY:
         return Found(
             candidate,
@@ -263,7 +330,11 @@ def _examine(
     try:
         snapshot = parse(
             collected.document,
-            access=DeviceAccess(candidate.name, candidate.type, candidate.protocol or ""),
+            access=DeviceAccess(
+                candidate.name,
+                candidate.type,
+                candidate.protocol or protocol_of(collected.document) or "",
+            ),
             collection=Collection(
                 smartctl_version=collected.smartctl_version,
                 exit_status=collected.exit_status or 0,
@@ -387,7 +458,11 @@ def _read_again(
     try:
         parsed = parse(
             again.document,
-            access=DeviceAccess(candidate.name, candidate.type, candidate.protocol or ""),
+            access=DeviceAccess(
+                candidate.name,
+                candidate.type,
+                candidate.protocol or protocol_of(again.document) or "",
+            ),
             collection=Collection(
                 smartctl_version=again.smartctl_version,
                 exit_status=again.exit_status or 0,

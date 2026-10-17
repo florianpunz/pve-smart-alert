@@ -13,10 +13,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from hosts import CLUSTER_NODE_SCSI_HOSTS, write_scsi_hosts
+from hosts import CLUSTER_NODE_SCSI_HOSTS, write_scsi_hosts, write_sg_nodes
 
 from pve_smart_alert import cli
 from pve_smart_alert.config import (
+    DiscoverySettings,
     NotifySettings,
     SmartctlSettings,
     TransportName,
@@ -33,6 +34,7 @@ from pve_smart_alert.doctor import (
     check_config,
     check_fallback,
     check_mail,
+    check_probe,
     check_pve,
     check_routing,
     check_smartctl,
@@ -981,6 +983,7 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
         "pve",
         "smartd",
         "controllers",
+        "probe",
     ]
     assert all(result.status is not Status.FAIL for result in results)
     assert results[1].detail.endswith("smartctl 7.5")
@@ -989,14 +992,82 @@ def test_a_working_host_reports_no_failure(tmp_path: Path, bridge: Path, vendor_
 def test_the_controllers_are_read_from_the_sysfs_it_is_given(
     tmp_path: Path, bridge: Path, vendor_dir: Path
 ) -> None:
-    # Every part of FR-603 is checked; the last line is the controllers.
+    # Every part of FR-603 is checked; the line `controllers` is one of them.
     write_scsi_hosts(tmp_path / "sys", CLUSTER_NODE_SCSI_HOSTS)
 
-    controllers = doctor_on(tmp_path, bridge, vendor_dir, tmp_path / "sendmail")[-1]
+    results = doctor_on(tmp_path, bridge, vendor_dir, tmp_path / "sendmail")
+    controllers = next(result for result in results if result.name == "controllers")
 
-    assert controllers.name == "controllers"
     assert controllers.status is Status.OK
     assert controllers.detail == "6 SCSI hosts (ahci), none whose drives smartctl cannot read"
+
+
+# The line `probe` (FR-103, ADR 0032)
+
+
+def probe_on(
+    tmp_path: Path,
+    drivers: dict[int, str],
+    *,
+    nodes: dict[int, int] | None = None,
+    probe_cciss: bool = True,
+) -> CheckResult:
+    sysfs = tmp_path / "sys"
+    write_scsi_hosts(sysfs, drivers)
+    write_sg_nodes(sysfs, {} if nodes is None else nodes)
+    return check_probe(DiscoverySettings(probe_cciss=probe_cciss), HostPaths(sysfs=sysfs))
+
+
+def test_a_host_without_an_hpe_controller_has_nothing_to_probe(tmp_path: Path) -> None:
+    result = probe_on(tmp_path, CLUSTER_NODE_SCSI_HOSTS)
+
+    assert result.status is Status.OK
+    assert result.detail == "no HPE Smart Array controller"
+
+
+def test_an_hpsa_controller_is_named_with_its_node(tmp_path: Path) -> None:
+    result = probe_on(tmp_path, {0: "ahci", 1: "hpsa"}, nodes={1: 1})
+
+    assert result.status is Status.OK
+    assert "SCSI host 1 has the driver hpsa and is probed as cciss,N on /dev/sg1" in result.detail
+    assert result.advice is None
+
+
+def test_a_smartpqi_controller_is_named_and_warns(tmp_path: Path) -> None:
+    # smartctl supports -d cciss,N only for hpsa (ADR 0032): the drives of such
+    # a controller are found only as manual entries.
+    result = probe_on(tmp_path, {1: "smartpqi"}, nodes={1: 1})
+
+    assert result.status is Status.WARN
+    assert "smartctl supports -d cciss,N only for the driver hpsa" in result.detail
+    assert result.advice is not None
+    assert "[[discovery.device]]" in result.advice
+
+
+def test_an_hpsa_controller_without_a_node_warns(tmp_path: Path) -> None:
+    result = probe_on(tmp_path, {1: "hpsa"})
+
+    assert result.status is Status.WARN
+    assert "no SCSI generic node (/dev/sgN) of this host was found" in result.detail
+    assert result.advice is not None
+    assert "sg driver" in result.advice
+
+
+def test_a_switched_off_probe_is_no_warning(tmp_path: Path) -> None:
+    result = probe_on(tmp_path, {1: "hpsa"}, nodes={1: 1}, probe_cciss=False)
+
+    assert result.status is Status.OK
+    assert "the probe is switched off with probe_cciss = false" in result.detail
+
+
+def test_without_sysfs_the_probe_line_is_skipped(tmp_path: Path) -> None:
+    directory = tmp_path / "sys" / "class" / "scsi_host"
+    directory.parent.mkdir(parents=True)
+    directory.write_text("", encoding="utf-8")
+
+    result = check_probe(DiscoverySettings(), HostPaths(sysfs=tmp_path / "sys"))
+
+    assert result.status is Status.SKIP
 
 
 # The command

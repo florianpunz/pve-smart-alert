@@ -6,8 +6,10 @@ source, what became of it, and for a drive that was read what the tool knows
 about it: identity, class, the controller and device ID of a drive behind a
 RAID controller (ADR 0028), what uses it, the wear value with its source,
 and how long smartctl took. A controller whose drives smartctl cannot read
-is named above the devices (FR-109, ADR 0030). A wear value that differs by 10 percentage points or
-more from what the web interface of Proxmox VE shows names both (ADR 0021).
+is named above the devices (FR-109, ADR 0030), and so is every HPE Smart Array
+controller with what the probe made of it (FR-103, ADR 0032). A wear value
+that differs by 10 percentage points or more from what the web interface of
+Proxmox VE shows names both (ADR 0021).
 """
 
 from __future__ import annotations
@@ -23,7 +25,11 @@ from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC
 # From this difference on, both values are shown (ADR 0021).
 WEAR_DIFFERENCE: Final = 10
 
-_SOURCES: Final = {Source.SCAN: "from the scan", Source.MANUAL: "manual entry"}
+_SOURCES: Final = {
+    Source.SCAN: "from the scan",
+    Source.PROBE: "from the probe",
+    Source.MANUAL: "manual entry",
+}
 
 
 def render(discovery: Discovery, *, smartctl_path: Path) -> list[str]:
@@ -39,6 +45,11 @@ def render(discovery: Discovery, *, smartctl_path: Path) -> list[str]:
         lines.append(f"Without SCSI hosts: {discovery.scsi_hosts.error}")
     for host in discovery.scsi_hosts.unsupported:
         lines.append(f"Unsupported controller: {host.describe()}")
+    for controller in discovery.probe.controllers:
+        text = controller.describe()
+        if controller.probed:
+            text += f": {_probing(controller.device_ids)}"
+        lines.append(f"HPE Smart Array: {text}")
     for found in discovery.devices:
         lines.append("")
         lines.extend(_device(found))
@@ -136,6 +147,15 @@ def _summary(discovery: Discovery) -> str:
         f"{counts[Outcome.MONITORED]} monitored, {counts[Outcome.STANDBY]} in standby,"
         f" {counts[Outcome.UNREADABLE]} unreadable, {counts[Outcome.SKIPPED]} skipped"
     )
+
+
+def _probing(device_ids: tuple[int, ...]) -> str:
+    """Return what the probe read behind one controller (ADR 0032)."""
+    if not device_ids:
+        return "no drive answered"
+    count = f"{len(device_ids)} drive{'' if len(device_ids) == 1 else 's'}"
+    ids = ", ".join(f"cciss,{device_id}" for device_id in device_ids)
+    return f"{count} found ({ids})"
 
 
 def _labelled(label: str, value: str) -> str:

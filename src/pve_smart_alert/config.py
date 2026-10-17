@@ -89,7 +89,7 @@ _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
         }
     ),
     "smartctl": frozenset({"path", "timeout", "detail"}),
-    "discovery": frozenset({"device", "exclude"}),
+    "discovery": frozenset({"device", "exclude", "probe_cciss"}),
 }
 _DYNAMIC_SECTIONS: Final = ("checks", "drive")
 
@@ -280,6 +280,10 @@ class DiscoverySettings:
 
     devices: tuple[ManualDevice, ...] = ()
     exclude: tuple[DriveSelector, ...] = ()
+    # Whether the drives behind an HPE Smart Array controller are probed
+    # (FR-103, ADR 0032). The probe is experimental in version 1, and this is
+    # the only setting of the section that is not a list.
+    probe_cciss: bool = True
 
 
 @dataclass(frozen=True)
@@ -415,6 +419,7 @@ def _to_json(config: Config) -> dict[str, object]:
             "exclude": [
                 {"kind": rule.kind.value, "value": rule.value} for rule in config.discovery.exclude
             ],
+            "probe_cciss": config.discovery.probe_cciss,
         },
         "checks": {
             name: {
@@ -549,6 +554,7 @@ def _from_json(data: Mapping[str, object], *, source: Path) -> Config:
                 )
                 for rule in _list_of(discovery.get("exclude"))
             ),
+            probe_cciss=_switch(discovery, "probe_cciss", DiscoverySettings().probe_cciss),
         ),
         checks=_overrides_of(_table_of(data.get("checks"))),
         drives=tuple(
@@ -616,6 +622,12 @@ def _json_text(node: Mapping[str, object], key: str) -> str | None:
     """Return a string value of a last-good document, or `None`."""
     value = node.get(key)
     return value if isinstance(value, str) else None
+
+
+def _switch(table: Mapping[str, object], key: str, default: bool) -> bool:
+    """Return a flag of a last-good document; a value it lacks keeps the default."""
+    value = table.get(key)
+    return value if isinstance(value, bool) else default
 
 
 def _list_of(value: object) -> tuple[Mapping[str, object], ...]:
@@ -1198,9 +1210,11 @@ def _smartctl(section: Mapping[str, object], text: str) -> SmartctlSettings:
 def _discovery(section: Mapping[str, object], text: str) -> DiscoverySettings:
     devices = _tables(section, "device", text)
     rules = _tables(section, "exclude", text)
+    probe_cciss = _boolean(section, "probe_cciss", "discovery.probe_cciss", text)
     return DiscoverySettings(
         devices=tuple(_device(entry, number, text) for number, entry in enumerate(devices, 1)),
         exclude=tuple(_selector(rule, number, text) for number, rule in enumerate(rules, 1)),
+        probe_cciss=True if probe_cciss is None else probe_cciss,
     )
 
 
