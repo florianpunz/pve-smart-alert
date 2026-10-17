@@ -842,6 +842,12 @@ def prerequisites(scenario: Scenario) -> list[str]:
     host brings the first two itself, or does not show that part.
     """
     notes = []
+    first = documents_of(scenario, scenario.steps[0]).get("lsblk.json")
+    if first is not None and first != load(scenario.base).get("lsblk.json"):
+        notes.append(
+            "block devices as in the lsblk.json of the steps, which only the test frame"
+            " replays; a real host answers lsblk itself"
+        )
     if scenario.devices:
         notes.append("the manual entries of manual-entries.toml in the configuration")
     if scenario.scsi_hosts:

@@ -297,9 +297,10 @@ def test_the_cciss_type_decides_over_the_protocol() -> None:
     ],
 )
 def test_the_type_of_another_controller_decides_over_the_protocol(device_type: str) -> None:
-    # A drive behind 3ware, Areca or HighPoint is a SATA drive, and one behind
-    # Adaptec or SSSRAID can be: it is not woken, whatever the protocol of the
-    # scan says (FR-203, ADR 0034).
+    # A drive behind 3ware, HighPoint or an Areca SATA controller is a SATA
+    # drive, and one behind an Areca SAS controller, Adaptec or SSSRAID can be:
+    # it is read with the standby check, whatever the protocol of the scan
+    # says (FR-203, ADR 0034).
     assert checks_standby(device_type) is True
     assert checks_standby(device_type, "SCSI") is True
 
