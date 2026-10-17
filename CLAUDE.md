@@ -46,6 +46,7 @@ Current milestone: **M5**, packaging, timer and installation, built and waiting 
 | `docs/adr/README.md` | You want to know why something is the way it is |
 | `docs/research/` | You need the evidence and the sources behind a decision |
 | `docs/check-catalog.md` | You work on checks or thresholds |
+| `docs/hardware-support.md` | You touch discovery of a controller family, or its evidence changes |
 | `ROADMAP.md` | You need the state of a milestone or plan the next step |
 | `OPEN-QUESTIONS.md` | Something is unclear; it may already be listed there |
 | `CONTRIBUTING.md` | You set up the development tools, commit, or add a fixture |
@@ -71,7 +72,7 @@ These follow from the decision records. They are not hard rules, but deviating f
 Other agents pick this project up with no memory of earlier sessions, so the markdown files are their only source of truth.
 Keep them current as part of every change, not as a separate task afterwards.
 
-- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
+- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, `docs/hardware-support.md`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
 - Records are different. Accepted ADRs and research notes describe a point in time and are not brought up to date. A changed decision gets a new ADR that supersedes the old one (ADR 0001); new evidence gets a new research note or a dated addition to an existing one.
 - Status has one home. `ROADMAP.md` says per milestone what is done, what is in progress and what is next. `CLAUDE.md` carries at most two sentences (current milestone, next step) and no dated history. README carries the short status for users. Every other document links to `ROADMAP.md` instead of stating a status of its own.
 - Record what another agent needs to continue without asking: decisions and their reasons (ADR), changed behavior or interfaces (ARCHITECTURE, CHANGELOG), new setup or config steps (README, CONTRIBUTING), known issues and open work (OPEN-QUESTIONS, ROADMAP).

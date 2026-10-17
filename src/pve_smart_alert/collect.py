@@ -46,10 +46,15 @@ JSON_FORMAT_MAJOR: Final = 1
 # `sat+megaraid,N`, and the USB bridges.
 _STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
 
-# The `cciss,N` forms, which get the standby check whatever their protocol says:
-# a drive behind an HPE Smart Array controller can be a SATA or a SAS drive, and
-# smartctl implements the power mode check for both (ADR 0032).
-_CCISS_TYPES: Final = re.compile(r"(?:sat\+|scsi\+)?cciss,[0-9]+")
+# The types of a drive behind an HPE Smart Array, 3ware, Areca, Adaptec,
+# HighPoint or SSSRAID controller, which get the standby check whatever their
+# protocol says: such a drive can be a SATA drive, behind 3ware, Areca and
+# HighPoint it always is, and smartctl implements the power mode check for SCSI
+# as well (ADR 0032, ADR 0034). MegaRAID is not among them, because its type
+# tells a SATA drive (`sat+megaraid,N`) from a SAS drive (`megaraid,N`).
+_CONTROLLER_TYPES: Final = re.compile(
+    r"(?:sat(?:,[a-z0-9]+)*\+|scsi\+)?(?:cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
+)
 
 
 class Status(StrEnum):
@@ -88,13 +93,14 @@ def checks_standby(device_type: str, protocol: str | None = None) -> bool:
     """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
     The option is `--nocheck=standby`, and a call that ends because of it is
-    recorded as standby, not as unreadable (ADR 0004). A `cciss,N` device is
-    included whatever its protocol says, because its drive can be a SAS drive
-    and smartctl checks the power mode for SCSI as well (ADR 0032). For every
-    other type the protocol of the device scan decides where it is known, and
-    for a manual device the type does.
+    recorded as standby, not as unreadable (ADR 0004). A drive behind an HPE
+    Smart Array, 3ware, Areca, Adaptec, HighPoint or SSSRAID controller is
+    included whatever its protocol says, because it can be a SATA drive and
+    smartctl checks the power mode for SCSI as well (ADR 0032, ADR 0034). For
+    every other type the protocol of the device scan decides where it is
+    known, and for a manual device the type does.
     """
-    if _CCISS_TYPES.fullmatch(device_type) is not None:
+    if _CONTROLLER_TYPES.fullmatch(device_type) is not None:
         return True
     if protocol is not None:
         return protocol == "ATA"
