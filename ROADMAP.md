@@ -304,7 +304,7 @@ Deliverables:
 - User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page.
 - Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data.
 - Review of all default thresholds and policy defaults against the experience from the maintainer's cluster since M5.
-- All requirements checked off against tests or acceptance steps. Started on the branch `feature/requirements-traceability` (2026-10-17, unattended session): [docs/traceability.md](docs/traceability.md) maps every requirement to the tests that cite it, tests found by topic and its acceptance step, and lists the 12 requirements with neither a test nor a passed acceptance step.
+- All requirements checked off against tests or acceptance steps. Started on the branch `feature/requirements-traceability` (2026-10-17): [docs/traceability.md](docs/traceability.md) maps every requirement to the tests that cite it, tests found by topic and its acceptance step, and lists the 12 requirements with neither a test nor a passed acceptance step.
 - Release notes, version 1.0.0.
 
 Result you can test:
