@@ -17,7 +17,8 @@ import pytest
 from frame import RUN_INTERVAL, START, Clock, RecordingTransport, ScenarioHost
 
 from pve_smart_alert.checks import evaluate
-from pve_smart_alert.discovery import Outcome, SkipReason
+from pve_smart_alert.discovery import Outcome, SkipReason, Source
+from pve_smart_alert.discovery.enrichment import details_of, read_block_devices
 from pve_smart_alert.model import (
     FIELD_DEVICE,
     FIELD_DEVICE_ID,
@@ -176,31 +177,41 @@ def test_the_unsupported_mpi3mr_scenario(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Derived: a drive behind each controller that only a manual entry
-    # reaches is read with its type on its node (FR-104). What the host shows
-    # for a node such as the logical volume /dev/sdb, with its ZFS pool, is
-    # not the drive's (ADR 0028); these types have no device ID (ADR 0034).
+    # Derived: a drive behind each controller other than MegaRAID and cciss is
+    # read with its type on its node; the scan lists the SSSRAID drive, manual
+    # entries name the others (FR-104, ADR 0034). What the host shows for a
+    # node such as the logical volume /dev/sdc, with its ZFS pool, is not the
+    # drive's (ADR 0028), and these types have no device ID.
     host = installed(tmp_path, monkeypatch, "manual-pass-through")
+    volume = details_of("/dev/sdc", read_block_devices(host.paths, runner=host), host.paths)
+    assert volume.membership.zfs_pool == "tank"
 
     devices = host.discover().devices
     assert [(found.candidate.name, found.candidate.type) for found in devices] == [
         ("/dev/sda", "sat"),
+        ("/dev/bsg/sssraid0", "sssraid,0,1"),
         ("/dev/sg2", "areca,2"),
         ("/dev/sg3", "areca,1/1"),
         ("/dev/twa0", "3ware,1"),
-        ("/dev/sdb", "aacraid,0,0,2"),
-        ("/dev/sdc", "hpt,1/2/3"),
-        ("/dev/bsg/sssraid0", "sssraid,0,1"),
+        ("/dev/sdc", "aacraid,0,0,2"),
+        ("/dev/sdd", "hpt,1/2/3"),
     ]
+    assert devices[1].candidate.source is Source.SCAN
+    assert all(found.candidate.source is Source.MANUAL for found in devices[2:])
     assert all(found.outcome is Outcome.MONITORED for found in devices)
     for found in devices[1:]:
         assert found.details.block_device is False
         assert found.details.membership.zfs_pool is None
         assert found.details.location.controller_text is None
+    # None of them is woken in standby (FR-203).
+    log = [json.loads(line) for line in host.log.read_text(encoding="utf-8").splitlines()]
+    reads = [call for call in log if "--scan-open" not in call and call[-1] != "/dev/sda"]
+    assert reads
+    assert all("--nocheck=standby" in call for call in reads)
 
     first = only(host.run("01-healthy"))
     assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 7 drives, no findings"
-    assert "/dev/sdb [aacraid,0,0,2] NETAPP X371_SLBPE960ATE (ANON-SN-0005)  no findings" in (
+    assert "/dev/sdc [aacraid,0,0,2] NETAPP X371_SLBPE960ATE (ANON-SN-0005)  no findings" in (
         first.body
     )
 
@@ -211,10 +222,10 @@ def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.Mo
     )
     assert "Drive:      /dev/twa0 [3ware,1]\n" in three_ware.body
     assert adaptec.subject == (
-        "[pve-smart-alert] WARNING pve1: /dev/sdb NETAPP X371_SLBPE960ATE (ANON-SN-0005):"
+        "[pve-smart-alert] WARNING pve1: /dev/sdc NETAPP X371_SLBPE960ATE (ANON-SN-0005):"
         " 150 grown defects"
     )
-    assert "Drive:      /dev/sdb [aacraid,0,0,2]\n" in adaptec.body
+    assert "Drive:      /dev/sdc [aacraid,0,0,2]\n" in adaptec.body
     assert "Location:" not in adaptec.body
     assert "tank" not in adaptec.body
     for notification in (three_ware, adaptec):
@@ -222,10 +233,9 @@ def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def megaraid_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> ScenarioHost:
-    """A MegaRAID scenario, installed, with the controller as SCSI host 6 of `megaraid_sas`."""
+    """A MegaRAID scenario, installed; the scenario names SCSI host 6 of `megaraid_sas`."""
     host = ScenarioHost(tmp_path, monkeypatch, name)
     host.install()
-    host.scsi_host(6, "megaraid_sas")
     return host
 
 
@@ -379,6 +389,20 @@ def test_the_scenarios_can_be_listed(capsys: pytest.CaptureFixture[str]) -> None
     out = capsys.readouterr().out
     assert "pending-sectors" in out
     assert "09-gone" in out
+    assert "host2 mpi3mr in sysfs" in out
+
+
+def test_a_real_host_is_told_what_the_frame_adds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # On a real host the steps alone do not make the scenario: the manual
+    # entries go into the configuration, and sysfs is the host's own.
+    assert main(["build", "manual-pass-through", str(tmp_path / "scenario")]) == 0
+
+    entries = (tmp_path / "scenario" / "manual-entries.toml").read_text(encoding="utf-8")
+    assert '[[discovery.device]]\nname = "/dev/twa0"\ntype = "3ware,1"\n' in entries
+    assert "sssraid" not in entries
+    assert "needs the manual entries of manual-entries.toml" in capsys.readouterr().err
 
 
 def test_the_clock_moves_only_when_the_test_moves_it() -> None:
