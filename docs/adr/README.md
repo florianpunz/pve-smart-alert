@@ -37,6 +37,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0030](0030-controllers-whose-drives-cannot-be-queried.md) | Detect controllers whose drives cannot be queried from the driver of the SCSI host | Accepted | Which controllers `scan`, `doctor` and `tool.unsupported_controller` report, and which drivers they never report |
 | [0031](0031-switching-tool-conditions-off.md) | Switch a condition of the tool off, and name the monitored drives of the notice | Accepted | The key that switches a condition of the tool off, and what the notice about an unsupported controller names |
 | [0032](0032-hpe-smart-array-probe.md) | Probe the drives behind an HPE Smart Array controller | Accepted | The scope of the `cciss,N` probe, the node it reads, when it stops, the key that switches it off, its `device-id` and its standby check |
+| [0034](0034-manual-entries-of-other-pass-through-types.md) | Manual entries for the other pass-through types | Proposed | That a drive behind Areca, 3ware, Adaptec, HighPoint or SSSRAID takes nothing lsblk shows for its node, that the JMicron types are refused, and that these types have no `device-id` in version 1 |
 
 ## Confirmed by the maintainer
 
