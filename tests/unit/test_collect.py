@@ -233,6 +233,18 @@ def test_the_protocol_of_the_scan_decides_over_the_type() -> None:
     assert checks_standby("sat", "SCSI") is False
 
 
+def test_the_cciss_type_decides_over_the_protocol() -> None:
+    # A drive behind an HPE Smart Array controller can be a SAS drive, for
+    # which the scan reports protocol SCSI; the standby check applies all the
+    # same (FR-203, ADR 0032).
+    assert checks_standby("cciss,0", "SCSI") is True
+    assert checks_standby("scsi+cciss,3", "SCSI") is True
+
+    command = drive_command("/dev/sg1", "cciss,0", settings=settings(), protocol="SCSI")
+
+    assert "--nocheck=standby" in command
+
+
 def test_the_command_takes_name_and_type_as_found() -> None:
     command = drive_command("/dev/bus/0", "sat+megaraid,12", settings=settings())
 

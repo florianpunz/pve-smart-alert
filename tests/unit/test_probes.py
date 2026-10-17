@@ -51,12 +51,29 @@ _USABLE: Final = json.dumps(
     }
 )
 
+# What smartctl answers for a drive in standby behind the controller: no data,
+# the exit status of `-n standby` and the message that names the power mode.
+_STANDBY: Final = json.dumps(
+    {
+        "json_format_version": [1, 0],
+        "smartctl": {
+            "version": [7, 5],
+            "argv": [],
+            "messages": [
+                {"string": "Device is in STANDBY mode, exit(2)", "severity": "information"}
+            ],
+            "exit_status": 2,
+        },
+    }
+)
+
 
 class Answers:
     """A runner that answers smartctl for the device IDs a test names."""
 
-    def __init__(self, present: set[int]) -> None:
+    def __init__(self, present: set[int], *, standby: set[int] | None = None) -> None:
         self.present = present
+        self.standby = standby or set()
         self.calls: list[list[str]] = []
 
     def __call__(
@@ -69,6 +86,8 @@ class Answers:
         self.calls.append([str(part) for part in command])
         device_type = next(str(part) for part in command if str(part).startswith("--device="))
         device_id = int(device_type.removeprefix("--device=cciss,"))
+        if device_id in self.standby:
+            return ProcessResult(returncode=2, stdout=_STANDBY, stderr="", timed_out=False)
         if device_id in self.present:
             return ProcessResult(returncode=0, stdout=_USABLE, stderr="", timed_out=False)
         return ProcessResult(returncode=2, stdout="", stderr="", timed_out=False)
@@ -98,10 +117,14 @@ def probed(
 
 
 def probe_with(
-    tmp_path: Path, present: set[int], *, probe_cciss: bool = True
+    tmp_path: Path,
+    present: set[int],
+    *,
+    standby: set[int] | None = None,
+    probe_cciss: bool = True,
 ) -> tuple[Answers, Probing]:
     paths = paths_with(tmp_path, hosts={1: "hpsa"}, nodes={1: 1})
-    runner = Answers(present)
+    runner = Answers(present, standby=standby)
     probing = probe_hpe(
         read_scsi_hosts(paths).hosts,
         probe_cciss=probe_cciss,
@@ -228,6 +251,30 @@ def test_a_bay_that_answers_nothing_does_not_end_the_probe(tmp_path: Path) -> No
 
     assert probing.controllers[0].device_ids == (0, 2)
     assert runner.types == ["cciss,0", "cciss,1", "cciss,2", "cciss,3", "cciss,4", "cciss,5"]
+
+
+def test_three_standby_answers_in_a_row_are_not_failures(tmp_path: Path) -> None:
+    # A sleeping drive is not an empty bay: every standby answer is kept as a
+    # reading, it does not count as a failure, and the probe reads on (FR-203).
+    runner, probing = probe_with(tmp_path, {3}, standby={0, 1, 2})
+
+    assert probing.controllers[0].device_ids == (0, 1, 2, 3)
+    assert [collected.status for _candidate, collected in probing.readings] == [
+        Status.STANDBY,
+        Status.STANDBY,
+        Status.STANDBY,
+        Status.OK,
+    ]
+    # 4, 5 and 6 answer nothing, which ends the probe.
+    assert runner.types == [
+        "cciss,0",
+        "cciss,1",
+        "cciss,2",
+        "cciss,3",
+        "cciss,4",
+        "cciss,5",
+        "cciss,6",
+    ]
 
 
 def test_the_probe_stops_at_the_highest_device_id_smartctl_accepts(tmp_path: Path) -> None:
@@ -556,3 +603,23 @@ def test_switching_the_probe_off_forgets_its_drives(
     assert error is None
     assert state is not None
     assert len(state.drives) == 2
+
+
+def test_a_manual_entry_is_read_while_the_probe_is_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A manual entry does not depend on the probe: the drive it names is read,
+    # and only the drives that the probe alone can find stay unseen (ADR 0032).
+    host = check_host(tmp_path, monkeypatch)
+    host.write_config(
+        "[discovery]\nprobe_cciss = false\n"
+        '[[discovery.device]]\nname = "/dev/sg1"\ntype = "cciss,0"\n'
+    )
+
+    (first,) = host.run()
+
+    assert first.event is EventType.FIRST_RUN
+    state, error = read_state(host.state_path, now=host.clock())
+    assert error is None
+    assert state is not None
+    assert len(state.drives) == 1

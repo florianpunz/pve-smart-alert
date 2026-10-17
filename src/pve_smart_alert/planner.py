@@ -342,6 +342,10 @@ class _Planner:
         # The conditions of the tool the configuration leaves switched on; a
         # switched-off one is dropped without a recovery (ADR 0031).
         self.tool_enabled = tool_conditions_enabled(config)
+        # The devices that the configuration names itself. They are read
+        # whatever the probe does, so their records are never forgotten with a
+        # switched-off probe (ADR 0032).
+        self.manual = {(device.name, device.type) for device in config.discovery.devices}
 
     # The first run (ADR 0009, FR-516)
 
@@ -597,11 +601,17 @@ class _Planner:
             return message, outcome.changes
         if not self.observation.presence_known or record.exempt_from_missing:
             return None, []
-        if self.observation.probe_off and is_cciss_type(record.last_access.type):
+        if (
+            self.observation.probe_off
+            and is_cciss_type(record.last_access.type)
+            and (record.last_access.name, record.last_access.type) not in self.manual
+        ):
             # A drive that only the probe of an HPE Smart Array controller can
             # find, while the configuration switched that probe off: it is
             # forgotten silently, like an excluded drive, instead of being
-            # reported as missing (ADR 0032).
+            # reported as missing. A device that the configuration names itself
+            # is read whatever the probe does, so it is never forgotten here
+            # (ADR 0032).
             del self.work.drives[key]
             return None, []
         if not self._enabled(record, DRIVE_MISSING):

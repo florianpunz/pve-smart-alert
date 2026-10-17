@@ -14,7 +14,14 @@ from datetime import datetime, timedelta
 import pytest
 from frame import RUN_INTERVAL, Clock
 
-from pve_smart_alert.config import CheckOverride, Config, NotifySettings, ReminderSettings
+from pve_smart_alert.config import (
+    CheckOverride,
+    Config,
+    DiscoverySettings,
+    ManualDevice,
+    NotifySettings,
+    ReminderSettings,
+)
 from pve_smart_alert.model import (
     CheckKind,
     Collection,
@@ -892,3 +899,22 @@ def test_the_planner_leaves_the_state_it_was_given_alone() -> None:
     plan(state, Observation(drives=(read(DRIVE),)), Config(), now=Clock()(), host="pve1")
 
     assert state == State()
+
+
+# The probe of an HPE Smart Array controller (ADR 0032)
+
+
+def test_a_manual_cciss_entry_is_not_forgotten_with_the_probe_off() -> None:
+    # Only the drives that the switched-off probe alone can find are forgotten.
+    # A device that the configuration names itself is read whatever the probe
+    # does, so its absence is reported (FR-309).
+    drive = replace(snapshot(), access=DeviceAccess("/dev/sg1", "cciss,0", "ATA"))
+    host = Host(
+        config=Config(discovery=DiscoverySettings(devices=(ManualDevice("/dev/sg1", "cciss,0"),)))
+    )
+    host.started(read(drive))
+
+    runs = [host.run(probe_off=True) for _ in range(2)]
+
+    assert runs[0] == []
+    assert events_of(runs[1]) == [(EventType.MISSING, DRIVE_MISSING, Severity.WARNING)]

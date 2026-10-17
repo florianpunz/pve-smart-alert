@@ -43,12 +43,13 @@ JSON_FORMAT_MAJOR: Final = 1
 
 # The device types for which the tool passes `--nocheck=standby` (FR-203,
 # ADR 0004): `ata`, the SCSI to ATA translation `sat` with its variants such as
-# `sat+megaraid,N`, the USB bridges, and every `cciss,N` form. A drive behind
-# an HPE Smart Array controller can be a SATA or a SAS drive, and smartctl
-# implements the power mode check for both (ADR 0032).
-_STANDBY_TYPES: Final = re.compile(
-    r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?|(?:sat\+|scsi\+)?cciss,[0-9]+"
-)
+# `sat+megaraid,N`, and the USB bridges.
+_STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
+
+# The `cciss,N` forms, which get the standby check whatever their protocol says:
+# a drive behind an HPE Smart Array controller can be a SATA or a SAS drive, and
+# smartctl implements the power mode check for both (ADR 0032).
+_CCISS_TYPES: Final = re.compile(r"(?:sat\+|scsi\+)?cciss,[0-9]+")
 
 
 class Status(StrEnum):
@@ -87,12 +88,14 @@ def checks_standby(device_type: str, protocol: str | None = None) -> bool:
     """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
     The option is `--nocheck=standby`, and a call that ends because of it is
-    recorded as standby, not as unreadable (ADR 0004). The protocol of the
-    device scan decides where it is known; for a manual device, and for a drive
-    the probe found, the type does. A `cciss,N` device is included although its
-    drive can be a SAS drive: smartctl checks the power mode for SCSI as well
-    (ADR 0032).
+    recorded as standby, not as unreadable (ADR 0004). A `cciss,N` device is
+    included whatever its protocol says, because its drive can be a SAS drive
+    and smartctl checks the power mode for SCSI as well (ADR 0032). For every
+    other type the protocol of the device scan decides where it is known, and
+    for a manual device the type does.
     """
+    if _CCISS_TYPES.fullmatch(device_type) is not None:
+        return True
     if protocol is not None:
         return protocol == "ATA"
     return _STANDBY_TYPES.fullmatch(device_type) is not None
