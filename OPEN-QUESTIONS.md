@@ -16,6 +16,7 @@ The acceptance run of milestone M1 answered Q-N1 to Q-N3 and Q-N7, and the routi
 | --- | --- | --- | --- |
 | Q-N5 | What happens to the bridge when pmxcfs has no quorum or is not running? | Behavior in a degraded cluster | Without pmxcfs the bridge fails and the fallback is used. Without quorum, `/etc/pve/corosync.conf` stays readable, so notifications keep the cluster name |
 | Q-N6 | Do the Proxmox developers plan a supported interface for custom notifications, or the "notification registry" mentioned in their source code? | Would replace the bridge with something stable | Unknown. To be asked on the Proxmox forum or development list once M1 has produced concrete findings |
+| Q-N11 | How does the notification system of Proxmox VE render the data of a message of the tool: does a mail target escape HTML in the `<pre>` part of a text template, and how does a webhook body escape a field value with `"` or `\`? | Whether a string of a drive with `<`, `&`, `"` or `\` changes a mail or breaks a webhook body ([ADR 0008](docs/adr/0008-notification-integration.md), ARCHITECTURE.md section 14) | Not verified; the source of `proxmox-notify` could not be read in the session of 2026-10-17. The tool removes control and format characters only |
 
 ## smartctl output and discovery
 

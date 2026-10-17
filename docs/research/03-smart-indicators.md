@@ -182,6 +182,14 @@ Checked on 2026-10-12 in the same way, for the temperature data (**Verified**):
 
 Proxmox VE 9.1 reports `smartmontools: 7.4-pve1` (**Reported**, forum). The latest upstream release is 7.5 (2025).
 
+## Addition of 2026-10-17: what reaches the tool of a hostile string
+
+Read in the source of smartmontools 7.3, 7.4 and 7.5 and of util-linux, for the review of hostile strings of milestone M7 (ARCHITECTURE.md section 14).
+
+- **smartctl 7.4 and 7.5 escape what is not printable.** The JSON writer `print_quoted_string` (`json.cpp`, line 455 of 7.4 and 7.5) writes a C0 control other than TAB, DEL, and every byte of a string that is not valid UTF-8 as the text `\xNN`, and TAB as `\t`; valid UTF-8 passes unchanged. smartctl 7.3 writes `?` for such a byte (`json.cpp` line 409). A raw escape character or newline in a string of smartctl 7.4 or later therefore comes from a misbehaving or fake smartctl, while the C1 controls and the format characters of Unicode, such as RIGHT-TO-LEFT OVERRIDE, arrive as valid UTF-8. **Verified** in the source.
+- **The identity strings of an ATA drive are the drive's.** `ata_format_id_string` (`atacmds.cpp`) only swaps the bytes and trims spaces, so model, serial number and firmware are what the drive wrote. **Verified** in the source.
+- **lsblk escapes the C0 controls in its JSON** as `\b`, `\t`, `\n`, `\f`, `\r` and `\u00XX` (util-linux, `lib/jsonwrt.c`), which a JSON parser decodes back into the characters, and passes every other byte raw. A label, vendor or model that lsblk reads can therefore bring an escape character or a newline into the tool; the label of a file system on a disk passed to a guest is written by the guest. **Verified** in the source.
+
 ## Sources
 
 - smartmontools source, `smartctl.cpp`, `smartctl.h`, `ataprint.cpp`, `nvmeprint.cpp`, `master` and `RELEASE_7_4`: <https://github.com/smartmontools/smartmontools/tree/master/smartmontools>
