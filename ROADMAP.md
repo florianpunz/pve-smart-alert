@@ -301,7 +301,7 @@ Goal: a release that others can install with confidence.
 
 Deliverables:
 
-- User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page. Drafted on the branch `feature/user-documentation` (2026-10-17, unattended session): [docs/troubleshooting.md](docs/troubleshooting.md) and the manual page source `man/pve-smart-alert.8`, which `groff -man -ww` reads without a warning and which the package does not install yet. Installation and the configuration reference stay in the README and in `config/config.reference.toml` until the maintainer decides how the user documentation is split.
+- User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page. Drafted on the branch `feature/user-documentation` (2026-10-17): [docs/troubleshooting.md](docs/troubleshooting.md) and the manual page source `man/pve-smart-alert.8`, which `groff -man -ww` reads without a warning and which the package does not install yet. Installation and the configuration reference stay in the README and in `config/config.reference.toml` until the maintainer decides how the user documentation is split.
 - Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data.
 - Review of all default thresholds and policy defaults against the experience from the maintainer's cluster since M5.
 - All requirements checked off against tests or acceptance steps.
