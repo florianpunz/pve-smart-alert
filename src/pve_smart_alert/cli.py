@@ -41,6 +41,7 @@ from pve_smart_alert.model import (
     Notification,
     PveSeverity,
     node_name,
+    without_controls,
 )
 from pve_smart_alert.paths import (
     BRIDGE_PATH,
@@ -278,10 +279,11 @@ def _report(
     if outcome.delivered:
         print(_labelled("Used", outcome.transport.value))
     print(_labelled("Duration", f"{outcome.duration_seconds:.2f} s"))
+    # The reasons and the log can carry what a remote server answered.
     if outcome.fallback_reason is not None:
-        print(_labelled("Fallback", outcome.fallback_reason))
+        print(_labelled("Fallback", without_controls(outcome.fallback_reason)))
     if outcome.error is not None:
-        print(_labelled("Error", outcome.error))
+        print(_labelled("Error", without_controls(outcome.error)))
     decided = False
     if outcome.delivered:
         matchers, decided = _matchers(notification, outcome)
@@ -290,7 +292,7 @@ def _report(
     print("Log:")
     if outcome.log_lines:
         for log_line in outcome.log_lines:
-            print(f"  {log_line}")
+            print(f"  {without_controls(log_line)}")
     elif outcome.transport is not TransportName.PVE_NOTIFY:
         # Mail to root never brings an answer of the notification system.
         print("  (the mail command logged nothing)")
@@ -370,7 +372,8 @@ def _reading(candidate: Candidate) -> None:
     journal, not one line per drive (FR-606).
     """
     if sys.stderr.isatty():
-        print(f"reading {candidate.name} [{candidate.type}] ...", file=sys.stderr)
+        name, kind = without_controls(candidate.name), without_controls(candidate.type)
+        print(f"reading {name} [{kind}] ...", file=sys.stderr)
 
 
 def clock() -> datetime:
@@ -416,10 +419,10 @@ def _check() -> int:
             via = outcome.transport.value
             if outcome.fallback_reason is not None:
                 via += f", because {outcome.fallback_reason}"
-            print(f"sent ({via}): {delivery.notification.subject}")
+            print(without_controls(f"sent ({via}): {delivery.notification.subject}"))
         else:
             reason = outcome.error if outcome is not None else "not sent"
-            print(f"not delivered ({reason}): {delivery.notification.subject}")
+            print(without_controls(f"not delivered ({reason}): {delivery.notification.subject}"))
     print(f"{PROGRAM}: {result.summary}")
     return EXIT_OK if result.ok else EXIT_PROBLEM
 

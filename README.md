@@ -22,7 +22,7 @@
 
 ## Planned features
 
-- **Automatic discovery:** finds all SATA, SAS and NVMe drives, including drives behind MegaRAID and SSSRAID controllers and, experimentally, HPE Smart Array; the drives behind other RAID controllers that smartctl can reach are added by hand ([docs/hardware-support.md](docs/hardware-support.md))
+- **Automatic discovery:** finds all SATA, SAS and NVMe drives, including drives behind MegaRAID controllers and, experimentally, SSSRAID and HPE Smart Array; the drives behind other RAID controllers that smartctl can reach are added by hand ([docs/hardware-support.md](docs/hardware-support.md))
 - **Predictive thresholds:** judges drives by thresholds that predict failure instead of merely confirming it
 - **No repeat alerts:** reports a problem once, and again only when it gets worse or a reminder is due
 - **Real severities:** sends messages through the targets and matchers configured under Datacenter → Notifications
@@ -142,6 +142,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
 - [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
+- [docs/traceability.md](docs/traceability.md): the tests and acceptance steps of every requirement
 - [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): what is not settled yet
 - [CLAUDE.md](CLAUDE.md): binding rules for contributors and AI agents
 
