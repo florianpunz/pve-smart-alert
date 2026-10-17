@@ -14,7 +14,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M4: State and notification policy | Done |
 | M5: Packaging, timer and installation | Built, waits for the remaining checks on a real Proxmox VE host and the acceptance on the test cluster |
 | M6: SAS and hardware RAID on recorded data | Built: slice 6 waits for its pull request (#20) and ADR 0034 for the maintainer; results 2 and 3 on a cluster node are open |
-| M7 | Planned |
+| M7 | Started: first work on three deliverables in open pull requests |
 
 The section of a milestone says what of it is done and what comes next.
 
