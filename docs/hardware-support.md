@@ -44,12 +44,12 @@ The state of the work is in [ROADMAP.md](../ROADMAP.md).
 ### What is not known yet
 
 - NVMe drives behind a tri-mode MegaRAID controller (Q-R3). Nothing was found about how smartctl reads them, and the tool has nothing for them beyond what the scan lists. They are drives of the MegaRAID family, whose labels above cover SATA and SAS drives only; they carry no label of their own until something is built for them.
-- How `smartctl --scan-open` lists the logical volume of an HPE, Adaptec, Areca, 3ware, HighPoint or SSSRAID controller, and what smartctl writes into the device fields of a drive read through these controllers besides its `info_name` (Q-R2, Q-R9). The scenarios list no such volume in the scan; on a real host it may appear there as a device of its own.
+- What a logical volume of an HPE, Adaptec, Areca, HighPoint or SSSRAID controller answers when the tool reads it. The scan of smartctl lists such a volume as an ordinary `/dev/sdX` of type `scsi` or `sat`, and a 3ware volume with an `open_error` that asks for `-d 3ware,N` ([Research 04](research/04-hardware-raid.md), addition of 2026-10-17); unless its inquiry data are among those of [ADR 0028](adr/0028-logical-volumes-and-enclosures.md), it is monitored as a drive or skipped as `no-smart`. The scenarios list no such volume (Q-R9).
 
 ## Recordings wanted
 
 The labels "Experimental" above stay until someone records a real system.
-A recording turns a family into "Verified by fixtures": it becomes a fixture, a scenario replays it, and the label changes with the pull request that adds it.
+A recording turns a family into "Verified by fixtures": it becomes a fixture, a scenario replays it with the same calls, since the archive names the device and type each drive was read with, and the label changes with the pull request that adds it.
 Wanted most, in this order:
 
 1. MegaRAID or PERC with SAS drives, recorded with the scan of `--scan-open`, so that the derived SAS drive, the logical volume and the enclosure can be replaced by real output (Q-R1).
@@ -71,4 +71,4 @@ On the host, as root, with the tool installed:
 
 By contributing a recording you agree that it becomes part of the project under its license, AGPL-3.0-or-later ([ADR 0015](adr/0015-license.md)), as `dump-fixture` writes into the archive. Whether the issue tracker is open to everyone depends on whether the repository is public yet ([ROADMAP.md](../ROADMAP.md), M0).
 
-Nothing in this procedure writes to a drive or changes a setting of a drive. The tool changes nothing on the host but its configuration; smartctl itself creates the device nodes it needs for some controllers, such as `/dev/aacH` for Adaptec and the nodes of a 3ware controller (Research 04, addition of 2026-10-17).
+Nothing in this procedure writes to a drive or changes a setting of a drive. On the host it adds the entries to the configuration of the tool and writes the archive; the runs of the timer keep their state as always, and smartctl itself creates the device nodes it needs for some controllers, such as `/dev/aacH` for Adaptec and the nodes of a 3ware controller (Research 04, addition of 2026-10-17).

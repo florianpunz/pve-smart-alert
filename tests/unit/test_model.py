@@ -302,7 +302,7 @@ def test_a_cciss_type_is_recognized(device_type: str, cciss: bool) -> None:
         ("sat+megaraid,14", True),
         ("cciss,0", True),
         ("scsi+cciss,3", True),
-        # The types only a manual entry names (smartctl(8), Research 04).
+        # The other controller types of smartctl(8) (Research 04).
         ("3ware,2", True),
         ("areca,2", True),
         ("areca,1/1", True),
