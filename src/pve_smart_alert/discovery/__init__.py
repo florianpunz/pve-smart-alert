@@ -61,7 +61,7 @@ from pve_smart_alert.model import (
     DeviceAccess,
     DriveIdentity,
     Snapshot,
-    pass_through_id,
+    behind_controller,
 )
 from pve_smart_alert.parsers import ParseError, inquiry_of, parse, protocol_of
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
@@ -409,7 +409,7 @@ def _volume_before_reading(candidate: Candidate, details: Details) -> str | None
     those of the device node, so they count only when smartctl reads the
     node itself and not a drive behind it.
     """
-    if pass_through_id(candidate.type) is None and logical_volume(details.vendor, details.model):
+    if not behind_controller(candidate.type) and logical_volume(details.vendor, details.model):
         return "lsblk " + inquiry_text(details.vendor, details.model, product_label="model")
     if asks_for_megaraid(candidate.open_error):
         return "the scan: smartctl asks for -d megaraid,N"

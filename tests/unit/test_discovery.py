@@ -633,6 +633,54 @@ def test_a_drive_in_jbod_mode_is_kept_once_as_its_block_device(megaraid: Host) -
     assert through_controller.detail == "the same drive as /dev/sdc"
 
 
+# Drives behind the other controllers, named by manual entries (FR-104)
+
+
+@pytest.mark.parametrize(
+    "device_type",
+    ["aacraid,0,0,2", "scsi+aacraid,0,0,2", "hpt,1/2/3", "hpt,1/3", "3ware,2", "areca,1/1"],
+)
+def test_lsblk_of_the_node_does_not_describe_a_drive_of_another_controller(
+    pve7: Host, device_type: str
+) -> None:
+    # smartctl(8) reads a drive behind an Adaptec or HighPoint controller
+    # through a block device of the host, such as `-d aacraid,0,0,2 /dev/sda`,
+    # which is a logical volume, as it does for MegaRAID (ADR 0028): its
+    # location, its pool and its inquiry data are not those of the drive.
+    behind = pve7.drive("sda.json")
+    behind["serial_number"] = "ANON-SN-0009"
+    pve7.add_file("behind.json", behind, device="/dev/sda", device_type=device_type)
+    write_lsblk(
+        pve7,
+        {
+            "name": "sda",
+            "kname": "sda",
+            "type": "disk",
+            "tran": "sas",
+            "vendor": "DELL",
+            "model": "PERC H730",
+            "children": [
+                {
+                    "name": "sda1",
+                    "kname": "sda1",
+                    "type": "part",
+                    "fstype": "zfs_member",
+                    "label": "tank",
+                },
+            ],
+        },
+    )
+
+    found = pve7.discover(devices=(ManualDevice("/dev/sda", device_type),)).devices[-1]
+
+    assert found.outcome is Outcome.MONITORED
+    assert found.details.block_device is False
+    assert found.details.location.transport is None
+    assert found.details.membership.zfs_pool is None
+    assert found.snapshot is not None
+    assert found.snapshot.membership.zfs_pool is None
+
+
 # When parts of the host fail (FR-205)
 
 

@@ -25,6 +25,7 @@ from pve_smart_alert.model import (
     Severity,
     Snapshot,
     WearSource,
+    behind_controller,
     is_cciss_type,
     node_name,
     pass_through_id,
@@ -292,3 +293,38 @@ def test_a_cciss_type_is_recognized(device_type: str, cciss: bool) -> None:
     # The planner forgets the drives of a switched-off probe by their type
     # (ADR 0032).
     assert is_cciss_type(device_type) is cciss
+
+
+@pytest.mark.parametrize(
+    ("device_type", "behind"),
+    [
+        ("megaraid,8", True),
+        ("sat+megaraid,14", True),
+        ("cciss,0", True),
+        ("scsi+cciss,3", True),
+        # The types only a manual entry names (smartctl(8), Research 04).
+        ("3ware,2", True),
+        ("areca,2", True),
+        ("areca,1/1", True),
+        ("aacraid,0,0,2", True),
+        ("scsi+aacraid,1,0,4", True),
+        ("hpt,1/3", True),
+        ("hpt,1/2/3", True),
+        ("sssraid,0,1", True),
+        ("sat", False),
+        ("scsi", False),
+        ("nvme", False),
+        ("sat,12", False),
+        ("areca", False),
+        ("usbjmicron,0", False),
+    ],
+)
+def test_a_type_that_reads_a_drive_behind_a_controller_is_recognized(
+    device_type: str, behind: bool
+) -> None:
+    # What the host shows for the node of such a type is not the drive's
+    # (ADR 0028).
+    assert behind_controller(device_type) is behind
+    # Only some of them have a device ID (ADR 0029).
+    if pass_through_id(device_type) is not None:
+        assert behind
