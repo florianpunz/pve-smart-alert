@@ -43,6 +43,7 @@ from pve_smart_alert.model import (
     Severity,
     Snapshot,
     WearSource,
+    behind_controller,
 )
 
 __all__ = [
@@ -616,8 +617,12 @@ def _self_test(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
 def _smart_disabled(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
     if snapshot.smart_available is True and snapshot.smart_enabled is False:
         # The tool never enables SMART itself (FR-311, ADR 0012); it names
-        # the command an administrator can use.
-        command = f"smartctl -s on {snapshot.access.name}"
+        # the command an administrator can use. A drive behind a controller is
+        # addressed with its type, without which the command would reach the
+        # node, the logical volume or the controller (ADR 0034).
+        access = snapshot.access
+        device = f"-d {access.type} " if behind_controller(access.type) else ""
+        command = f"smartctl -s on {device}{access.name}"
         if snapshot.access.protocol == "SCSI":
             # For a SCSI drive SMART is its informational exceptions, without
             # which it reports no failing health (Research 08).

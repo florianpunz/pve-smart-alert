@@ -231,18 +231,21 @@ def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.Mo
     for notification in (three_ware, adaptec):
         assert FIELD_DEVICE_ID not in notification.fields_for()
 
-
-def megaraid_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> ScenarioHost:
-    """A MegaRAID scenario, installed; the scenario names SCSI host 6 of `megaraid_sas`."""
-    host = ScenarioHost(tmp_path, monkeypatch, name)
-    host.install()
-    return host
+    # A SAS drive in standby names its power condition in words; it is in
+    # standby, not unreadable, and keeps its state (FR-203).
+    host.step("03-sas-standby")
+    sssraid = next(
+        found for found in host.discover().devices if found.candidate.name == "/dev/bsg/sssraid0"
+    )
+    assert sssraid.outcome is Outcome.STANDBY
+    assert host.run("03-sas-standby") == []
+    assert host.run("03-sas-standby") == []
 
 
 def test_the_megaraid_jbod_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A drive in JBOD mode is a block device and is reached through the
     # controller as well: it is kept once, as the block device (FR-106).
-    host = megaraid_host(tmp_path, monkeypatch, "megaraid-jbod")
+    host = installed(tmp_path, monkeypatch, "megaraid-jbod")
 
     devices = {
         (found.candidate.name, found.candidate.type): found for found in host.discover().devices
@@ -272,7 +275,7 @@ def test_the_megaraid_jbod_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A drive whose device ID changes keeps its identity and its state: no
     # new problem, no missing drive (ADR 0005, FR-105).
-    host = megaraid_host(tmp_path, monkeypatch, "megaraid-id-change")
+    host = installed(tmp_path, monkeypatch, "megaraid-id-change")
 
     assert only(host.run("01-first")).event is EventType.FIRST_RUN
     warning = only(host.run("02-pending-8"))
@@ -327,7 +330,7 @@ def test_a_state_of_an_earlier_build_is_read_and_continued(
     # The schema is still 1, so nothing is migrated (ADR 0007). The device
     # type of the last read was kept since the first schema, so a drive that
     # goes missing from that state carries the device ID dev2 read (ADR 0029).
-    host = megaraid_host(tmp_path, monkeypatch, "megaraid-id-change")
+    host = installed(tmp_path, monkeypatch, "megaraid-id-change")
     host.state_dir.mkdir()
     shutil.copy(DEV2_STATE, host.state_path)
     host.clock.now = datetime(2026, 10, 12, 16, 0, tzinfo=UTC)
@@ -352,7 +355,7 @@ def test_the_megaraid_degraded_scenario(tmp_path: Path, monkeypatch: pytest.Monk
     # Result 2 of M6: a degraded drive behind the controller produces a
     # notification that names controller and device ID, for a SATA drive
     # and for the derived SAS drive.
-    host = megaraid_host(tmp_path, monkeypatch, "megaraid-degraded")
+    host = installed(tmp_path, monkeypatch, "megaraid-degraded")
 
     assert only(host.run("01-healthy")).event is EventType.FIRST_RUN
     sata, sas = host.run("02-degraded")
@@ -402,7 +405,9 @@ def test_a_real_host_is_told_what_the_frame_adds(
     entries = (tmp_path / "scenario" / "manual-entries.toml").read_text(encoding="utf-8")
     assert '[[discovery.device]]\nname = "/dev/twa0"\ntype = "3ware,1"\n' in entries
     assert "sssraid" not in entries
-    assert "needs the manual entries of manual-entries.toml" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "needs the manual entries of manual-entries.toml" in err
+    assert "which only the test frame replays" in err
 
 
 def test_the_clock_moves_only_when_the_test_moves_it() -> None:

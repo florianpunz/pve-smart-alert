@@ -12,7 +12,8 @@ An optional `behavior.json` in the same directory changes the answer for
 one file, by its name:
 
     {"sda.json": {"delay_seconds": 5}}        answers late, or hangs
-    {"sda.json": {"standby": "STANDBY"}}      sleeps, when asked not to wake it
+    {"sda.json": {"standby": "STANDBY"}}      sleeps, when asked not to wake it;
+                                              a SCSI drive as "STANDBY BY TIMER"
     {"sda.json": {"stdout": "...", "exit_status": 4}}   answers with this
 
 A device the recording does not have fails to open, modelled on smartctl
@@ -70,7 +71,10 @@ def _answer(
     mode = behavior.get("standby")
     if isinstance(mode, str) and "--nocheck=standby" in argv:
         document = _message_document(argv, f"Device is in {mode} mode, exit(2)", "information", 2)
-        document["power_mode"] = {"ata_value": 0, "name": mode}
+        # Only the ATA path writes `power_mode`; a SCSI power condition has a
+        # name of several words, such as STANDBY BY TIMER.
+        if " " not in mode:
+            document["power_mode"] = {"ata_value": 0, "name": mode}
         _print(document)
         return FAILPOWER
 
