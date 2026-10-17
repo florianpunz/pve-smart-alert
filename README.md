@@ -129,6 +129,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
 - [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
+- [docs/troubleshooting.md](docs/troubleshooting.md): what to do when no notification arrives, a drive is missing or the configuration does not apply
 - [docs/hardware-support.md](docs/hardware-support.md): which drives and controllers are supported, how each was verified, and how to contribute a recording of your hardware
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
