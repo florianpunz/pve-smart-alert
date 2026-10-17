@@ -122,18 +122,26 @@ class EventType(StrEnum):
 MAX_PRINTED: Final = 200
 
 
-def without_controls(text: str) -> str:
-    """Return `text` with every control character replaced by a space.
+# The Unicode categories that `without_controls` replaces: the controls (Cc),
+# the format characters (Cf), among them the controls of the direction of
+# text and the invisible ones, and the line and paragraph separators (Zl, Zp).
+_NOT_PRINTED: Final = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
-    These are the characters of the Unicode category Cc: the C0 controls,
-    among them escape, carriage return and newline, DEL, and the C1 controls
-    from U+0080 to U+009F, among them the 8-bit introducer of an ANSI escape
-    sequence (U+009B) and NEL (U+0085). A string from a drive that keeps
-    none of them cannot move the cursor, colour a terminal or start a line
-    of its own (ARCHITECTURE.md section 14).
+
+def without_controls(text: str) -> str:
+    """Return `text` with every control and format character replaced by a space.
+
+    These are the C0 controls, among them escape, carriage return, newline
+    and tab, DEL, the C1 controls from U+0080 to U+009F, among them the 8-bit
+    introducer of an ANSI escape sequence (U+009B) and NEL (U+0085), the
+    format characters of Unicode, such as RIGHT-TO-LEFT OVERRIDE (U+202E) and
+    ZERO WIDTH SPACE (U+200B), and the line and paragraph separators. A string
+    from a drive that keeps none of them cannot move the cursor, colour a
+    terminal, start a line of its own or show itself in another order or
+    length than it has (ARCHITECTURE.md section 14).
     """
     return "".join(
-        " " if unicodedata.category(character) == "Cc" else character for character in text
+        " " if unicodedata.category(character) in _NOT_PRINTED else character for character in text
     )
 
 

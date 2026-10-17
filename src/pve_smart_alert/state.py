@@ -295,7 +295,10 @@ def save_state(state: State, path: Path) -> None:
     file as it was and removes the temporary one. Raises `OSError`.
     """
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    text = json.dumps(state_to_json(state), indent=2, ensure_ascii=False) + "\n"
+    # Every character outside ASCII is escaped: the strings of drives are kept
+    # as they came (ADR 0005), and escaped they put no control character on a
+    # terminal that shows the file (ARCHITECTURE.md section 14).
+    text = json.dumps(state_to_json(state), indent=2, ensure_ascii=True) + "\n"
     descriptor, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
     )

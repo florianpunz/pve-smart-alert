@@ -45,7 +45,14 @@ class MailTransport:
                 error=f"the mail command is missing at {self.sendmail_path}",
             )
 
-        message = build_message(notification, recipient=self.recipient)
+        try:
+            message = build_message(notification, recipient=self.recipient)
+        except ValueError as failure:
+            # A subject that a header cannot carry; the renderer does not write
+            # one, so this is a defect, reported instead of ending the run.
+            return self._outcome(
+                delivered=False, started=started, error=f"the mail could not be built: {failure}"
+            )
         try:
             # "-i" keeps a line with a single dot from ending the message,
             # "-t" takes the recipients from the headers.
