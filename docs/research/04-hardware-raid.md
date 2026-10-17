@@ -89,6 +89,16 @@ No RAID controller is available to the project. The plan in [ADR 0016](../adr/00
 
 Public sources of recorded output that can seed the fixture set: the Scrutiny test data (MIT) and outputs quoted in public issue trackers. License and anonymization must be checked for each file.
 
+## Addition of 2026-10-17: the other controller types in the source of 7.4 and 7.5
+
+Read in `smartctl.8.in`, `os_linux.cpp`, `dev_interface.cpp` and `dev_jmb39x_raid.cpp` of the tags `RELEASE_7_4` and `RELEASE_7_5` of smartmontools, for [ADR 0034](../adr/0034-manual-entries-of-other-pass-through-types.md). It corrects the summary table above in one row and adds what the table left open.
+
+- **SSSRAID is listed by the scan.** `scan_smart_devices` calls `get_dev_sssraid` next to `get_dev_megasas` (7.5 line 3131, 7.4 line 3139). It reads the `proc_name` of every SCSI host below `/sys/class/scsi_host`, and for each host with the driver `sssraid` it lists every drive the controller reports as `/dev/bsg/sssraidN` with the type `sssraid,E,S` (7.5 lines 3039 to 3069 and 3319 to 3347). The row "Found by `smartctl --scan`: Unknown" above is therefore "Yes". **Verified** in the source; no recording exists.
+- **The `info_name` of a drive behind each controller**, as the constructors of the devices write it (7.5): `[aacraid_disk_HH_LL_ID]` (line 865), `[3ware_disk_NN]` (line 1595), `[areca_disk#NN_enc#EE]` (lines 2089 and 2154), `[hpt_disk_L/M/N]` (line 2363), `[sssraid_disk_EE_SS]` (line 1411), next to `[megaraid_disk_NN]` (line 1106) and `[cciss_disk_NN]` (line 1549). **Verified** in the source.
+- **The prefixes before a controller type.** smartctl takes a type that starts with `sat` followed by `,` or `+` and splits it at the first `+`, so `sat,auto+aacraid,0,0,2` and `sat,12+megaraid,2` are valid forms (`dev_interface.cpp` of 7.5, lines 440 to 457); the manual names `scsi+cciss,N` and `scsi+aacraid,H,L,ID` to switch the implicit SAT off. **Verified** in the source.
+- **The JMicron types write to the RAID volume.** smartctl(8) of 7.4 and 7.5 warns for `jmb39x` and `jms56x` that the commands "are issued via READ/WRITE commands to a LBA of the RAID volume" and that "Original sector data is not written back if smartctl is aborted with a signal". The variant `jmb39x-q2` is new in 7.5; the 7.4 manual has `jmb39x[-q],N`. smartctl dispatches on these prefixes at the start of a type or after a `+` (`dev_interface.cpp` of 7.5, lines 468 to 480). **Verified** in the manual and the source.
+- **smartctl creates device nodes for some controllers.** For `aacraid` it creates `/dev/aacH` with `mknod` when it is missing (7.5 line 908); for `3ware` it creates the nodes `/dev/twaN`, `/dev/twlN` or `/dev/tweN`, and unlinks and recreates one whose numbers are wrong (7.5 lines 1683 to 1716; the manual says the same); for MegaRAID it creates its ioctl node, also during the scan (7.5 lines 1184, 1191 and 2997). **Verified** in the source.
+
 ## Sources
 
 - `smartctl(8)`, smartmontools 7.4, option `-d TYPE`: <https://manpages.debian.org/trixie/smartmontools/smartctl.8.en.html>
