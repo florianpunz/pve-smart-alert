@@ -149,7 +149,10 @@ def discover(
     paths: HostPaths = HOST,
     on_device: Callable[[Candidate], None] | None = None,
 ) -> Discovery:
-    """Find the drives of this host and read each of them once.
+    """Find the drives of this host and read them.
+
+    A drive that two sources find is read twice and kept once; a device
+    listed twice with the same name and type is read once.
 
     `on_device` is called before each device is read, so that a command can
     show progress.

@@ -1,7 +1,13 @@
 .\" SPDX-License-Identifier: AGPL-3.0-or-later
-.\" The manual page of pve-smart-alert. It repeats the command reference of
-.\" the README on purpose, for a host without the repository (CLAUDE.md).
+.\" The manual page of pve-smart-alert. It repeats the command reference,
+.\" the files, the exit status and the notifications of the README and of
+.\" ARCHITECTURE.md on purpose, for a host without the repository (CLAUDE.md).
 .TH PVE\-SMART\-ALERT 8 "2026-10-17" "pve\-smart\-alert" "System Administration"
+.\" Commands, options and paths are meant to be copied: no hyphenation, and
+.\" no stretched gaps before a long path. The man macros of groff reset the
+.\" adjustment to the string AD at every paragraph, so it is set there.
+.nh
+.ds AD l
 .SH NAME
 pve\-smart\-alert \- SMART drive alerts for Proxmox VE
 .SH SYNOPSIS
@@ -75,7 +81,8 @@ Find the drives of the host and show every device found with its source
 (the device scan of smartctl, the probe for HPE Smart Array controllers, or a
 manual entry) and what became of it: monitored, in standby, unreadable, or
 skipped with a reason.
-A drive that two sources find is read twice and kept once.
+A drive that two sources find is read twice and kept once; a device that is
+listed twice with the same name and type is read once.
 For a drive it shows model, serial number, class, what uses it, its wear
 value with the source and, behind a RAID controller, the controller and the
 device ID.
@@ -143,6 +150,8 @@ of the scan and of the manual entries
 .RB ( \-\-all )
 or for the named devices, as one archive in the current directory or in
 .BR \-\-output .
+A named device has to be one that the scan or a manual entry lists; for any
+other name nothing is written.
 The drives that only the HPE probe finds are not recorded; add them as manual
 entries of the form
 .B cciss,N
@@ -178,8 +187,25 @@ enabled state of a condition of the tool), and
 .B [[drive]]
 (overrides for one drive, selected by model pattern, serial number or WWN).
 .PP
-The interval of the timer is not a key of this file; change it with
+The interval of the timer is not a key of this file.
+Change it with a drop\-in, written by
 .BR "systemctl edit \%pve\-smart\-alert.timer" .
+The timer settings of a drop\-in add to those of the package
+.RB ( systemd.timer (5)),
+so the drop\-in first empties
+.BR OnUnitActiveSec= ,
+which resets
+.B OnBootSec=
+as well, and then sets both:
+.PP
+.RS
+.nf
+[Timer]
+OnUnitActiveSec=
+OnBootSec=3min
+OnUnitActiveSec=1h
+.fi
+.RE
 .SH EXIT STATUS
 .TP
 .B 0
@@ -234,7 +260,7 @@ carry on with the last good configuration.
 .B 3
 For
 .BR check ,
-another run holds the lock; the timer counts this as success.
+another run holds the lock; the service counts this as success.
 .SH FILES
 .TP
 .I \%/etc/pve\-smart\-alert/config.toml
@@ -243,6 +269,9 @@ The configuration.
 .I \%/var/lib/pve\-smart\-alert/state.json
 The state: what was reported and when.
 Deleting it makes the next run a first run.
+.TP
+.I \%/var/lib/pve\-smart\-alert/state.json.corrupt\-\fItimestamp\fP
+A state file that could not be used, set aside by the run that found it.
 .TP
 .I \%/var/lib/pve\-smart\-alert/last\-good\-config.json
 The last configuration that passed validation.
@@ -259,7 +288,16 @@ The failure reporter, started through
 .B OnFailure=
 when a run of
 .B \%pve\-smart\-alert.service
-fails; it mails the last 30 lines of the run to root, at most once a day.
+fails; it mails the last 30 lines of the run to root, at most once a day
+and once more after a reboot.
+.TP
+.I \%/usr/lib/systemd/system/pve\-smart\-alert.timer
+.TQ
+.I \%/usr/lib/systemd/system/pve\-smart\-alert.service
+.TQ
+.I \%/usr/lib/systemd/system/pve\-smart\-alert\-failure.service
+The timer, the service that runs a check, and the unit that reports a failed
+run.
 .TP
 .I \%/usr/share/pve\-manager/templates/default/pve\-smart\-alert\-*.txt.hbs
 The two templates of the notifications of the tool.
@@ -289,6 +327,15 @@ A drive behind a MegaRAID or HPE Smart Array controller also carries
 A matcher with
 .B \%match\-field regex:type=^pve\-smart\-alert$
 selects all of them.
+A notification that goes as mail to root, with
+.B transport = "mail"
+or as the fallback of
+.BR auto ,
+reaches the notification system as
+.B system\-mail
+with the severity
+.B unknown
+and none of these fields.
 .B pve\-smart\-alert doctor
 warns when a severity of the tool reaches no enabled target.
 .SH SEE ALSO
@@ -298,7 +345,9 @@ warns when a severity of the tool reaches no enabled target.
 .BR smartctl (8),
 .BR smartd (8)
 .PP
-The README in
-.I \%/usr/share/doc/pve\-smart\-alert/
-and the documents of the source repository: the check catalog, the hardware
-support table and the troubleshooting guide.
+The README, installed compressed in
+.IR \%/usr/share/doc/pve\-smart\-alert/ ,
+and the documents of the project at
+.UR https://github.com/florianpunz/pve\-smart\-alert
+.UE :
+the check catalog, the hardware support table and the troubleshooting guide.

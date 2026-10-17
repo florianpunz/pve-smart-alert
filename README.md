@@ -44,11 +44,19 @@ wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert
 wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
 
-The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` one line per run. `systemctl edit pve-smart-alert.timer` changes the interval with a drop-in.
+The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` one line per run.
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
-- The interval is changed with a drop-in, `systemctl edit pve-smart-alert.timer`, not in the configuration file of the tool. A drop-in survives upgrades of the package.
+- The interval is changed with a drop-in, not in the configuration file of the tool; a drop-in survives upgrades of the package. The timer settings of a drop-in add to those of the package ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)), so the drop-in that `systemctl edit pve-smart-alert.timer` opens first empties `OnUnitActiveSec=`, which resets `OnBootSec=` as well, and then sets both. For a run every hour:
+
+  ```ini
+  [Timer]
+  OnUnitActiveSec=
+  OnBootSec=3min
+  OnUnitActiveSec=1h
+  ```
+
 - When a run fails, a short mail to root says so, at most once a day and once more after a reboot. It is sent without the code of the tool, so it also arrives when that code is broken.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
 - These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, `probe_cciss` in `[discovery]`, which switches the experimental probe for the drives behind an HPE Smart Array controller off (it is on by default and runs on hosts with the driver `hpsa`), the thresholds, the enabled state and the confirmation count of every check in `[checks."<check-id>"]`, the enabled state of every condition of the tool itself in the same table, such as `enabled = false` in the table `[checks."tool.unsupported_controller"]` for a controller in HBA mode whose drives all appear in `scan`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
@@ -64,7 +72,7 @@ The installed tool has these commands:
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
 | `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |
-| `pve-smart-alert config check` | Validates the whole configuration file; errors name the key and the line, and the exit status is non-zero (FR-405) |
+| `pve-smart-alert config check` | Validates the whole configuration file and names the first error with its key and, where it can be found, its line; the exit status is then non-zero (FR-405) |
 | `pve-smart-alert config show` | Prints every key with its effective value and where the value comes from, the file or the built-in default (FR-407); `--defaults` prints the built-in ones |
 | `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604) |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
@@ -85,7 +93,7 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
-A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The timer treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
+A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
 
 ## Coexistence with smartd
 
@@ -129,7 +137,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
 - [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
-- [docs/troubleshooting.md](docs/troubleshooting.md): what to do when no notification arrives, a drive is missing or the configuration does not apply
+- [docs/troubleshooting.md](docs/troubleshooting.md): what to do when no notification arrives, a drive is missing or was replaced, a run fails, or the configuration does not apply
 - [docs/hardware-support.md](docs/hardware-support.md): which drives and controllers are supported, how each was verified, and how to contribute a recording of your hardware
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
