@@ -93,7 +93,7 @@ EXPECTED_LICENSE: Final = "AGPL-3.0-or-later"
 LICENSE_EXCEPTIONS: Final[dict[str, str]] = {}
 
 SOURCE_SUFFIXES: Final = frozenset(
-    {".pl", ".pm", ".py", ".service", ".sh", ".timer", ".toml", ".yaml", ".yml"}
+    {".8", ".pl", ".pm", ".py", ".service", ".sh", ".timer", ".toml", ".yaml", ".yml"}
 )
 # Scripts without a suffix: the ones whose installed path keeps the name, and
 # the two maintainer scripts of the Debian package.

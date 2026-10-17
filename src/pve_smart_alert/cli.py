@@ -134,8 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
         "scan",
         help="find the drives of this host and show what each one is",
         description=(
-            "Find the drives of this host, read each of them once, and show every device"
-            " found with its source and what became of it."
+            "Find the drives of this host, read them, and show every device found with its"
+            " source and what became of it; a drive that two sources find is read twice and"
+            " kept once."
         ),
     )
 

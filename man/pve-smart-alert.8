@@ -1,42 +1,42 @@
 .\" SPDX-License-Identifier: AGPL-3.0-or-later
-.\" The manual page of pve-smart-alert. Draft for milestone M7; not installed
-.\" by the package yet (ROADMAP.md, M5 and M7).
-.TH PVE-SMART-ALERT 8 "2026-10-17" "pve-smart-alert" "System Administration"
+.\" The manual page of pve-smart-alert. It repeats the command reference of
+.\" the README on purpose, for a host without the repository (CLAUDE.md).
+.TH PVE\-SMART\-ALERT 8 "2026-10-17" "pve\-smart\-alert" "System Administration"
 .SH NAME
-pve-smart-alert \- SMART drive alerts for Proxmox VE
+pve\-smart\-alert \- SMART drive alerts for Proxmox VE
 .SH SYNOPSIS
-.B pve-smart-alert
+.B pve\-smart\-alert
 .RB [ \-\-version ]
 .I command
 .RI [ options ]
 .PP
-.B pve-smart-alert check
+.B pve\-smart\-alert check
 .RB [ \-\-dry\-run ]
 .br
-.B pve-smart-alert scan
+.B pve\-smart\-alert scan
 .br
-.B pve-smart-alert status
+.B pve\-smart\-alert status
 .RB [ \-\-json ]
 .br
-.B pve-smart-alert doctor
+.B pve\-smart\-alert doctor
 .br
-.B pve-smart-alert config check
+.B pve\-smart\-alert config check
 .br
-.B pve-smart-alert config show
+.B pve\-smart\-alert config show
 .RB [ \-\-defaults ]
 .br
-.B pve-smart-alert test\-notification
+.B pve\-smart\-alert test\-notification
 .RB [ \-\-severity
 .IR severity ]
 .RB [ \-\-transport
 .IR transport ]
 .br
-.B pve-smart-alert dump\-fixture
+.B pve\-smart\-alert dump\-fixture
 .RB [ \-\-output
 .IR directory ]
 .RB { \-\-all | \fIdevice\fR\ ...}
 .SH DESCRIPTION
-.B pve-smart-alert
+.B pve\-smart\-alert
 reads the SMART data of every drive of a Proxmox VE host with
 .BR smartctl (8),
 evaluates it against a catalog of checks, and reports problems through the
@@ -45,14 +45,18 @@ A problem is reported once, again when it gets worse, as a reminder after a
 while, and when it has cleared.
 .PP
 The package runs
-.B pve-smart-alert check
+.B pve\-smart\-alert check
 from the systemd timer
-.BR pve-smart-alert.timer ,
+.BR \%pve\-smart\-alert.timer ,
 3 minutes after boot and then 30 minutes after the start of the previous
 run.
-The tool only reads from drives; it never enables SMART, starts a self-test
+The tool only reads from drives; it never enables SMART, starts a self\-test
 or changes a setting of a drive, and it changes no file on the host except
 its own.
+smartctl itself creates the device nodes it needs for some RAID controllers.
+.PP
+Run the commands as root: the state, the drives and the notification
+configuration are readable by root only.
 .SH COMMANDS
 .TP
 .B check
@@ -60,20 +64,23 @@ Run one check: find and read the drives, evaluate them, compare the result
 with the state of earlier runs, send the notifications that are due and save
 the state.
 The first run sends one summary of the drives it monitors.
+Each notification is logged as one line, and the run as a summary line.
 With
 .BR \-\-dry\-run ,
 print the findings and the notifications a run would send now, and send and
 change nothing.
 .TP
 .B scan
-Find the drives of the host, read each of them once, and show every device
-found with its source (the device scan of smartctl, the probe for HPE Smart
-Array controllers, or a manual entry) and what became of it: monitored, in
-standby, unreadable, or skipped with a reason.
+Find the drives of the host and show every device found with its source
+(the device scan of smartctl, the probe for HPE Smart Array controllers, or a
+manual entry) and what became of it: monitored, in standby, unreadable, or
+skipped with a reason.
+A drive that two sources find is read twice and kept once.
 For a drive it shows model, serial number, class, what uses it, its wear
 value with the source and, behind a RAID controller, the controller and the
 device ID.
 A controller whose drives smartctl cannot read is named above the devices.
+The output holds the real serial numbers and WWNs.
 .TP
 .B status
 Show, from the stored state, the last run and every drive with its active
@@ -84,10 +91,21 @@ With
 print the state as JSON.
 .TP
 .B doctor
-Report one line for each part of the host the tool works with: the
-configuration, smartctl, the notify bridge, the templates, the mail command,
-the routing of the notifications and of the fallback mail, the state, the
-timer, the Proxmox VE version, smartd, the controllers and the HPE probe.
+Report one line for each part of the host the tool works with:
+.BR config ,
+.BR smartctl ,
+.BR bridge ,
+.BR templates ,
+.BR mail ,
+.BR routing ,
+.BR fallback ,
+.BR state ,
+.BR timer ,
+.BR pve ,
+.BR smartd ,
+.B controllers
+and
+.BR probe .
 Each line is
 .BR ok ,
 .BR warn ,
@@ -97,15 +115,16 @@ or
 with advice where something can be done.
 .TP
 .B config check
-Validate the configuration file.
-An error names the key and the line.
+Validate the configuration file and report its first error, with the key
+and, where it can be found, the line.
+A file that passes is saved as the last good configuration.
 .TP
 .B config show
 Print every key with its effective value and where the value comes from, the
-file or the built-in default.
+file or the built\-in default.
 With
 .BR \-\-defaults ,
-print the built-in defaults.
+print the built\-in defaults.
 .TP
 .B test\-notification
 Send one test notification and report what the notification system did with
@@ -120,34 +139,38 @@ and replaces the configured transport for this test.
 .TP
 .B dump\-fixture
 Record the device scan, lsblk and the output of smartctl for every device
-found
+of the scan and of the manual entries
 .RB ( \-\-all )
 or for the named devices, as one archive in the current directory or in
 .BR \-\-output .
+The drives that only the HPE probe finds are not recorded; add them as manual
+entries of the form
+.B cciss,N
+first.
 Serial numbers, WWNs and UUIDs are replaced by placeholders; nothing is
 written when a real value would be left.
 Model names, firmware versions and the node name are kept: look at the
 archive before you share it.
 .SH CONFIGURATION
 The configuration is
-.IR /etc/pve\-smart\-alert/config.toml ,
+.IR \%/etc/pve\-smart\-alert/config.toml ,
 in TOML.
 Every key is optional; without the file the defaults apply.
-.I /usr/share/doc/pve\-smart\-alert/config.reference.toml
+.I \%/usr/share/doc/pve\-smart\-alert/config.reference.toml
 lists every key with its default and explains it.
 A file that does not validate never stops a run: the last configuration that
 passed is used, or the defaults, and the problem is reported as
-.BR tool.config_invalid .
+.BR \%tool.config_invalid .
 .PP
 The sections are
 .B [smartctl]
 (path, timeout and detail level),
-.B [discovery]
+.B \%[discovery]
 (exclude rules, the HPE probe and manual devices in
-.BR [[discovery.device]] ),
+.BR \%[[discovery.device]] ),
 .B [notify]
 and
-.B [notify.reminder]
+.B \%[notify.reminder]
 (transport and notification policy),
 .B [checks."\fIcheck\-id\fB"]
 (thresholds, enabled state and confirmation count of a check, and the
@@ -156,7 +179,7 @@ enabled state of a condition of the tool), and
 (overrides for one drive, selected by model pattern, serial number or WWN).
 .PP
 The interval of the timer is not a key of this file; change it with
-.BR "systemctl edit pve\-smart\-alert.timer" .
+.BR "systemctl edit \%pve\-smart\-alert.timer" .
 .SH EXIT STATUS
 .TP
 .B 0
@@ -166,21 +189,47 @@ For
 whatever the health of the drives.
 .TP
 .B 1
-A problem: for
-.BR check ,
+A problem:
+.RS
+.IP \(bu 2
+.BR check :
 a notification could not be handed over and is planned again on the next
-run, or the run failed; for
-.BR "check \-\-dry\-run" ,
-the drives have findings; for
-.BR scan ,
-the device scan failed; for
-.BR doctor ,
-a line failed; for
-.BR "config check" ,
-the file is invalid.
+run, or the run failed;
+.IP \(bu 2
+.BR "check \-\-dry\-run" :
+the drives have findings;
+.IP \(bu 2
+.BR scan :
+the device scan failed;
+.IP \(bu 2
+.BR status :
+the state file cannot be read;
+.IP \(bu 2
+.BR doctor :
+a line failed;
+.IP \(bu 2
+.BR "config check" :
+the file is invalid;
+.IP \(bu 2
+.BR test\-notification :
+the test was not delivered;
+.IP \(bu 2
+.BR dump\-fixture :
+nothing was written.
+.RE
 .TP
 .B 2
-Wrong use of the command line, or a configuration that prevents the command.
+Wrong use of the command line; and for
+.BR scan ,
+.B test\-notification
+and
+.BR dump\-fixture ,
+an invalid configuration file, while
+.BR check ,
+.B doctor
+and
+.B config show
+carry on with the last good configuration.
 .TP
 .B 3
 For
@@ -188,53 +237,68 @@ For
 another run holds the lock; the timer counts this as success.
 .SH FILES
 .TP
-.I /etc/pve\-smart\-alert/config.toml
+.I \%/etc/pve\-smart\-alert/config.toml
 The configuration.
 .TP
-.I /var/lib/pve\-smart\-alert/state.json
+.I \%/var/lib/pve\-smart\-alert/state.json
 The state: what was reported and when.
 Deleting it makes the next run a first run.
 .TP
-.I /var/lib/pve\-smart\-alert/last\-good\-config.json
+.I \%/var/lib/pve\-smart\-alert/last\-good\-config.json
 The last configuration that passed validation.
 .TP
-.I /run/pve\-smart\-alert/
+.I \%/run/pve\-smart\-alert/
 The lock of a run and the stamp of the failure mail.
 .TP
-.I /usr/libexec/pve\-smart\-alert/notify\-bridge
+.I \%/usr/libexec/pve\-smart\-alert/notify\-bridge
 The program that hands a notification to the notification system of
 Proxmox VE.
 .TP
-.I /usr/share/doc/pve\-smart\-alert/config.reference.toml
+.I \%/usr/libexec/pve\-smart\-alert/report\-failure
+The failure reporter, started through
+.B OnFailure=
+when a run of
+.B \%pve\-smart\-alert.service
+fails; it mails the last 30 lines of the run to root, at most once a day.
+.TP
+.I \%/usr/share/pve\-manager/templates/default/pve\-smart\-alert\-*.txt.hbs
+The two templates of the notifications of the tool.
+.TP
+.I \%/usr/share/doc/pve\-smart\-alert/config.reference.toml
 The reference configuration.
 .SH NOTIFICATIONS
 Every notification has the type
 .B pve\-smart\-alert
 and the fields
-.B type
+.BR type ,
+.B hostname
 and
-.BR hostname ;
-one about a single drive also
-.BR event ,
-.BR device ,
+.BR event .
+One about a single drive also carries
+.B device
+and, where the drive reports them,
 .B serial
 and
-.BR model ,
-and a drive behind a MegaRAID or HPE Smart Array controller
+.BR model ;
+one about the tool itself carries
+.B device
+with the value
+.BR pve\-smart\-alert .
+A drive behind a MegaRAID or HPE Smart Array controller also carries
 .BR device\-id .
 A matcher with
-.B match\-field regex:type=^pve\-smart\-alert$
+.B \%match\-field regex:type=^pve\-smart\-alert$
 selects all of them.
-.B pve-smart-alert doctor
-warns when a severity of the tool reaches no target.
-.PP
-When a run fails, a short mail to root says so, at most once a day and once
-more after a reboot.
+.B pve\-smart\-alert doctor
+warns when a severity of the tool reaches no enabled target.
 .SH SEE ALSO
-.BR smartctl (8),
-.BR smartd (8),
+.BR journalctl (1),
 .BR systemctl (1),
-.BR journalctl (1)
+.BR systemd.timer (5),
+.BR smartctl (8),
+.BR smartd (8)
 .PP
-The README, the check catalog and the hardware support table of the source
-repository.
+The README in
+.I \%/usr/share/doc/pve\-smart\-alert/
+and the documents of the source repository: the check catalog, the hardware
+support table and the troubleshooting guide.
