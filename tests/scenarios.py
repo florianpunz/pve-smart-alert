@@ -38,8 +38,8 @@ import copy
 import json
 import shutil
 import sys
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
@@ -56,6 +56,48 @@ DERIVED_SAS_SOURCE: Final = ("direct/libblockdev-seagate-st600mp0036", "sdb.json
 # What the scan writes to `open_error` for a logical volume of a MegaRAID
 # controller, in 7.4 and 7.5 alike (`os_linux.cpp` line 2652, ADR 0028).
 LOGICAL_VOLUME_ERROR: Final = "DELL or MegaRaid controller, please try adding '-d megaraid,N'"
+
+# The host of the HPE scenario: the controller is SCSI host 1 of the driver
+# hpsa, and the probe reads through its SCSI generic node (ADR 0032).
+HPE_NODE: Final = "/dev/sg1"
+# The two drives behind it, from the recording of the maintainer's TrueNAS
+# host: a SATA SSD and a SAS SSD, so that both protocols are read.
+HPE_BASE: Final = "hba/maintainer-truenas"
+HPE_DRIVES: Final = (("cciss0.json", "sdd.json", "cciss,0"), ("cciss1.json", "sdc.json", "cciss,1"))
+
+# The drives of the scenario `manual-pass-through`, one per type that
+# smartctl(8) of 7.4 and 7.5 documents for a controller the scan does not
+# list (Research 04), on a node of the form the manual shows for Linux: the
+# file of the step, the node, the type, and the recorded drive it is made of.
+# `/dev/sdb` and `/dev/sdc` are logical volumes of the host, as the manual's
+# `/dev/sda` is for `aacraid` and `hpt`.
+MANUAL_DRIVES: Final = (
+    (
+        "areca2.json",
+        "/dev/sg2",
+        "areca,2",
+        "megaraid/scrutiny-megaraid-wd4000fyyx",
+        "sda-megaraid0.json",
+    ),
+    (
+        "areca1-1.json",
+        "/dev/sg3",
+        "areca,1/1",
+        "direct/libblockdev-seagate-st600mp0036",
+        "sdb.json",
+    ),
+    ("3ware1.json", "/dev/twa0", "3ware,1", "direct/test-cluster-pve5", "sda.json"),
+    ("aacraid0-0-2.json", "/dev/sdb", "aacraid,0,0,2", "hba/maintainer-truenas", "sdc.json"),
+    ("hpt1-2-3.json", "/dev/sdc", "hpt,1/2/3", "direct/test-cluster-pve6", "sda.json"),
+    (
+        "sssraid0-1.json",
+        "/dev/bsg/sssraid0",
+        "sssraid,0,1",
+        "direct/libblockdev-toshiba-al15seb120ny",
+        "sdd.json",
+    ),
+)
+MANUAL_BASE: Final = "direct/standalone-pve1"
 
 # A recording in memory: file name to JSON document. `recording.json` and
 # `scan.json` are documents like the others.
@@ -81,6 +123,14 @@ class Scenario:
     description: str
     steps: tuple[Step, ...]
     prepare: tuple[Edit, ...] = ()
+    # What the host has besides the recording, which the frame of the tests
+    # writes and a real host brings itself: the drivers of the SCSI hosts of
+    # sysfs by host number, the SCSI generic nodes by the host they belong
+    # to, and the manual entries of the configuration as name and type
+    # (FR-104).
+    scsi_hosts: Mapping[int, str] = field(default_factory=dict)
+    sg_nodes: Mapping[int, int] = field(default_factory=dict)
+    devices: tuple[tuple[str, str], ...] = ()
 
 
 def attribute(file: str, number: int, raw: int) -> Edit:
@@ -292,6 +342,133 @@ def megaraid_host(*, jbod: bool = False) -> Edit:
     return edit
 
 
+def hpe_host() -> Edit:
+    """Make a host with an HPE Smart Array controller of two drives (ADR 0032).
+
+    Nothing of such a host was ever recorded (Research 08), so the host is
+    synthetic: the SATA SSD and a SAS SSD of the TrueNAS recording, with the
+    device fields of a read of `cciss,N` on `/dev/sg1`, and the rest of the
+    recording taken away. The scan lists no device, because what smartctl
+    makes of the logical volume of an HPE controller is not recorded either
+    (Q-R2). A device ID that the recording does not have is an empty bay:
+    the fake smartctl answers as smartctl does, with a failed open.
+    """
+
+    def edit(documents: Documents) -> None:
+        drives = {file: documents[source] for file, source, _ in HPE_DRIVES}
+        documents.clear()
+        files: list[dict[str, object]] = []
+        for disk, (file, _, device_type) in enumerate(HPE_DRIVES):
+            document = copy.deepcopy(drives[file])
+            device = _device_of(document)
+            device["name"] = HPE_NODE
+            device["type"] = "cciss"
+            device["info_name"] = f"{HPE_NODE} [cciss_disk_{disk:02d}]"
+            smartctl = document["smartctl"]
+            assert isinstance(smartctl, dict)
+            smartctl["argv"] = [
+                "smartctl",
+                "--xall",
+                "--json=c",
+                f"--device={device_type}",
+                HPE_NODE,
+            ]
+            documents[file] = document
+            files.append({"file": file, "device": HPE_NODE, "type": device_type, "exit_status": 0})
+        documents["scan.json"] = {
+            "json_format_version": [1, 0],
+            "smartctl": {"version": [7, 5], "argv": ["smartctl", "--scan-open", "--json=c"]},
+            "devices": [],
+        }
+        documents["recording.json"] = {
+            "origin": (
+                "Synthetic, written for slice 5 of milestone M6 (ADR 0032): two devices"
+                " of the recording of the maintainer's TrueNAS host, with the device"
+                " fields of a cciss,N read. No HPE Smart Array host was ever recorded"
+            ),
+            "license": "AGPL-3.0-or-later",
+            "node": "hpe1",
+            "collected": "synthetic",
+            "collected_with": "tests/scenarios.py",
+            "smartmontools": "7.5",
+            "controller": f"HPE Smart Array behind hpsa, read on {HPE_NODE} (synthetic)",
+            "files": [
+                {"file": "scan.json", "command": "smartctl --scan-open --json=c", "exit_status": 0},
+                *files,
+            ],
+        }
+
+    return edit
+
+
+def manual_host() -> Edit:
+    """Add a drive behind each controller that only a manual entry reaches (FR-104).
+
+    Each drive of `MANUAL_DRIVES` is a recorded drive of another fixture,
+    moved to the node and type of its controller and given the next
+    placeholder serial number, without WWN or logical unit id (ADR 0023).
+    No drive behind these controllers was ever recorded, so the drives are
+    derived and what smartctl writes into the device fields of such a read
+    is not known; the scan lists only the recorded on-board drive. lsblk
+    shows the two logical volumes `/dev/sdb` and `/dev/sdc` that `aacraid`
+    and `hpt` read through, the first with a ZFS pool, and the frame names
+    the drives as manual entries.
+    """
+
+    def edit(documents: Documents) -> None:
+        files = documents["recording.json"]["files"]
+        assert isinstance(files, list)
+        for number, (file, name, device_type, base, source) in enumerate(MANUAL_DRIVES, start=2):
+            path = RECORDINGS / base / source
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["serial_number"] = f"ANON-SN-{number:04d}"
+            document.pop("wwn", None)
+            document.pop("logical_unit_id", None)
+            _place(document, name, device_type)
+            documents[file] = document
+            files.append(_recording_entry(file, document, exit_status=0))
+        recording = documents["recording.json"]
+        recording["origin"] = (
+            "Derived for the scenario manual-pass-through of tests/scenarios.py: the"
+            " on-board SATA SSD of pve-test, and one recorded drive of another fixture"
+            " behind each controller that only a manual entry reaches; only the"
+            " on-board drive is recorded on this host"
+        )
+        lsblk = documents["lsblk.json"]["blockdevices"]
+        assert isinstance(lsblk, list)
+        lsblk.append(
+            {
+                "name": "sdb",
+                "kname": "sdb",
+                "type": "disk",
+                "tran": "sas",
+                "children": [
+                    {
+                        "name": "sdb1",
+                        "kname": "sdb1",
+                        "type": "part",
+                        "fstype": "zfs_member",
+                        "label": "tank",
+                    }
+                ],
+            }
+        )
+        lsblk.append({"name": "sdc", "kname": "sdc", "type": "disk", "tran": None})
+
+    return edit
+
+
+def media_errors(file: str, count: int) -> Edit:
+    """Set the media and data integrity errors of an NVMe drive."""
+
+    def edit(documents: Documents) -> None:
+        log = documents[file]["nvme_smart_health_information_log"]
+        assert isinstance(log, dict)
+        log["media_errors"] = count
+
+    return edit
+
+
 def device_id(file: str, number: int) -> Edit:
     """Give a drive behind the controller another device ID, as after a rebuild or a reboot."""
 
@@ -325,8 +502,9 @@ def grown_defects(file: str, count: int) -> Edit:
 
 
 #: The scenarios, by name. The steps of `pending-sectors` and `five-hot`
-#: follow the acceptance steps of milestone M4 in ROADMAP.md, those of the
-#: MegaRAID scenarios the deliverables of milestone M6.
+#: follow the acceptance steps of milestone M4 in ROADMAP.md. The others are
+#: named after the controller family they show, as milestone M6 asks, and
+#: `docs/hardware-support.md` names the scenario of every family.
 SCENARIOS: Final = {
     scenario.name: scenario
     for scenario in (
@@ -380,6 +558,97 @@ SCENARIOS: Final = {
                     "03-hot",
                     tuple(temperature(f"sd{letter}.json", 65) for letter in "abcde"),
                     "confirmed: one summary instead of five",
+                ),
+            ),
+        ),
+        Scenario(
+            name="onboard-sata-nvme",
+            base="direct/test-cluster-pve7",
+            description=(
+                "A cluster node with a SATA SSD and two NVMe drives on the board,"
+                " one of which gets media errors"
+            ),
+            scsi_hosts=dict.fromkeys(range(6), "ahci"),
+            steps=(
+                Step("01-healthy", description="first run: one summary with three drives"),
+                Step(
+                    "02-media-errors",
+                    (media_errors("nvme0.json", 2),),
+                    "2 media errors on the first NVMe drive: one warning, without device ID",
+                ),
+            ),
+        ),
+        Scenario(
+            name="hba-sas",
+            base="hba/maintainer-truenas",
+            description=(
+                "The TrueNAS host: three SAS SSDs behind an LSI SAS2308 HBA (mpt2sas)"
+                " and a SATA SSD on the board, one SAS SSD gets grown defects"
+            ),
+            scsi_hosts={0: "mpt2sas", **dict.fromkeys(range(1, 7), "ahci"), 7: "ahciem"},
+            steps=(
+                Step(
+                    "01-healthy",
+                    description="first run: one summary with four drives, no controller notice",
+                ),
+                Step(
+                    "02-grown-defects",
+                    (grown_defects("sdc.json", 150),),
+                    "150 grown defects on a SAS SSD: one warning, without device ID",
+                ),
+            ),
+        ),
+        Scenario(
+            name="hpe-smart-array",
+            base=HPE_BASE,
+            description=(
+                "A synthetic HPE Smart Array controller behind hpsa with a SATA and a SAS"
+                " SSD that the probe finds, one of which gets pending sectors"
+            ),
+            prepare=(hpe_host(),),
+            scsi_hosts={0: "ahci", 1: "hpsa"},
+            sg_nodes={1: 1},
+            steps=(
+                Step("01-healthy", description="first run: one summary with two drives"),
+                Step(
+                    "02-pending-3",
+                    (attribute("cciss0.json", 197, 3),),
+                    "3 pending sectors on cciss,0: one warning naming controller and device ID",
+                ),
+            ),
+        ),
+        Scenario(
+            name="unsupported-mpi3mr",
+            base="direct/standalone-pve1",
+            description=(
+                "A host with a synthetic mpi3mr controller next to its on-board SATA SSD,"
+                " whose drives smartctl cannot read"
+            ),
+            scsi_hosts={0: "ahci", 1: "ahci", 2: "mpi3mr"},
+            steps=(
+                Step(
+                    "01-first",
+                    description="first run: one summary and one notice about the controller",
+                ),
+                Step("02-again", description="no change: nothing"),
+            ),
+        ),
+        Scenario(
+            name="manual-pass-through",
+            base=MANUAL_BASE,
+            description=(
+                "One derived drive behind each controller that only a manual entry"
+                " reaches: Areca, 3ware, Adaptec, HighPoint and SSSRAID"
+            ),
+            prepare=(manual_host(),),
+            devices=tuple((name, device_type) for _, name, device_type, _, _ in MANUAL_DRIVES),
+            steps=(
+                Step("01-healthy", description="first run: one summary with seven drives"),
+                Step(
+                    "02-degraded",
+                    (attribute("3ware1.json", 197, 3), grown_defects("aacraid0-0-2.json", 150)),
+                    "pending sectors behind 3ware and grown defects behind Adaptec:"
+                    " one warning each, without device ID",
                 ),
             ),
         ),

@@ -82,17 +82,151 @@ def test_the_five_hot_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert all(findings == [("temperature", Severity.WARNING, 65)] for findings in hot.values())
 
 
+def only(notifications: list[Notification]) -> Notification:
+    assert len(notifications) == 1, [n.subject for n in notifications]
+    return notifications[0]
+
+
+def installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> ScenarioHost:
+    host = ScenarioHost(tmp_path, monkeypatch, name)
+    host.install()
+    return host
+
+
+# One scenario per controller family (ROADMAP.md, M6, result 1). The table
+# of docs/hardware-support.md names the scenario of each family.
+
+
+def test_the_onboard_sata_nvme_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Drives on the board are read directly: no controller, no device ID.
+    host = installed(tmp_path, monkeypatch, "onboard-sata-nvme")
+
+    first = only(host.run("01-healthy"))
+    assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 3 drives, no findings"
+    warning = only(host.run("02-media-errors"))
+    assert warning.event is EventType.PROBLEM
+    assert warning.subject == (
+        "[pve-smart-alert] WARNING pve1: /dev/nvme0 SAMSUNG MZVLW256HEHP-000L2 (ANON-SN-0002):"
+        " 2 media errors"
+    )
+    assert "Drive:      /dev/nvme0 [nvme]\n" in warning.body
+    assert warning.fields_for()[FIELD_DEVICE] == "/dev/nvme0"
+    assert FIELD_DEVICE_ID not in warning.fields_for()
+
+
+def test_the_hba_sas_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Result 3 of M6 on the recording of the TrueNAS host: the SAS SSDs behind
+    # the mpt2sas HBA are block devices of the host, and neither mpt2sas nor
+    # ahciem is reported as a controller that cannot be queried (ADR 0030).
+    host = installed(tmp_path, monkeypatch, "hba-sas")
+
+    devices = host.discover().devices
+    assert [(found.candidate.name, found.candidate.type) for found in devices] == [
+        ("/dev/sda", "scsi"),
+        ("/dev/sdc", "scsi"),
+        ("/dev/sdd", "sat"),
+        ("/dev/sde", "scsi"),
+    ]
+    assert all(found.outcome is Outcome.MONITORED for found in devices)
+    first = only(host.run("01-healthy"))
+    assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 4 drives, no findings"
+    assert "tool.unsupported_controller" not in first.body
+
+    warning = only(host.run("02-grown-defects"))
+    assert warning.subject == (
+        "[pve-smart-alert] WARNING pve1: /dev/sdc NETAPP X371_SLBPE960ATE (ANON-SN-0002):"
+        " 150 grown defects"
+    )
+    assert "Drive:      /dev/sdc [scsi]\n" in warning.body
+    assert FIELD_DEVICE_ID not in warning.fields_for()
+
+
+def test_the_hpe_smart_array_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Synthetic and experimental (ADR 0032): the probe finds both drives
+    # behind hpsa, and a finding names the controller and the device ID.
+    host = installed(tmp_path, monkeypatch, "hpe-smart-array")
+
+    monitored = [
+        (found.candidate.name, found.candidate.type) for found in host.discover().monitored
+    ]
+    assert monitored == [("/dev/sg1", "cciss,0"), ("/dev/sg1", "cciss,1")]
+    first = only(host.run("01-healthy"))
+    assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 2 drives, no findings"
+
+    warning = only(host.run("02-pending-3"))
+    assert warning.subject == (
+        "[pve-smart-alert] WARNING pve1: /dev/sg1 Samsung SSD 850 EVO 120GB (ANON-SN-0003):"
+        " 3 pending sectors"
+    )
+    assert "Drive:      /dev/sg1 [cciss,0]\n" in warning.body
+    assert "Location:   /dev/sg1 (hpsa), device 0\n" in warning.body
+    assert warning.fields_for()[FIELD_DEVICE_ID] == "0"
+
+
+def test_the_unsupported_mpi3mr_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Synthetic: the drives behind mpi3mr cannot be read, and the first run
+    # says so; the on-board drive is monitored (ADR 0030, ADR 0031).
+    host = installed(tmp_path, monkeypatch, "unsupported-mpi3mr")
+
+    first = only(host.run("01-first"))
+    assert first.subject == "[pve-smart-alert] NOTICE pve1: monitoring 1 drive, no findings"
+    assert "tool.unsupported_controller: SCSI host 2 has the driver mpi3mr" in first.body
+    assert "1 drive is monitored on this host" in first.body
+    assert host.run("02-again") == []
+
+
+def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Derived: a drive behind each controller that only a manual entry
+    # reaches is read with its type on its node (FR-104). What the host shows
+    # for a node such as the logical volume /dev/sdb, with its ZFS pool, is
+    # not the drive's (ADR 0028); these types have no device ID (ADR 0034).
+    host = installed(tmp_path, monkeypatch, "manual-pass-through")
+
+    devices = host.discover().devices
+    assert [(found.candidate.name, found.candidate.type) for found in devices] == [
+        ("/dev/sda", "sat"),
+        ("/dev/sg2", "areca,2"),
+        ("/dev/sg3", "areca,1/1"),
+        ("/dev/twa0", "3ware,1"),
+        ("/dev/sdb", "aacraid,0,0,2"),
+        ("/dev/sdc", "hpt,1/2/3"),
+        ("/dev/bsg/sssraid0", "sssraid,0,1"),
+    ]
+    assert all(found.outcome is Outcome.MONITORED for found in devices)
+    for found in devices[1:]:
+        assert found.details.block_device is False
+        assert found.details.membership.zfs_pool is None
+        assert found.details.location.controller_text is None
+
+    first = only(host.run("01-healthy"))
+    assert first.subject == "[pve-smart-alert] INFO pve1: monitoring 7 drives, no findings"
+    assert "/dev/sdb [aacraid,0,0,2] NETAPP X371_SLBPE960ATE (ANON-SN-0005)  no findings" in (
+        first.body
+    )
+
+    three_ware, adaptec = host.run("02-degraded")
+    assert three_ware.subject == (
+        "[pve-smart-alert] WARNING pve1: /dev/twa0 Fanxiang S301 256GB (ANON-SN-0004):"
+        " 3 pending sectors"
+    )
+    assert "Drive:      /dev/twa0 [3ware,1]\n" in three_ware.body
+    assert adaptec.subject == (
+        "[pve-smart-alert] WARNING pve1: /dev/sdb NETAPP X371_SLBPE960ATE (ANON-SN-0005):"
+        " 150 grown defects"
+    )
+    assert "Drive:      /dev/sdb [aacraid,0,0,2]\n" in adaptec.body
+    assert "Location:" not in adaptec.body
+    assert "tank" not in adaptec.body
+    for notification in (three_ware, adaptec):
+        assert FIELD_DEVICE_ID not in notification.fields_for()
+
+
 def megaraid_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> ScenarioHost:
     """A MegaRAID scenario, installed, with the controller as SCSI host 6 of `megaraid_sas`."""
     host = ScenarioHost(tmp_path, monkeypatch, name)
     host.install()
     host.scsi_host(6, "megaraid_sas")
     return host
-
-
-def only(notifications: list[Notification]) -> Notification:
-    assert len(notifications) == 1, [n.subject for n in notifications]
-    return notifications[0]
 
 
 def test_the_megaraid_jbod_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

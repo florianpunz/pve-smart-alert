@@ -17,7 +17,7 @@ from typing import Final
 
 import pytest
 from frame import RUN_INTERVAL, Clock, RecordingTransport
-from hosts import FAKE, HPE_NODE, Host, write_hpe_recording, write_scsi_hosts, write_sg_nodes
+from hosts import FAKE, Host, write_hpe_recording, write_scsi_hosts, write_sg_nodes
 
 from pve_smart_alert import cli
 from pve_smart_alert import config as config_module
@@ -41,6 +41,7 @@ from pve_smart_alert.model import EventType, Notification, Snapshot
 from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.scan_report import render
 from pve_smart_alert.state import read_state
+from scenarios import HPE_NODE
 
 # A document the probe only has to judge as usable; the parsers are not asked.
 _USABLE: Final = json.dumps(
