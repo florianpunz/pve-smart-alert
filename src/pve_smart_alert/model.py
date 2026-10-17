@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import socket
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -113,21 +114,45 @@ class EventType(StrEnum):
     TEST = "test"
 
 
+# Longer strings of a drive are cut where `scan`, `status` and `check
+# --dry-run` print them, as in a message (ARCHITECTURE.md section 14).
+MAX_PRINTED: Final = 200
+
+
+def without_controls(text: str) -> str:
+    """Return `text` with every control character replaced by a space.
+
+    These are the characters of the Unicode category Cc: the C0 controls,
+    among them escape, carriage return and newline, DEL, and the C1 controls
+    from U+0080 to U+009F, among them the 8-bit introducer of an ANSI escape
+    sequence (U+009B) and NEL (U+0085). A string from a drive that keeps
+    none of them cannot move the cursor, colour a terminal or start a line
+    of its own (ARCHITECTURE.md section 14).
+    """
+    return "".join(
+        " " if unicodedata.category(character) == "Cc" else character for character in text
+    )
+
+
+def printable(value: str, *, limit: int) -> str:
+    """Return a string from a drive, safe to print or to write into a message.
+
+    Control characters are replaced by spaces, runs of whitespace are
+    collapsed, and the result is cut to `limit` characters (ARCHITECTURE.md
+    section 14).
+    """
+    return " ".join(without_controls(value).split())[:limit]
+
+
 def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
     A field value never contains a comma, because Proxmox VE splits the value
     list of an exact matcher on commas, so a comma inside a value would change
-    the meaning of a rule. Control characters are replaced by spaces and runs
-    of whitespace are collapsed, so that a value cannot break the line it is
-    written to. The result is cut to `limit` characters (ADR 0008,
-    ARCHITECTURE.md section 14).
+    the meaning of a rule. Otherwise it is `printable`, so that a value cannot
+    break the line it is written to (ADR 0008, ARCHITECTURE.md section 14).
     """
-    without_controls = "".join(
-        " " if character < " " or character == "\x7f" else character for character in value
-    )
-    without_commas = without_controls.replace(",", ";")
-    return " ".join(without_commas.split())[:limit]
+    return printable(value.replace(",", ";"), limit=limit)
 
 
 @dataclass(frozen=True)

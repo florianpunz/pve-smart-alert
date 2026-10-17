@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `pve-smart-alert scan`, `status` and `check --dry-run` no longer print the control characters of a drive's model, serial number, firmware or of the label of a pool, such as an ANSI escape sequence or a newline, and cut such a value at 200 characters as a message does; notifications and their fields also drop the C1 control characters, among them the 8-bit introducer of an escape sequence.
 - `pve-smart-alert config check` names the line of an unknown check identifier, as it does for every other configuration error (FR-405).
 - The wear of an ATA drive read with `smartctl.detail = "basic"` no longer claims the vendor-neutral source: without the device statistics, smartmontools guesses `endurance_used` from a vendor attribute, and the guess is shown as the vendor attribute it is.
 - A run with an invalid configuration and no last good configuration says that the built-in defaults are in use, instead of claiming a last good configuration (FR-406).

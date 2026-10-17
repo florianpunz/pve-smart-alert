@@ -302,7 +302,7 @@ Goal: a release that others can install with confidence.
 Deliverables:
 
 - User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page.
-- Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data.
+- Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data. Started on the branch `fix/hostile-drive-strings` (2026-10-17, unattended session): `tests/unit/test_hostile_strings.py` feeds a model, serial number, firmware and pool label with C0 and C1 control characters, ANSI escapes, newlines, a very long value, Handlebars and shell syntax through `scan`, `status`, `check --dry-run`, the notifications, their fields, the journal line and the bridge; `scan`, `status` and the dry run printed them raw, and the messages kept the C1 controls, which is fixed there. Still open: the other security points of section 14.
 - Review of all default thresholds and policy defaults against the experience from the maintainer's cluster since M5.
 - All requirements checked off against tests or acceptance steps.
 - Release notes, version 1.0.0.

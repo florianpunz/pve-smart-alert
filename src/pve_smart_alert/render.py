@@ -35,6 +35,7 @@ from pve_smart_alert.model import (
     Notification,
     Severity,
     pass_through_id,
+    printable,
 )
 from pve_smart_alert.paths import CONFIG_PATH, COROSYNC_CONF_PATH
 from pve_smart_alert.planner import RANK, DriveInfo, DriveMessage, Item, MessageKind, Planned
@@ -773,10 +774,7 @@ def _clean(value: str | None, *, limit: int = _MAX_TEXT) -> str:
     """Return a string from a drive, safe to write into a message (ARCHITECTURE.md section 14)."""
     if value is None:
         return ""
-    without_controls = "".join(
-        " " if character < " " or character == "\x7f" else character for character in value
-    )
-    return " ".join(without_controls.split())[:limit]
+    return printable(value, limit=limit)
 
 
 def _cleaned(item: Item) -> str:
