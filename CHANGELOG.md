@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The package installs the reference configuration as `/usr/share/doc/pve-smart-alert/config.reference.toml`, the path that `doctor`, the shipped `config.toml` and the documentation name; it was installed compressed, as `config.reference.toml.gz`.
 - `pve-smart-alert config check` names the line of an unknown check identifier, as it does for every other configuration error (FR-405).
 - The wear of an ATA drive read with `smartctl.detail = "basic"` no longer claims the vendor-neutral source: without the device statistics, smartmontools guesses `endurance_used` from a vendor attribute, and the guess is shown as the vendor attribute it is.
 - A run with an invalid configuration and no last good configuration says that the built-in defaults are in use, instead of claiming a last good configuration (FR-406).
