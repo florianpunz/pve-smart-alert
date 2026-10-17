@@ -35,8 +35,10 @@ FAILPOWER: Final = 0b10
 # What smartctl writes when `--nocheck=standby` ends the call before the data,
 # in 7.4 and 7.5: an information message that names the power mode and the
 # exit status of FAILPOWER, for ATA (ataprint.cpp) and for SCSI
-# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA.
-STANDBY_MESSAGE: Final = re.compile(r"Device is in (\S+) mode")
+# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA. The name
+# of an ATA mode is one word, such as STANDBY; the name of a SCSI power
+# condition has several, such as STANDBY BY TIMER.
+STANDBY_MESSAGE: Final = re.compile(r"Device is in (.+?) mode(?:, exit\(|$)")
 
 # The major version of the JSON format this tool reads (ADR 0004).
 JSON_FORMAT_MAJOR: Final = 1
