@@ -8,7 +8,7 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 | [01 Notification integration](01-notification-integration.md) | How can an external tool feed a message into the Proxmox VE notification system? |
 | [02 Built-in SMART handling](02-builtin-smart-handling.md) | What does Proxmox VE already do, where is the gap, and how are duplicate alerts avoided? |
 | [03 SMART indicators and smartctl JSON](03-smart-indicators.md) | Which values predict failure, and how do SATA, SAS and NVMe differ in `smartctl --json`? |
-| [04 Hardware RAID](04-hardware-raid.md) | How are drives behind RAID controllers found, and which controllers are realistic? |
+| [04 Hardware RAID](04-hardware-raid.md) | How are drives behind RAID controllers found, and which controllers are realistic? Addition on the other controller types in the source of smartmontools (2026-10-17) |
 | [05 Prior art](05-prior-art.md) | Which existing projects solve something similar, and what follows for PVE SMART Alert? |
 | [06 Recordings from the test cluster](06-test-cluster-recordings.md) | What do the drives, the wear values and the matcher configuration of the test cluster look like? Recorded 2026-10-05 |
 | [07 Acceptance run on the standalone host pve1](07-standalone-host-pve1.md) | What did the M2 steps show on a host outside the cluster: routing, the line `fallback`, the wear value, and the USB device that the scan omits? Run 2026-10-08 |
