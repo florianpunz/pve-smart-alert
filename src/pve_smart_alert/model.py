@@ -47,13 +47,16 @@ FIELD_DEVICE_ID: Final = "device-id"
 _PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+|scsi\+)?(megaraid|cciss),([0-9]+)")
 
 # The types that read a drive behind a controller through a node of the host
-# that is not the drive: the two above, and the types of smartctl(8) of 7.4
-# and 7.5 that only a manual entry names (FR-104, Research 04): `3ware,N`,
-# `areca,N` and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`,
-# and `sssraid,E,S`. The node can be a logical volume, such as /dev/sda for
-# `aacraid` and `hpt`, so what the host tells about it is not about the drive.
-_BEHIND_CONTROLLER_TYPE: Final = re.compile(
-    r"(?:sat\+|scsi\+)?(?:megaraid|cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
+# that is not the drive: the two above, and the other controller types of
+# smartctl(8) of 7.4 and 7.5 (Research 04, ADR 0034): `3ware,N`, `areca,N`
+# and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`, and
+# `sssraid,E,S`. Before any of them smartctl takes `scsi+` and `sat` with its
+# options, such as `sat,auto+` (dev_interface.cpp of 7.5). The node can be a
+# logical volume, such as /dev/sda for `aacraid` and `hpt`, so what the host
+# tells about it is not about the drive.
+BEHIND_CONTROLLER_TYPE: Final = re.compile(
+    r"(?:sat(?:,[a-z0-9]+)*\+|scsi\+)?"
+    r"(?:megaraid|cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
 )
 
 # Longer field values are cut. Field values go into the configuration of the
@@ -188,7 +191,7 @@ def behind_controller(device_type: str) -> bool:
     for the node are then not those of the drive (ADR 0028). Only the types
     of `pass_through_id` have a device ID as well.
     """
-    return _BEHIND_CONTROLLER_TYPE.fullmatch(device_type) is not None
+    return BEHIND_CONTROLLER_TYPE.fullmatch(device_type) is not None
 
 
 def is_cciss_type(device_type: str) -> bool:

@@ -61,7 +61,6 @@ from pve_smart_alert.model import (
     DeviceAccess,
     DriveIdentity,
     Snapshot,
-    behind_controller,
 )
 from pve_smart_alert.parsers import ParseError, inquiry_of, parse, protocol_of
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
@@ -407,9 +406,10 @@ def _volume_before_reading(candidate: Candidate, details: Details) -> str | None
     First the vendor and model that lsblk shows, then the scan, whose
     `open_error` asks for `-d megaraid,N`. The inquiry data of lsblk are
     those of the device node, so they count only when smartctl reads the
-    node itself and not a drive behind it.
+    node itself and not a drive behind it; enrichment leaves them out for a
+    drive behind a controller (ADR 0028, ADR 0034).
     """
-    if not behind_controller(candidate.type) and logical_volume(details.vendor, details.model):
+    if logical_volume(details.vendor, details.model):
         return "lsblk " + inquiry_text(details.vendor, details.model, product_label="model")
     if asks_for_megaraid(candidate.open_error):
         return "the scan: smartctl asks for -d megaraid,N"
