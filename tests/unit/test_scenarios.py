@@ -231,6 +231,16 @@ def test_the_manual_pass_through_scenario(tmp_path: Path, monkeypatch: pytest.Mo
     for notification in (three_ware, adaptec):
         assert FIELD_DEVICE_ID not in notification.fields_for()
 
+    # A SAS drive in standby names its power condition in words; it is in
+    # standby, not unreadable, and keeps its state (FR-203).
+    host.step("03-sas-standby")
+    sssraid = next(
+        found for found in host.discover().devices if found.candidate.name == "/dev/bsg/sssraid0"
+    )
+    assert sssraid.outcome is Outcome.STANDBY
+    assert host.run("03-sas-standby") == []
+    assert host.run("03-sas-standby") == []
+
 
 def megaraid_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> ScenarioHost:
     """A MegaRAID scenario, installed; the scenario names SCSI host 6 of `megaraid_sas`."""
