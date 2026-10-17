@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Final
 
+from pve_smart_alert.model import MAX_PRINTED, printable, without_controls
 from pve_smart_alert.planner import RANK
 from pve_smart_alert.state import ConditionRecord, DriveRecord, State, format_time, state_to_json
 
@@ -59,12 +60,15 @@ def render(state: State, *, path: Path) -> list[str]:
         lines += ["", "Skipped devices:"]
         for key, skipped in sorted(state.skipped.items()):
             name, _, device_type = key.partition("|")
-            detail = f" ({skipped.detail})" if skipped.detail else ""
+            cleaned = printable(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""
+            detail = f" ({cleaned})" if cleaned else ""
             lines.append(
                 f"  {name} [{device_type}]: {skipped.reason}{detail}, since"
                 f" {format_time(skipped.since)}"
             )
-    return lines
+    # The state keeps the strings of the drives as they came: no control
+    # character of theirs reaches the terminal (ARCHITECTURE.md section 14).
+    return [without_controls(line) for line in lines]
 
 
 def render_json(state: State, *, path: Path) -> str:
@@ -77,8 +81,9 @@ def _drive_line(record: DriveRecord) -> str:
     identity = record.identity
     if identity is None:
         return f"{access.name} [{access.type}], never answered with an identity"
-    serial = identity.serial or "no serial number"
-    return f"{access.name} [{access.type}] {identity.model} ({serial})"
+    model = printable(identity.model, limit=MAX_PRINTED)
+    serial = printable(identity.serial or "no serial number", limit=MAX_PRINTED)
+    return f"{access.name} [{access.type}] {model} ({serial})"
 
 
 def _presence(record: DriveRecord) -> str | None:

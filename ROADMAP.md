@@ -263,7 +263,7 @@ Result you can test:
 3. The same for a SAS drive scenario.
 4. The hardware support table states for every family how it was verified.
 
-Open questions this milestone answers or narrows: Q-R1 to Q-R6.
+Open questions this milestone answers or narrows: Q-R1 to Q-R7 and Q-R9 to Q-R11.
 
 State: built; the runs of results 2 and 3 on a cluster node are open. The work was split into six slices, one branch `feature/m6-<slice>` each, built one after the other and merged into `main` by pull request:
 
@@ -317,6 +317,8 @@ Result you can test:
 
 State: started on 2026-10-17, nothing of it merged yet.
 
+- Built, not merged: hostile strings in drive data. `tests/unit/test_hostile_strings.py` feeds a model, serial number and firmware with C0 and C1 controls, an ANSI escape, newlines, a TAB, a right-to-left override, a lone surrogate, a very long value and Handlebars and shell syntax, a pool label and the inquiry data of a logical volume with escapes, and a device name of the scan that fails its check, through `scan`, `status`, `check --dry-run`, the notifications, their fields and data, a mail, the journal lines, the progress line and the state file, and the answer of a transport through `test-notification` and the journal lines; the bridge gets a separate string with Handlebars and shell syntax.
+- Still open for the security review: the other points of [ARCHITECTURE.md](ARCHITECTURE.md) section 14; how the notification system renders the data of a message (Q-N11); a cut value carries no mark; a model or serial number of control characters only is left out of the fields; a selector copied from `scan` misses a drive whose model holds a removed character, because the identity keeps it (ADR 0005).
 - Built, not merged: [docs/traceability.md](docs/traceability.md), a dated snapshot that relates every requirement to its tests and acceptance steps and lists the requirements that no test covers and those whose acceptance step ROADMAP does not have.
 - Still open for result 2: a test or an acceptance step for each requirement on those two lists, and a check of the table row by row when it is made again for the release.
 

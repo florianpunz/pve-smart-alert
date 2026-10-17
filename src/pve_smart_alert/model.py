@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import socket
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -50,8 +51,10 @@ _PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+|scsi\+)?(megaraid|cciss),([0-9
 # that is not the drive: the two above, and the other controller types of
 # smartctl(8) of 7.4 and 7.5 (Research 04, ADR 0034): `3ware,N`, `areca,N`
 # and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`, and
-# `sssraid,E,S`. Before any of them smartctl takes `scsi+` and `sat` with its
-# options, such as `sat,auto+` (dev_interface.cpp of 7.5). The node can be a
+# `sssraid,E,S`. Before `megaraid`, `cciss`, `aacraid` and `sssraid` smartctl
+# takes `scsi+` and `sat` with its options, such as `sat,auto+`, and refuses
+# them before the ATA types `3ware`, `areca` and `hpt` (dev_interface.cpp of
+# 7.5); the pattern takes them before every type. The node can be a
 # logical volume, such as /dev/sda for `aacraid` and `hpt`, so what the host
 # tells about it is not about the drive.
 BEHIND_CONTROLLER_TYPE: Final = re.compile(
@@ -116,21 +119,57 @@ class EventType(StrEnum):
     TEST = "test"
 
 
+# Longer strings of a drive are cut where `scan`, `status` and `check
+# --dry-run` print them, as in a message (ARCHITECTURE.md section 14).
+MAX_PRINTED: Final = 200
+
+
+# The Unicode categories that `without_controls` replaces: the controls (Cc),
+# the format characters (Cf), among them the controls of the direction of
+# text and the invisible ones, the lone surrogates (Cs), which no output can
+# encode, and the line and paragraph separators (Zl, Zp).
+NOT_PRINTED: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+
+
+def without_controls(text: str) -> str:
+    """Return `text` with every control and format character replaced by a space.
+
+    These are the C0 controls, among them escape, carriage return, newline
+    and tab, DEL, the C1 controls from U+0080 to U+009F, among them the 8-bit
+    introducer of an ANSI escape sequence (U+009B) and NEL (U+0085), the
+    format characters of Unicode, such as RIGHT-TO-LEFT OVERRIDE (U+202E) and
+    ZERO WIDTH SPACE (U+200B), a lone surrogate, which a decoder can produce
+    from an escape in JSON, and the line and paragraph separators. A string
+    from a drive that keeps none of them cannot move the cursor, colour a
+    terminal, start a line of its own, turn the direction of the text around
+    it or stop a line from being written. Letters of right-to-left scripts,
+    combining marks and letters that show as blank still show as Unicode
+    defines them (ARCHITECTURE.md section 14).
+    """
+    return "".join(
+        " " if unicodedata.category(character) in NOT_PRINTED else character for character in text
+    )
+
+
+def printable(value: str, *, limit: int) -> str:
+    """Return a string from a drive, safe to print or to write into a message.
+
+    Control characters are replaced by spaces, runs of whitespace are
+    collapsed, and the result is cut to `limit` characters (ARCHITECTURE.md
+    section 14).
+    """
+    return " ".join(without_controls(value).split())[:limit]
+
+
 def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
     A field value never contains a comma, because Proxmox VE splits the value
     list of an exact matcher on commas, so a comma inside a value would change
-    the meaning of a rule. Control characters are replaced by spaces and runs
-    of whitespace are collapsed, so that a value cannot break the line it is
-    written to. The result is cut to `limit` characters (ADR 0008,
-    ARCHITECTURE.md section 14).
+    the meaning of a rule. Otherwise it is `printable`, so that a value cannot
+    break the line it is written to (ADR 0008, ARCHITECTURE.md section 14).
     """
-    without_controls = "".join(
-        " " if character < " " or character == "\x7f" else character for character in value
-    )
-    without_commas = without_controls.replace(",", ";")
-    return " ".join(without_commas.split())[:limit]
+    return printable(value.replace(",", ";"), limit=limit)
 
 
 @dataclass(frozen=True)

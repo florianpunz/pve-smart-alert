@@ -101,7 +101,7 @@ REQUIREMENTS.md names A for these requirements, but no step or result of a miles
 | FR-603 | T, A | test_the_controllers_are_read_from_the_sysfs_it_is_given (test_doctor.py) | section test_doctor.py: The state file (FR-603)<br>section test_doctor.py: Proxmox VE and smartd (FR-603, ADR 0002, ADR 0012)<br>module test_doctor.py | – | M1 step 5, M2 step 5 |
 | FR-604 | T | – | module test_dump_fixture.py | – | M2 step 3 |
 | FR-605 | T | test_a_second_run_while_one_holds_the_lock_is_skipped (test_acceptance_m4.py) | – | – | – |
-| FR-606 | T | test_a_run_logs_one_summary_line (test_acceptance_m4.py)<br>test_without_a_terminal_there_is_no_progress (test_scan.py) | – | – | M5 step 3 |
+| FR-606 | T | test_a_run_logs_one_summary_line (test_acceptance_m4.py)<br>test_the_journal_lines_of_a_run_carry_no_control_character_of_a_drive (test_hostile_strings.py)<br>test_the_answer_of_a_transport_reaches_the_journal_lines_clean (test_hostile_strings.py)<br>test_without_a_terminal_there_is_no_progress (test_scan.py) | – | – | M5 step 3 |
 | FR-607 | T | test_the_ten_steps_of_m4 (test_acceptance_m4.py)<br>test_a_notification_that_fails_is_sent_on_the_next_run (test_acceptance_m4.py)<br>test_a_run_that_cannot_take_its_lock_fails (test_check_command.py) | – | – | – |
 | FR-701 | A | – | – | the tests of test_install_script.py (`install.sh` against a stand-in release, not on a host) | M5 step 1 |
 | FR-702 | A | – | – | test_the_timer_runs_3_minutes_after_boot_and_then_every_30_minutes (test_units.py) (the unit, not a running host) | M5 steps 2 and 3 |

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.discovery import Discovery, Found, Outcome
-from pve_smart_alert.model import Finding, Severity
+from pve_smart_alert.model import MAX_PRINTED, Finding, Severity, printable, without_controls
 
 # The width the check identifiers and the severities line up in.
 _CHECK_WIDTH: Final = 26
@@ -41,7 +41,9 @@ def render(
         lines.extend(_finding_line(finding) for finding in findings)
     lines.append("")
     lines.append(_summary(discovery, evaluations))
-    return lines
+    # No control character of a drive reaches the terminal (ARCHITECTURE.md
+    # section 14).
+    return [without_controls(line) for line in lines]
 
 
 def _smartctl_line(discovery: Discovery, path: Path) -> str:
@@ -57,8 +59,9 @@ def _drive_line(found: Found) -> str:
     if snapshot is None:
         return f"{candidate.name} [{candidate.type}]"
     identity = snapshot.identity
-    serial = identity.serial or "no serial number reported"
-    return f"{candidate.name} [{candidate.type}] {identity.model}, serial {serial}"
+    model = printable(identity.model, limit=MAX_PRINTED)
+    serial = printable(identity.serial or "no serial number reported", limit=MAX_PRINTED)
+    return f"{candidate.name} [{candidate.type}] {model}, serial {serial}"
 
 
 def _finding_line(finding: Finding) -> str:

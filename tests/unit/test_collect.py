@@ -106,10 +106,10 @@ def test_a_sleeping_drive_is_not_read(recording: Path) -> None:
         "STANDBY BY COMMAND",
         "STANDBY_Y BY TIMER",
         "STANDBY_Y BY COMMAND",
+        # The names of ataprint.cpp for which it does.
         "SLEEP",
-        # The names of ataprint.cpp.
         "STANDBY",
-        "IDLE",
+        "STANDBY_Y",
     ],
 )
 def test_a_scsi_drive_in_standby_is_standby(mode: str) -> None:

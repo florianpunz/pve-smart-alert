@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.discovery import Discovery, Found, Outcome, Source
-from pve_smart_alert.model import Membership, Snapshot
+from pve_smart_alert.model import MAX_PRINTED, Membership, Snapshot, printable, without_controls
 from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC
 
 # From this difference on, both values are shown (ADR 0021).
@@ -55,7 +55,10 @@ def render(discovery: Discovery, *, smartctl_path: Path) -> list[str]:
         lines.extend(_device(found))
     lines.append("")
     lines.append(_summary(discovery))
-    return lines
+    # Names, messages and drive strings come from smartctl, lsblk and sysfs:
+    # no control character of theirs reaches the terminal (ARCHITECTURE.md
+    # section 14).
+    return [without_controls(line) for line in lines]
 
 
 def _smartctl_line(discovery: Discovery, path: Path) -> str:
@@ -84,9 +87,12 @@ def _device(found: Found) -> Iterator[str]:
 def _outcome(found: Found) -> str:
     if found.outcome is Outcome.SKIPPED:
         reason = found.reason.value if found.reason is not None else "skipped"
-        return f"skipped, {reason}" + (f" ({found.detail})" if found.detail else "")
+        # The detail can quote the inquiry data of a logical volume from lsblk.
+        detail = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        return f"skipped, {reason}" + (f" ({detail})" if detail else "")
     if found.outcome is Outcome.STANDBY:
-        return f"in standby ({found.detail}), not woken" if found.detail else "in standby"
+        mode = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        return f"in standby ({mode}), not woken" if mode else "in standby"
     return found.outcome.value
 
 
@@ -159,5 +165,5 @@ def _probing(device_ids: tuple[int, ...]) -> str:
 
 
 def _labelled(label: str, value: str) -> str:
-    """Return one line below a device. The values line up."""
-    return f"  {label + ':':<10} {value}"
+    """Return one line below a device. The values line up, and none is longer than a message's."""
+    return f"  {label + ':':<10} {printable(value, limit=MAX_PRINTED)}"
