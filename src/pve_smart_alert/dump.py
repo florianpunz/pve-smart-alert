@@ -99,6 +99,7 @@ def dump_fixture(
         if document is not None:
             recording.drives[stem] = document
             recording.exits[stem] = result.returncode
+            recording.calls[stem] = (candidate.name, candidate.type)
 
     lsblk = runner(lsblk_command(paths), timeout=LSBLK_TIMEOUT_SECONDS)
     recording.lsblk = _json_object(lsblk.stdout)
