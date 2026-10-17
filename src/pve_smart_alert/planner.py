@@ -55,6 +55,7 @@ from pve_smart_alert.model import (
     Finding,
     Severity,
     Snapshot,
+    is_cciss_type,
 )
 from pve_smart_alert.state import (
     RETENTION,
@@ -170,7 +171,9 @@ class Observation:
     neither recovered nor raised (ADR 0030). `state_reset` says
     why the state was set aside, when it was. When the device scan failed,
     `presence_known` is false: drives that were not found were not looked
-    for, so their absence is not counted.
+    for, so their absence is not counted. `probe_off` says that the
+    configuration switched the HPE Smart Array probe off: the drives that only
+    it can find are forgotten without a missing or a recovery (ADR 0032).
     """
 
     drives: tuple[DriveSeen, ...] = ()
@@ -179,6 +182,7 @@ class Observation:
     tool_not_evaluated: frozenset[str] = frozenset()
     state_reset: str | None = None
     presence_known: bool = True
+    probe_off: bool = False
 
 
 @dataclass(frozen=True)
@@ -338,6 +342,10 @@ class _Planner:
         # The conditions of the tool the configuration leaves switched on; a
         # switched-off one is dropped without a recovery (ADR 0031).
         self.tool_enabled = tool_conditions_enabled(config)
+        # The devices that the configuration names itself. They are read
+        # whatever the probe does, so their records are never forgotten with a
+        # switched-off probe (ADR 0032).
+        self.manual = {(device.name, device.type) for device in config.discovery.devices}
 
     # The first run (ADR 0009, FR-516)
 
@@ -592,6 +600,19 @@ class _Planner:
                 del self.work.drives[key]
             return message, outcome.changes
         if not self.observation.presence_known or record.exempt_from_missing:
+            return None, []
+        if (
+            self.observation.probe_off
+            and is_cciss_type(record.last_access.type)
+            and (record.last_access.name, record.last_access.type) not in self.manual
+        ):
+            # A drive that only the probe of an HPE Smart Array controller can
+            # find, while the configuration switched that probe off: it is
+            # forgotten silently, like an excluded drive, instead of being
+            # reported as missing. A device that the configuration names itself
+            # is read whatever the probe does, so it is never forgotten here
+            # (ADR 0032).
+            del self.work.drives[key]
             return None, []
         if not self._enabled(record, DRIVE_MISSING):
             return None, []

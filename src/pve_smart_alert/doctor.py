@@ -20,6 +20,7 @@ from typing import Final
 from pve_smart_alert.config import (
     Config,
     ConfigError,
+    DiscoverySettings,
     NotifySettings,
     SmartctlSettings,
     TransportName,
@@ -28,6 +29,7 @@ from pve_smart_alert.config import (
 )
 from pve_smart_alert.discovery.controllers import describe_all, read_scsi_hosts
 from pve_smart_alert.discovery.enrichment import HOST, HostPaths
+from pve_smart_alert.discovery.probes import NotProbed, hpe_controllers
 from pve_smart_alert.discovery.sources import parse_scan
 from pve_smart_alert.model import NOTIFICATION_TYPE, PveSeverity, node_name
 from pve_smart_alert.paths import (
@@ -163,6 +165,7 @@ def run_doctor(
     config_result, config = check_config(config_path)
     settings = None if config is None else config.notify
     smartctl = SmartctlSettings() if config is None else config.smartctl
+    discovery = DiscoverySettings() if config is None else config.discovery
     node = node_name() if node is None else node
     # Read once for both routes: every call of pvesh takes seconds.
     routes = read_routes(pvesh_path, runner=runner)
@@ -180,6 +183,7 @@ def run_doctor(
         check_pve(pveversion_path, runner=runner),
         check_smartd(systemctl_path, smartd_conf_path, runner=runner),
         check_controllers(host_paths),
+        check_probe(discovery, host_paths),
     ]
 
 
@@ -584,6 +588,52 @@ def check_controllers(paths: HostPaths = HOST) -> CheckResult:
     return CheckResult(
         "controllers", Status.OK, detail + ", none whose drives smartctl cannot read"
     )
+
+
+def check_probe(settings: DiscoverySettings | None = None, paths: HostPaths = HOST) -> CheckResult:
+    """Name the HPE Smart Array controllers and whether the probe reaches them (FR-103).
+
+    Nothing is read here, so that `doctor` stays a picture of the host: the
+    probe itself runs in `scan` and in a check. A controller that the probe
+    cannot reach is a warning, because its drives are then found only as manual
+    entries. A probe that the configuration switched off is no warning, because
+    the administrator asked for it — unless the reason is the driver, which the
+    switch cannot change: a `smartpqi` host stays a warning (ADR 0032).
+    """
+    scsi = read_scsi_hosts(paths)
+    if scsi.error is not None:
+        return CheckResult("probe", Status.SKIP, scsi.error)
+    controllers = hpe_controllers(
+        scsi.hosts,
+        probe_cciss=True if settings is None else settings.probe_cciss,
+        paths=paths,
+    )
+    if not controllers:
+        return CheckResult("probe", Status.OK, "no HPE Smart Array controller")
+    detail = "; ".join(controller.describe() for controller in controllers)
+    reasons: set[NotProbed] = set()
+    for controller in controllers:
+        if controller.reason is not None:
+            reasons.add(controller.reason)
+    if reasons & {NotProbed.DRIVER, NotProbed.NO_NODE}:
+        return CheckResult("probe", Status.WARN, detail, advice=_probe_advice(reasons))
+    return CheckResult("probe", Status.OK, detail)
+
+
+def _probe_advice(reasons: set[NotProbed]) -> str:
+    """Return what to do about a controller that the probe does not reach."""
+    parts = []
+    if NotProbed.NO_NODE in reasons:
+        parts.append(
+            "no SCSI generic node was found; check that the sg driver is available in"
+            " /sys/class/scsi_generic"
+        )
+    if NotProbed.DRIVER in reasons:
+        parts.append(
+            "smartctl reaches -d cciss,N only on hosts with the driver hpsa; add the drives"
+            " of such a controller as [[discovery.device]]"
+        )
+    return "; ".join(parts)
 
 
 def check_templates(template_dir: Path, *, override_dir: Path) -> CheckResult:

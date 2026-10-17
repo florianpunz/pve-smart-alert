@@ -25,6 +25,7 @@ from pve_smart_alert.model import (
     Severity,
     Snapshot,
     WearSource,
+    is_cciss_type,
     node_name,
     pass_through_id,
     sanitize_field_value,
@@ -249,18 +250,45 @@ def test_a_snapshot_knows_only_what_it_is_given() -> None:
         ("megaraid,8", "8"),
         ("sat+megaraid,14", "14"),
         ("megaraid,0", "0"),
+        # The drives behind an HPE Smart Array controller (ADR 0032).
+        ("cciss,0", "0"),
+        ("cciss,127", "127"),
+        ("sat+cciss,2", "2"),
+        # The documented `scsi+` forms: the SCSI pass-through itself.
+        ("scsi+cciss,3", "3"),
+        ("scsi+megaraid,8", "8"),
         ("sat", None),
         ("scsi", None),
         ("nvme", None),
         ("megaraid", None),
         ("megaraid,", None),
         ("sat+megaraid,x", None),
-        ("cciss,2", None),
+        ("cciss", None),
+        ("cciss,", None),
+        ("scsi+cciss", None),
     ],
 )
 def test_the_device_id_is_read_from_a_pass_through_type(
     device_type: str, device_id: str | None
 ) -> None:
     # One function for `scan`, the location of a message and the field
-    # `device-id` (ADR 0028, ADR 0029). `cciss,N` follows with slice 5 of M6.
+    # `device-id` (ADR 0028, ADR 0029, ADR 0032).
     assert pass_through_id(device_type) == device_id
+
+
+@pytest.mark.parametrize(
+    ("device_type", "cciss"),
+    [
+        ("cciss,0", True),
+        ("sat+cciss,3", True),
+        ("scsi+cciss,3", True),
+        ("megaraid,8", False),
+        ("scsi+megaraid,8", False),
+        ("sat", False),
+        ("cciss", False),
+    ],
+)
+def test_a_cciss_type_is_recognized(device_type: str, cciss: bool) -> None:
+    # The planner forgets the drives of a switched-off probe by their type
+    # (ADR 0032).
+    assert is_cciss_type(device_type) is cciss

@@ -191,9 +191,36 @@ No host shows an `mpi3mr` controller, and no recording of one exists. What is kn
 
 [ADR 0030](../adr/0030-controllers-whose-drives-cannot-be-queried.md) builds on these facts: none of the recorded drivers is reported as a controller whose drives cannot be queried, and the text about `mpi3mr` names the drives in RAID mode only. The tests use sysfs trees built from the TrueNAS host, from `pve7` and from `pve-test` (`tests/unit/hosts.py`).
 
+## Addition 2026-10-17: what the source says about the HPE pass-through
+
+Checked in `RELEASE_7_4` and `RELEASE_7_5` on 2026-10-17, for the probe of milestone M6, slice 5 ([ADR 0032](../adr/0032-hpe-smart-array-probe.md)). Line numbers are those of 7.5 unless both versions are named. Extended later the same day with the power mode check and the `scsi+` form.
+
+| Fact | Where |
+| --- | --- |
+| `-d cciss,N` accepts `0 <= N <= 127` and wraps the device as `sat,auto`, so a SATA drive behind it is read through SAT | `os_linux.cpp` 3579–3584 |
+| With the driver `hpsa` the device node is the SCSI generic node of the controller: `smartctl -a -d cciss,0 /dev/sg2` | `smartctl.8.in` 685–701 |
+| `N` indexes the list that `CISS_REPORT_PHYS` answers with | `cciss.cpp`, `cciss_getlun`, 197–246 |
+| An index at or beyond the length of that list fails with `-ENXIO` ("give up, assume no device there") | `cciss.cpp` 87, 145 |
+| `--scan-open` keeps a device it could not open and writes the error into `devices[].open_error` | `smartctl.cpp` 1552–1561 |
+| smartctl asks for `-d cciss,N` only where `proc_name` is `hpsa`, and derives the host number from the SCSI device name `H:C:T:L` | `os_linux.cpp` 3363–3414, 3475–3477 |
+| The text of that error is `requires option '-d cciss,N'` | `os_linux.cpp`, `missing_option`, 3158–3161 |
+| `-n` (`--nocheck`) applies to ATA and SCSI devices and is ignored where the power mode check is not supported | `smartctl.8.in` 891, 930 |
+| A call that the power mode check ends writes `Device is in <mode> mode, exit(<n>)` with the status of `-n`, for ATA and for SCSI alike, so it carries no data and is a standby answer, not a failed read | `ataprint.cpp` 3448, `scsiprint.cpp` 3575 |
+| `-d scsi+cciss,N` names the SCSI pass-through itself and withholds the implicit SAT of a cciss device | `smartctl.8.in` 692, `dev_interface.cpp` 440–455 |
+
+What follows for the probe:
+
+- The IDs are positions in the list of devices that are present, not bay numbers. An ID at or beyond the end of the list is a failure that comes back at once, so a probe that reads upwards stops there.
+- A host with `smartpqi` is not covered by the one place where smartctl expects `cciss,N`, and neither a source nor a recording shows that the pass-through works there. Such a host is named and not probed (Q-R2).
+- `--nocheck=standby` applies to every `cciss` form: a drive behind the controller can be a SATA or a SAS drive, smartctl implements the check for both, and the tool records such an answer as standby (FR-203).
+- `scsi+cciss,N` and `scsi+megaraid,N` are types the tool reads, and they address one drive behind the controller like the forms without the prefix.
+- The addition of 2026-10-16 says that the tool passes `--nocheck=standby` only for ATA types; that held then and no longer holds for a `cciss` device (ADR 0032).
+- Still not recorded: how an empty bay answers in the tool's own call, and how the device scan lists the logical volume of such a controller.
+
 ## Sources
 
 - smartmontools at `RELEASE_7_4` and `RELEASE_7_5`: <https://github.com/smartmontools/smartmontools/tree/RELEASE_7_5/smartmontools>
+- Linux kernel, the name `H:C:T:L` of a SCSI device and the class device of `sgN`: <https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/scsi/scsi_sysfs.c> and <https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/scsi/sg.c>
 - smartmontools issue 313: <https://github.com/smartmontools/smartmontools/issues/313>
 - TrueNAS forum, "9600-24i mpi3mr error on passthrough" (Enhanced HBA Personality): <https://forums.truenas.com/t/9600-24i-mpi3mr-error-on-passthrough/42408>
 - libblockdev: <https://github.com/storaged-project/libblockdev/tree/3c5433aba8c87b83a590d9363bf0fc71c205e08a/tests/smart_dumps>

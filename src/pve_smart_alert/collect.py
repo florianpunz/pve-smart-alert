@@ -32,18 +32,24 @@ from pve_smart_alert.process import ProcessRunner, run_with_timeout
 NO_DATA_BITS: Final = 0b11
 FAILPOWER: Final = 0b10
 
-# What smartctl writes when `--nocheck=standby` skips a sleeping ATA drive, in
-# 7.4 and 7.5 (ataprint.cpp): an information message and the exit status of
-# FAILPOWER. 7.5 adds `power_mode` to the JSON.
+# What smartctl writes when `--nocheck=standby` ends the call before the data,
+# in 7.4 and 7.5: an information message that names the power mode and the
+# exit status of FAILPOWER, for ATA (ataprint.cpp) and for SCSI
+# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA.
 STANDBY_MESSAGE: Final = re.compile(r"Device is in (\S+) mode")
 
 # The major version of the JSON format this tool reads (ADR 0004).
 JSON_FORMAT_MAJOR: Final = 1
 
-# The device types that reach an ATA drive, for which the standby check
-# applies (ADR 0004): `ata`, the SCSI to ATA translation `sat` with its
-# variants such as `sat+megaraid,N`, and the USB bridges.
-_ATA_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
+# The device types for which the tool passes `--nocheck=standby` (FR-203,
+# ADR 0004): `ata`, the SCSI to ATA translation `sat` with its variants such as
+# `sat+megaraid,N`, and the USB bridges.
+_STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
+
+# The `cciss,N` forms, which get the standby check whatever their protocol says:
+# a drive behind an HPE Smart Array controller can be a SATA or a SAS drive, and
+# smartctl implements the power mode check for both (ADR 0032).
+_CCISS_TYPES: Final = re.compile(r"(?:sat\+|scsi\+)?cciss,[0-9]+")
 
 
 class Status(StrEnum):
@@ -78,15 +84,21 @@ class Collected:
         return version_of(self.document)
 
 
-def is_ata(device_type: str, protocol: str | None = None) -> bool:
-    """Whether a drive is reached as ATA, so that the standby check applies.
+def checks_standby(device_type: str, protocol: str | None = None) -> bool:
+    """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
-    The protocol of the device scan decides where it is known; for a manual
-    device the type does.
+    The option is `--nocheck=standby`, and a call that ends because of it is
+    recorded as standby, not as unreadable (ADR 0004). A `cciss,N` device is
+    included whatever its protocol says, because its drive can be a SAS drive
+    and smartctl checks the power mode for SCSI as well (ADR 0032). For every
+    other type the protocol of the device scan decides where it is known, and
+    for a manual device the type does.
     """
+    if _CCISS_TYPES.fullmatch(device_type) is not None:
+        return True
     if protocol is not None:
         return protocol == "ATA"
-    return _ATA_TYPES.fullmatch(device_type) is not None
+    return _STANDBY_TYPES.fullmatch(device_type) is not None
 
 
 def drive_command(
@@ -99,7 +111,7 @@ def drive_command(
     """Return the command line for one drive (ADR 0004)."""
     detail = "--xall" if settings.detail is Detail.EXTENDED else "--all"
     command = [str(settings.path), "--json=c", detail, f"--device={device_type}"]
-    if is_ata(device_type, protocol):
+    if checks_standby(device_type, protocol):
         command.append("--nocheck=standby")
     command.append(name)
     return command

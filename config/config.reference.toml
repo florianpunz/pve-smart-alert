@@ -70,6 +70,14 @@ timeout = "30s"
 detail = "extended"
 
 [discovery]
+# Whether the drives behind an HPE Smart Array controller are found by probing
+# `cciss,N` on the SCSI generic node of the controller (FR-103, ADR 0032).
+# The probe is experimental in version 1: it runs only on hosts with the driver
+# hpsa, reads the device IDs from 0 upwards and stops after 3 in a row that
+# answer nothing. A controller with the driver smartpqi is named by `scan` and
+# `doctor` and is not probed; its drives can be added as [[discovery.device]].
+probe_cciss = true
+
 # Devices that the scan of smartctl does not find, each with its device name
 # and its smartctl device type (FR-104). There are none by default. One entry
 # looks like this:

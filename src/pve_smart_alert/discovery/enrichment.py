@@ -12,7 +12,9 @@ A drive behind a RAID controller, read with a pass-through type such as
 `sat+megaraid,14` on `/dev/bus/6`, is not a block device of the host: what
 lsblk says about the device node is about the controller or a logical
 volume, not about the drive. Its location is the controller, with the driver
-of its SCSI host, and the device ID of the type (ADR 0028).
+of its SCSI host, and the device ID of the type (ADR 0028). The same holds for
+`cciss,N` on `/dev/sgN`, where the driver is the one of the SCSI host the node
+belongs to (ADR 0032).
 
 The volume group of a drive is read from the device-mapper names of its LVM
 devices, as Research 06 verified against `pvs` on the test cluster: the name
@@ -56,6 +58,10 @@ _NVME_CONTROLLER: Final = re.compile(r"nvme[0-9]+")
 # H with a MegaRAID controller. The pass-through types that address one drive
 # behind it are read by `pass_through_id` of the model.
 _SCSI_HOST_NODE: Final = re.compile(r"/dev/bus/([0-9]+)")
+# A SCSI generic node, `/dev/sg1`, which is where the probe of an HPE Smart
+# Array controller reads (ADR 0032). Its entry in the class directory is
+# `sg1`.
+_SG_NODE: Final = re.compile(r"(?:/dev/)?sg([0-9]+)")
 _VOLUME_GROUP: Final = re.compile(r"((?:[^-]|--)+)-")
 
 # The longest driver name that is kept. Kernel drivers have short names; the
@@ -189,6 +195,48 @@ def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
     return sanitize_field_value(text, limit=MAX_DRIVER_NAME) or None
 
 
+def scsi_host_of_sg(node: int | str, paths: HostPaths = HOST) -> int | None:
+    """Return the SCSI host of a SCSI generic node, or `None`.
+
+    The kernel names a SCSI device `H:C:T:L`, and the link
+    `/sys/class/scsi_generic/sgN/device` points at it, so its last part names
+    the host. smartctl derives the host of a block device the same way, by
+    cutting the name at the first colon (`os_linux.cpp`,
+    `is_hpsa_in_raid_mode`, 7.5 lines 3363 to 3414).
+    """
+    link = paths.sysfs / "class" / "scsi_generic" / f"sg{node}" / "device"
+    try:
+        name = link.resolve().name
+    except OSError:
+        return None
+    host, _, _ = name.partition(":")
+    return int(host) if host.isdigit() else None
+
+
+def sg_node_of_host(host: int, paths: HostPaths = HOST) -> str | None:
+    """Return the device node `/dev/sgN` of a SCSI host, or `None`.
+
+    The lowest number wins, so that the choice is the same within a run and as
+    stable as the numbering of the nodes itself; the identity of a drive does
+    not depend on it (FR-105). Any node of the controller reaches the same
+    controller: the pass-through of `cciss,N` is an ioctl that looks the drive
+    up in the device list of the controller, and the node only has to belong to
+    it (ADR 0032).
+    """
+    directory = paths.sysfs / "class" / "scsi_generic"
+    try:
+        entries = [entry.name for entry in directory.iterdir()]
+    except OSError:
+        return None
+    found: list[tuple[int, str]] = []
+    for entry in entries:
+        match = _SG_NODE.fullmatch(entry)
+        if match is None or scsi_host_of_sg(match.group(1), paths) != host:
+            continue
+        found.append((int(match.group(1)), f"/dev/{entry}"))
+    return min(found)[1] if found else None
+
+
 def is_remote(details: Details, name: str) -> bool:
     """Whether a device is reached over a network transport (FR-107)."""
     transport = details.location.transport
@@ -290,10 +338,17 @@ def _links(paths: HostPaths, kind: str, disk: Mapping[str, object]) -> Iterator[
 def _controller(name: str, paths: HostPaths) -> str:
     """Return the controller of a drive read through `name`: the device node and its driver.
 
-    On `/dev/bus/H` the driver is the one of SCSI host H, where sysfs has it.
+    On `/dev/bus/H` the driver is the one of SCSI host H, where sysfs has it;
+    on `/dev/sgN`, through which `cciss,N` reads, it is the driver of the SCSI
+    host the node belongs to (ADR 0032).
     """
     node = _SCSI_HOST_NODE.fullmatch(name)
-    driver = scsi_host_driver(node.group(1), paths) if node is not None else None
+    number: int | str | None = node.group(1) if node is not None else None
+    if number is None:
+        sg = _SG_NODE.fullmatch(name)
+        if sg is not None:
+            number = scsi_host_of_sg(sg.group(1), paths)
+    driver = scsi_host_driver(number, paths) if number is not None else None
     return f"{name} ({driver})" if driver is not None else name
 
 

@@ -7,6 +7,7 @@ answered from the same recording. Changes for one case are made on a copy.
 
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 from collections.abc import Mapping, Sequence
@@ -27,7 +28,18 @@ from pve_smart_alert.process import ProcessResult, run_with_timeout
 TESTS: Final = Path(__file__).resolve().parent.parent
 FAKE: Final = TESTS / "fake-smartctl"
 RECORDINGS: Final = TESTS / "fixtures" / "smartctl" / "direct"
+ALL_RECORDINGS: Final = TESTS / "fixtures" / "smartctl"
 LSBLK: Final = Path("/test/lsblk")
+
+#: The SCSI generic node through which the synthetic HPE probe reads
+#: (ADR 0032).
+HPE_NODE: Final = "/dev/sg1"
+
+#: The two devices of the synthetic HPE recording, taken from the recording of
+#: the maintainer's TrueNAS host: a SATA SSD and a SAS hard disk, so that the
+#: probe is tested on both protocols (ADR 0016, ADR 0032).
+HPE_SATA: Final = ALL_RECORDINGS / "hba" / "maintainer-truenas" / "sdd.json"
+HPE_SAS: Final = ALL_RECORDINGS / "hba" / "maintainer-truenas" / "sdc.json"
 
 
 class Host:
@@ -126,6 +138,10 @@ class Host:
         """Give the host these SCSI hosts in its sysfs, such as `TRUENAS_SCSI_HOSTS`."""
         write_scsi_hosts(self.paths.sysfs, drivers)
 
+    def sg_nodes(self, nodes: Mapping[int, int]) -> None:
+        """Give the host these SCSI generic nodes, such as `{1: 0}` for `/dev/sg1`."""
+        write_sg_nodes(self.paths.sysfs, nodes)
+
     def break_scsi_hosts(self) -> None:
         """Make /sys/class/scsi_host unreadable: a file where the directory belongs."""
         directory = self.paths.sysfs / "class" / "scsi_host"
@@ -192,6 +208,82 @@ def write_scsi_hosts(sysfs: Path, drivers: Mapping[int, str]) -> None:
         path = sysfs / "class" / "scsi_host" / f"host{number}" / "proc_name"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"{driver}\n", encoding="utf-8")
+
+
+def write_sg_nodes(sysfs: Path, nodes: Mapping[int, int]) -> None:
+    """Write SCSI generic nodes into a sysfs tree, each with the SCSI host it belongs to.
+
+    `/sys/class/scsi_generic/sgN/device` is a link to the SCSI device, which
+    the kernel names `H:C:T:L`, and that name is how the tool finds the host
+    of a node (ADR 0032).
+    """
+    for node, host in nodes.items():
+        link = sysfs / "class" / "scsi_generic" / f"sg{node}" / "device"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(f"../../../devices/host{host}/target{host}:0:0/{host}:0:0:0")
+
+
+def write_hpe_recording(directory: Path) -> None:
+    """Write a synthetic recording of a host with an HPE Smart Array controller (ADR 0032).
+
+    Nothing of such a host was ever recorded (Research 08), so the two devices
+    are derived from the recording of the maintainer's TrueNAS host: the device
+    fields name the SCSI generic node and the type `cciss,N`, and the rest is
+    the output of the drive. `scan.json` lists no device, because what smartctl
+    makes of the logical volume of an HPE controller is not recorded either
+    (Q-R2). A device ID that the recording does not have is an empty bay: the
+    fake smartctl answers as smartctl does, with a failed open and exit
+    status 2.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    files: list[dict[str, object]] = []
+    for name, source, device_type, disk in (
+        ("cciss0.json", HPE_SATA, "cciss,0", 0),
+        ("cciss1.json", HPE_SAS, "cciss,1", 1),
+    ):
+        loaded = json.loads(source.read_text(encoding="utf-8"))
+        document = _pass_through(loaded, device_type, disk)
+        (directory / name).write_text(json.dumps(document, indent=2), encoding="utf-8")
+        files.append({"file": name, "device": HPE_NODE, "type": device_type, "exit_status": 0})
+
+    scan = {
+        "json_format_version": [1, 0],
+        "smartctl": {"version": [7, 5], "argv": ["smartctl", "--scan-open", "--json=c"]},
+        "devices": [],
+    }
+    (directory / "scan.json").write_text(json.dumps(scan, indent=2), encoding="utf-8")
+    recording = {
+        "origin": (
+            "Synthetic, written for slice 5 of milestone M6 (ADR 0032): two devices"
+            " of the recording of the maintainer's TrueNAS host, with the device"
+            " fields of a cciss,N read. No HPE Smart Array host was ever recorded"
+        ),
+        "license": "AGPL-3.0-or-later",
+        "node": "hpe1",
+        "collected": "synthetic",
+        "collected_with": "tests/unit/hosts.py",
+        "smartmontools": "7.5",
+        "controller": f"HPE Smart Array behind hpsa, read on {HPE_NODE} (synthetic)",
+        "files": [
+            {"file": "scan.json", "command": "smartctl --scan-open --json=c", "exit_status": 0},
+            *files,
+        ],
+    }
+    (directory / "recording.json").write_text(json.dumps(recording, indent=2), encoding="utf-8")
+
+
+def _pass_through(loaded: dict[str, object], device_type: str, disk: int) -> dict[str, object]:
+    """Return the output of one drive with the device fields of `cciss,N`."""
+    document = copy.deepcopy(loaded)
+    device = document["device"]
+    assert isinstance(device, dict)
+    device["name"] = HPE_NODE
+    device["type"] = "cciss"
+    device["info_name"] = f"{HPE_NODE} [cciss_disk_{disk:02d}]"
+    smartctl = document["smartctl"]
+    assert isinstance(smartctl, dict)
+    smartctl["argv"] = ["smartctl", "--xall", "--json=c", f"--device={device_type}", HPE_NODE]
+    return document
 
 
 # A host with identifiers in the form of real ones, made up for the tests.

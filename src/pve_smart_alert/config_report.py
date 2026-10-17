@@ -107,6 +107,9 @@ def _settings(config: Config, document: Mapping[str, object]) -> list[str]:
     lines.append(_line("device", devices or "[]", _origin(section, "device")))
     exclude = "; ".join(rule.describe() for rule in discovery.exclude)
     lines.append(_line("exclude", exclude or "[]", _origin(section, "exclude")))
+    lines.append(
+        _line("probe_cciss", _boolean(discovery.probe_cciss), _origin(section, "probe_cciss"))
+    )
     return lines
 
 

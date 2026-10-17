@@ -22,7 +22,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | --- | --- | --- |
 | FR-101 | The tool shall find all directly attached SATA, SAS and NVMe drives of the host without any per-drive configuration. | T, A |
 | FR-102 | The tool shall find physical drives behind MegaRAID-family controllers as reported by the device scan of smartctl, without configuration. | T |
-| FR-103 | The tool shall be able to find physical drives behind HPE Smart Array controllers by probing. This function is experimental in version 1 and can be switched off. | T |
+| FR-103 | The tool shall be able to find physical drives behind HPE Smart Array controllers by probing, where smartctl supports the pass-through, and shall name a controller that it does not probe. This function is experimental in version 1 and can be switched off. | T |
 | FR-104 | The tool shall accept manually configured devices, each given as a device name and a smartctl device type. | T |
 | FR-105 | The tool shall identify a drive by model and serial number. Device node, device type and controller device ID shall not be part of the identity. | T |
 | FR-106 | A drive that is reachable through more than one path shall be evaluated and reported once per run. | T |
@@ -103,7 +103,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | --- | --- | --- |
 | FR-601 | `pve-smart-alert check` shall perform one run. With `--dry-run` it shall print the planned notifications, change no state and send nothing. | T |
 | FR-602 | `pve-smart-alert status` shall show, from the stored state, every drive with its active conditions and the time and result of the last run. With `--json` the output shall be machine-readable. | T |
-| FR-603 | `pve-smart-alert doctor` shall check and report: smartctl presence and version, Proxmox VE version, the notify bridge, the template files, the mail command, the timer state, the configuration, the state file, unsupported controllers, whether smartd is active and mailing, and whether the notification matchers route every severity of the tool and the fallback mail to root to an enabled target ([ADR 0020](docs/adr/0020-routing-check.md), [ADR 0022](docs/adr/0022-fallback-routing-check.md)). | T, A |
+| FR-603 | `pve-smart-alert doctor` shall check and report: smartctl presence and version, Proxmox VE version, the notify bridge, the template files, the mail command, the timer state, the configuration, the state file, unsupported controllers, the probe for HPE Smart Array controllers, whether smartd is active and mailing, and whether the notification matchers route every severity of the tool and the fallback mail to root to an enabled target ([ADR 0020](docs/adr/0020-routing-check.md), [ADR 0022](docs/adr/0022-fallback-routing-check.md)). | T, A |
 | FR-604 | `pve-smart-alert dump-fixture` shall record scan and drive output for all or selected drives with serial numbers, WWNs and other identifying values replaced by stable placeholders. | T |
 | FR-605 | Two runs shall never execute at the same time. A second invocation shall exit with a message. | T |
 | FR-606 | Each run shall log one summary line with the number of drives evaluated, skipped and failed, the number of active conditions per severity, and the number of notifications sent. | T |

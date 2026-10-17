@@ -308,6 +308,40 @@ def test_manual_devices_must_be_tables(tmp_path: Path) -> None:
     assert "must be a list of tables, such as [[discovery.device]]" in str(error.value)
 
 
+# probe_cciss (FR-103, ADR 0032)
+
+
+def test_the_hpe_probe_is_on_by_default() -> None:
+    # FR-103: the function works in version 1 and can be switched off.
+    assert Config().discovery.probe_cciss is True
+
+
+def test_the_hpe_probe_can_be_switched_off(tmp_path: Path) -> None:
+    path = write_config(tmp_path, "[discovery]\nprobe_cciss = false\n")
+
+    assert load_config(path).discovery.probe_cciss is False
+
+
+def test_the_hpe_probe_takes_a_boolean(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[discovery]\nprobe_cciss = "no"\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.key == "discovery.probe_cciss"
+
+
+def test_the_hpe_probe_survives_a_round_trip(tmp_path: Path) -> None:
+    path = write_config(tmp_path, "[discovery]\nprobe_cciss = false\n")
+    last_good = tmp_path / "last-good-config.json"
+    save_last_good(load_config(path), last_good)
+
+    loaded = load_last_good(last_good)
+
+    assert loaded is not None
+    assert loaded.discovery.probe_cciss is False
+
+
 def test_the_exclude_rules_are_read(tmp_path: Path) -> None:
     path = write_config(
         tmp_path,

@@ -153,7 +153,14 @@ def test_a_drive_behind_a_raid_controller_names_controller_and_device_id() -> No
 
 @pytest.mark.parametrize(
     ("device_type", "device_id"),
-    [("megaraid,8", "8"), ("sat+megaraid,14", "14"), ("megaraid,0", "0")],
+    [
+        ("megaraid,8", "8"),
+        ("sat+megaraid,14", "14"),
+        ("megaraid,0", "0"),
+        # The drives behind an HPE Smart Array controller (ADR 0032).
+        ("cciss,0", "0"),
+        ("cciss,3", "3"),
+    ],
 )
 def test_the_device_id_is_the_one_of_the_pass_through_type(
     device_type: str, device_id: str
@@ -165,13 +172,30 @@ def test_the_device_id_is_the_one_of_the_pass_through_type(
     assert fields[FIELD_DEVICE_ID] == device_id
 
 
-@pytest.mark.parametrize("device_type", ["sat", "nvme", "scsi", "auto", "ata", "megaraid"])
+@pytest.mark.parametrize("device_type", ["sat", "nvme", "scsi", "auto", "ata", "megaraid", "cciss"])
 def test_a_drive_read_directly_carries_no_device_id(device_type: str) -> None:
     drive = replace(SSD, type=device_type)
 
     fields = render(drive_message(REALLOCATED, drive=drive), CONTEXT).fields_for()
 
     assert FIELD_DEVICE_ID not in fields
+
+
+def test_a_drive_behind_an_hpe_controller_names_controller_and_device_id() -> None:
+    # FR-507, ADR 0032: a drive read as `cciss,0` on the controller's node.
+    drive = replace(
+        BEHIND_CONTROLLER,
+        name="/dev/sg1",
+        type="cciss,0",
+        location="/dev/sg1 (hpsa), device 0",
+    )
+
+    notification = render(drive_message(GROWN_DEFECTS, drive=drive), CONTEXT)
+
+    assert "Location:   /dev/sg1 (hpsa), device 0\n" in notification.body
+    fields = notification.fields_for()
+    assert fields[FIELD_DEVICE] == "/dev/sg1"
+    assert fields[FIELD_DEVICE_ID] == "0"
 
 
 def test_a_missing_drive_behind_a_raid_controller_keeps_its_last_device_id() -> None:
