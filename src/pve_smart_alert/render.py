@@ -666,8 +666,8 @@ def _data(planned: Planned) -> dict[str, object]:
     """Return the structured data for templates that an administrator overrides (ADR 0008)."""
     drives = [
         {
-            "device": message.drive.name,
-            "type": message.drive.type,
+            "device": _clean(message.drive.name),
+            "type": _clean(message.drive.type),
             "model": _clean(message.drive.model or ""),
             "serial": _clean(message.drive.serial or ""),
             "wwn": message.drive.wwn,
@@ -684,7 +684,7 @@ def _data(planned: Planned) -> dict[str, object]:
         "severity": planned.severity.value,
         "drives": drives,
         "findings": [
-            {**_item_data(item), "device": message.drive.name}
+            {**_item_data(item), "device": _clean(message.drive.name)}
             for message in planned.drives
             for item in message.items
         ]

@@ -26,13 +26,14 @@ import contextlib
 import json
 import os
 import tempfile
+import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
-from pve_smart_alert.model import DriveClass, DriveIdentity, Severity
+from pve_smart_alert.model import NOT_PRINTED, DriveClass, DriveIdentity, Severity
 
 __all__ = [
     "MIGRATIONS",
@@ -295,10 +296,7 @@ def save_state(state: State, path: Path) -> None:
     file as it was and removes the temporary one. Raises `OSError`.
     """
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # Every character outside ASCII is escaped: the strings of drives are kept
-    # as they came (ADR 0005), and escaped they put no control character on a
-    # terminal that shows the file (ARCHITECTURE.md section 14).
-    text = json.dumps(state_to_json(state), indent=2, ensure_ascii=True) + "\n"
+    text = _escaped(json.dumps(state_to_json(state), indent=2, ensure_ascii=False)) + "\n"
     descriptor, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
     )
@@ -380,6 +378,25 @@ def state_to_json(state: State) -> dict[str, object]:
             "last_notified": _time_or_none(state.tool.last_notified),
         },
     }
+
+
+def _escaped(text: str) -> str:
+    """Return JSON text with the characters that are not printed as escapes.
+
+    The strings of drives are kept as they came (ADR 0005); escaped, the
+    characters that `without_controls` replaces put nothing on a terminal
+    that shows the file, and the rest stays readable with `cat` (ADR 0007,
+    ARCHITECTURE.md section 14). `json.dumps` escapes the C0 controls inside
+    a string already, so one below DEL is the whitespace between the values;
+    outside its strings JSON is ASCII, and an escape means the same character
+    inside a string, so the file reads back as it was written.
+    """
+    return "".join(
+        json.dumps(character)[1:-1]
+        if character >= "\x7f" and unicodedata.category(character) in NOT_PRINTED
+        else character
+        for character in text
+    )
 
 
 def _set_aside(path: Path, reason: str, *, now: datetime) -> Loaded:

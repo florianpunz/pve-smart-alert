@@ -48,8 +48,9 @@ class MailTransport:
         try:
             message = build_message(notification, recipient=self.recipient)
         except ValueError as failure:
-            # A subject that a header cannot carry; the renderer does not write
-            # one, so this is a defect, reported instead of ending the run.
+            # A subject that a header cannot carry, or a text that cannot be
+            # encoded; the renderer writes neither, so this is a defect,
+            # reported instead of ending the run.
             return self._outcome(
                 delivered=False, started=started, error=f"the mail could not be built: {failure}"
             )

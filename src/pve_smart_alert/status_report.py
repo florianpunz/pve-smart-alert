@@ -60,7 +60,8 @@ def render(state: State, *, path: Path) -> list[str]:
         lines += ["", "Skipped devices:"]
         for key, skipped in sorted(state.skipped.items()):
             name, _, device_type = key.partition("|")
-            detail = f" ({skipped.detail})" if skipped.detail else ""
+            cleaned = printable(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""
+            detail = f" ({cleaned})" if cleaned else ""
             lines.append(
                 f"  {name} [{device_type}]: {skipped.reason}{detail}, since"
                 f" {format_time(skipped.since)}"
