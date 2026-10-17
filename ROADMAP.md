@@ -301,7 +301,7 @@ Goal: a release that others can install with confidence.
 
 Deliverables:
 
-- User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page. Drafted on the branch `feature/user-documentation` (2026-10-17): [docs/troubleshooting.md](docs/troubleshooting.md) and the manual page source `man/pve-smart-alert.8`, which the package does not install yet. Installation and the configuration reference stay in the README and in `config/config.reference.toml` until the maintainer decides how the user documentation is split.
+- User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page.
 - Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data.
 - Review of all default thresholds and policy defaults against the experience from the maintainer's cluster since M5.
 - All requirements checked off against tests or acceptance steps.
@@ -321,6 +321,8 @@ State: started on 2026-10-17, nothing of it merged yet.
 - Still open for the security review: the other points of [ARCHITECTURE.md](ARCHITECTURE.md) section 14; how the notification system renders the data of a message (Q-N11); a cut value carries no mark; a model or serial number of control characters only is left out of the fields; a selector copied from `scan` misses a drive whose model holds a removed character, because the identity keeps it (ADR 0005).
 - Built, not merged: [docs/traceability.md](docs/traceability.md), a dated snapshot that relates every requirement to its tests and acceptance steps and lists the requirements that no test covers and those whose acceptance step ROADMAP does not have.
 - Still open for result 2: a test or an acceptance step for each requirement on those two lists, and a check of the table row by row when it is made again for the release.
+- Built, not merged: [docs/troubleshooting.md](docs/troubleshooting.md) and the source of the manual page, `man/pve-smart-alert.8`, which the package does not install yet; with them the package installs the reference configuration uncompressed, at the path the tool names.
+- Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own, and whether the package installs the manual page; the notice `tool.unsupported_controller` names its table and key on one line, which is not valid TOML, in the wording that [ADR 0031](docs/adr/0031-switching-tool-conditions-off.md) prescribes; while the file is invalid, `config show` shows the values of the last good configuration with origins taken from the invalid file.
 
 ## After 1.0
 
