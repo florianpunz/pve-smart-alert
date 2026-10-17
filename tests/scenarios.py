@@ -441,7 +441,12 @@ def manual_host() -> Edit:
             documents[file] = document
             files.append(_recording_entry(file, document, exit_status=0, device_type=device_type))
             if not manual:
-                devices.append(_scan_entry(document, device_type))
+                # The scan lists a drive of SSSRAID without the `sat,auto` of a
+                # read, with protocol SCSI and the `info_name` of its device
+                # class (os_linux.cpp of 7.5).
+                listed = _scan_entry(document, device_type)
+                listed.update(info_name=_info_name(name, device_type), protocol="SCSI")
+                devices.append(listed)
         recording = documents["recording.json"]
         recording["origin"] = (
             "Derived for the scenario manual-pass-through of tests/scenarios.py: the"

@@ -22,7 +22,7 @@
 
 ## Planned features
 
-- **Automatic discovery:** finds all SATA, SAS and NVMe drives, including drives behind MegaRAID and SSSRAID controllers and, experimentally, HPE Smart Array; the drives behind other RAID controllers that smartctl can reach are added by hand ([docs/hardware-support.md](docs/hardware-support.md))
+- **Automatic discovery:** finds all SATA, SAS and NVMe drives, including drives behind MegaRAID controllers and, experimentally, SSSRAID and HPE Smart Array; the drives behind other RAID controllers that smartctl can reach are added by hand ([docs/hardware-support.md](docs/hardware-support.md))
 - **Predictive thresholds:** judges drives by thresholds that predict failure instead of merely confirming it
 - **No repeat alerts:** reports a problem once, and again only when it gets worse or a reminder is due
 - **Real severities:** sends messages through the targets and matchers configured under Datacenter → Notifications

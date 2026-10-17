@@ -51,8 +51,10 @@ _PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+|scsi\+)?(megaraid|cciss),([0-9
 # that is not the drive: the two above, and the other controller types of
 # smartctl(8) of 7.4 and 7.5 (Research 04, ADR 0034): `3ware,N`, `areca,N`
 # and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`, and
-# `sssraid,E,S`. Before any of them smartctl takes `scsi+` and `sat` with its
-# options, such as `sat,auto+` (dev_interface.cpp of 7.5). The node can be a
+# `sssraid,E,S`. Before `megaraid`, `cciss`, `aacraid` and `sssraid` smartctl
+# takes `scsi+` and `sat` with its options, such as `sat,auto+`, and refuses
+# them before the ATA types `3ware`, `areca` and `hpt` (dev_interface.cpp of
+# 7.5); the pattern takes them before every type. The node can be a
 # logical volume, such as /dev/sda for `aacraid` and `hpt`, so what the host
 # tells about it is not about the drive.
 BEHIND_CONTROLLER_TYPE: Final = re.compile(
