@@ -20,7 +20,9 @@ and no source or recording shows that the pass-through works there, so such
 a host is named in `scan` and `doctor` and is not probed (Q-R2).
 
 The probe is experimental in version 1 and is switched off with
-`probe_cciss = false` in `[discovery]`.
+`probe_cciss = false` in `[discovery]`. It reads with the call of every other
+drive, `--nocheck=standby` included, so that a drive in standby is not woken
+(FR-203).
 """
 
 from __future__ import annotations
@@ -199,11 +201,16 @@ def _read_devices(
         if on_device is not None:
             on_device(candidate)
         collected = collect_drive(node, candidate.type, settings=smartctl, runner=runner)
-        if collected.status is not Status.OK:
+        if collected.status is Status.UNREADABLE:
+            # Either an empty bay or a drive that answers nothing, which cannot
+            # be told apart here: both count as a failure (ADR 0032).
             failures += 1
             if failures >= CONSECUTIVE_FAILURES:
                 break
             continue
+        # A drive that answered, in standby included: it exists, so the probe
+        # reads on, and discovery keeps the previous state of a sleeping drive
+        # (FR-203).
         failures = 0
         answered.append(device_id)
         readings.append((candidate, collected))

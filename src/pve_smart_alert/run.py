@@ -330,6 +330,7 @@ def _observe(
         tool_not_evaluated=not_evaluated,
         state_reset=state_reset,
         presence_known=presence_known,
+        probe_off=not config.discovery.probe_cciss,
     )
     return observation, findings
 

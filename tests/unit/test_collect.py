@@ -14,7 +14,7 @@ from typing import Final
 
 import pytest
 
-from pve_smart_alert.collect import Status, collect_drive, drive_command, is_ata, judge
+from pve_smart_alert.collect import Status, checks_standby, collect_drive, drive_command, judge
 from pve_smart_alert.config import Detail, SmartctlSettings
 
 TESTS: Final = Path(__file__).resolve().parent.parent
@@ -96,6 +96,37 @@ def test_a_sleeping_drive_is_not_read(recording: Path) -> None:
     assert collected.document is None
 
 
+def test_a_standby_exit_is_standby_for_every_device_type() -> None:
+    # smartctl writes the same message for ATA and for SCSI (ataprint.cpp and
+    # scsiprint.cpp in 7.5), so a call that ends because of the standby check
+    # is standby for every type and never unreadable (FR-203, ADR 0032).
+    for device_type in ("sat", "cciss,0", "sat+cciss,0", "scsi+cciss,3"):
+        command = [
+            str(FAKE),
+            "--json=c",
+            "--xall",
+            f"--device={device_type}",
+            "--nocheck=standby",
+            "/dev/sg1",
+        ]
+        document = {
+            "json_format_version": [1, 0],
+            "smartctl": {
+                "version": [7, 5],
+                "argv": command,
+                "messages": [
+                    {"string": "Device is in STANDBY mode, exit(2)", "severity": "information"}
+                ],
+                "exit_status": 2,
+            },
+        }
+
+        collected = judge(json.dumps(document), 2, command=command, duration=0.1)
+
+        assert collected.status is Status.STANDBY
+        assert collected.reason == "STANDBY"
+
+
 def test_a_drive_that_does_not_answer_is_ended(recording: Path) -> None:
     behave(recording, "sda.json", delay_seconds=30)
 
@@ -175,25 +206,31 @@ def test_another_json_format_is_unreadable() -> None:
 
 
 @pytest.mark.parametrize(
-    ("device_type", "ata"),
+    ("device_type", "standby"),
     [
         ("sat", True),
         ("ata", True),
         ("sat+megaraid,3", True),
         ("usbjmicron,0", True),
+        # A drive behind an HPE Smart Array controller, SATA or SAS (ADR 0032).
+        ("cciss,0", True),
+        ("sat+cciss,3", True),
+        ("scsi+cciss,3", True),
         ("nvme", False),
         ("scsi", False),
         ("megaraid,0", False),
+        ("scsi+megaraid,8", False),
         ("areca,2/1", False),
+        ("cciss", False),
     ],
 )
-def test_the_standby_check_applies_to_ata_drives(device_type: str, ata: bool) -> None:
-    assert is_ata(device_type) is ata
+def test_the_standby_check_applies_to_these_types(device_type: str, standby: bool) -> None:
+    assert checks_standby(device_type) is standby
 
 
 def test_the_protocol_of_the_scan_decides_over_the_type() -> None:
-    assert is_ata("scsi", "ATA") is True
-    assert is_ata("sat", "SCSI") is False
+    assert checks_standby("scsi", "ATA") is True
+    assert checks_standby("sat", "SCSI") is False
 
 
 def test_the_command_takes_name_and_type_as_found() -> None:
@@ -207,6 +244,24 @@ def test_the_command_takes_name_and_type_as_found() -> None:
         "--nocheck=standby",
         "/dev/bus/0",
     ]
+
+
+def test_a_cciss_drive_is_read_with_the_standby_check() -> None:
+    # A drive behind an HPE Smart Array controller can be a SATA or a SAS
+    # drive, and smartctl checks the power mode for both, so a sleeping drive
+    # is not woken (FR-203, ADR 0032). `scsi+` is the documented way to switch
+    # the implicit SAT off.
+    for device_type in ("cciss,0", "sat+cciss,0", "scsi+cciss,3"):
+        command = drive_command("/dev/sg1", device_type, settings=settings())
+
+        assert command == [
+            str(FAKE),
+            "--json=c",
+            "--xall",
+            f"--device={device_type}",
+            "--nocheck=standby",
+            "/dev/sg1",
+        ]
 
 
 def test_a_sas_drive_behind_megaraid_is_read_without_the_standby_check() -> None:

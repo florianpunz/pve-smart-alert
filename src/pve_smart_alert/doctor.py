@@ -594,10 +594,11 @@ def check_probe(settings: DiscoverySettings | None = None, paths: HostPaths = HO
     """Name the HPE Smart Array controllers and whether the probe reaches them (FR-103).
 
     Nothing is read here, so that `doctor` stays a picture of the host: the
-    probe itself runs in `scan` and in a check. A controller the probe does not
-    reach is a warning, because its drives are then found only as manual
-    entries; a probe that the configuration switched off is no warning,
-    because the administrator asked for it (ADR 0032).
+    probe itself runs in `scan` and in a check. A controller that the probe
+    cannot reach is a warning, because its drives are then found only as manual
+    entries. A probe that the configuration switched off is no warning, because
+    the administrator asked for it — unless the reason is the driver, which the
+    switch cannot change: a `smartpqi` host stays a warning (ADR 0032).
     """
     scsi = read_scsi_hosts(paths)
     if scsi.error is not None:

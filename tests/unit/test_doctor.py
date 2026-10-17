@@ -1060,6 +1060,17 @@ def test_a_switched_off_probe_is_no_warning(tmp_path: Path) -> None:
     assert "the probe is switched off with probe_cciss = false" in result.detail
 
 
+def test_a_smartpqi_controller_keeps_its_warning_when_the_probe_is_off(
+    tmp_path: Path,
+) -> None:
+    # The driver is the reason and the switch cannot change it: switching the
+    # probe on would not help either (ADR 0032).
+    result = probe_on(tmp_path, {1: "smartpqi"}, nodes={1: 1}, probe_cciss=False)
+
+    assert result.status is Status.WARN
+    assert "smartctl supports -d cciss,N only for the driver hpsa" in result.detail
+
+
 def test_without_sysfs_the_probe_line_is_skipped(tmp_path: Path) -> None:
     directory = tmp_path / "sys" / "class" / "scsi_host"
     directory.parent.mkdir(parents=True)

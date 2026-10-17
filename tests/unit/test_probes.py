@@ -16,10 +16,13 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from hosts import HPE_NODE, Host, write_hpe_recording, write_scsi_hosts, write_sg_nodes
+from frame import RUN_INTERVAL, Clock, RecordingTransport
+from hosts import FAKE, HPE_NODE, Host, write_hpe_recording, write_scsi_hosts, write_sg_nodes
 
+from pve_smart_alert import cli
+from pve_smart_alert import config as config_module
 from pve_smart_alert.collect import Status
-from pve_smart_alert.config import ManualDevice, SmartctlSettings
+from pve_smart_alert.config import Config, ManualDevice, SmartctlSettings
 from pve_smart_alert.discovery import Discovery, Outcome, SkipReason, Source, discover
 from pve_smart_alert.discovery.controllers import read_scsi_hosts
 from pve_smart_alert.discovery.enrichment import HostPaths, scsi_host_of_sg, sg_node_of_host
@@ -34,9 +37,10 @@ from pve_smart_alert.discovery.probes import (
     hpe_controllers,
     probe_hpe,
 )
-from pve_smart_alert.model import Snapshot
+from pve_smart_alert.model import EventType, Notification, Snapshot
 from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.scan_report import render
+from pve_smart_alert.state import read_state
 
 # A document the probe only has to judge as usable; the parsers are not asked.
 _USABLE: Final = json.dumps(
@@ -252,24 +256,34 @@ def test_the_probe_hands_on_what_it_read(tmp_path: Path) -> None:
     assert collected.status is Status.OK
 
 
-def test_the_probe_passes_no_standby_check(tmp_path: Path) -> None:
-    # A cciss device can be a SAS or a SATA drive, and --nocheck=standby can
-    # end a SCSI call without data, so the probe does not pass it (ADR 0032).
+def test_the_probe_does_not_wake_a_sleeping_drive(tmp_path: Path) -> None:
+    # The probe passes --nocheck=standby like every other read: a drive behind
+    # the controller can be a SATA or a SAS drive, and smartctl checks the
+    # power mode for both (FR-203, ADR 0032).
     runner, _probing = probe_with(tmp_path, {0})
 
-    command = runner.calls[0]
-    assert "--nocheck=standby" not in command
-    assert command[-4:] == ["--json=c", "--xall", "--device=cciss,0", HPE_NODE]
+    assert runner.calls[0][-5:] == [
+        "--json=c",
+        "--xall",
+        "--device=cciss,0",
+        "--nocheck=standby",
+        HPE_NODE,
+    ]
 
 
 # The probe in a run of discovery
 
 
-def hpe_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Host:
-    """A host with an HPE Smart Array controller behind hpsa (ADR 0032)."""
+def hpe_recording(tmp_path: Path) -> Path:
+    """Write the synthetic recording of an HPE host and return its directory."""
     recording = tmp_path / "hpe"
     write_hpe_recording(recording)
-    host = Host(tmp_path, monkeypatch, recording)
+    return recording
+
+
+def hpe_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Host:
+    """A host with an HPE Smart Array controller behind hpsa (ADR 0032)."""
+    host = Host(tmp_path, monkeypatch, hpe_recording(tmp_path))
     host.scsi_hosts({0: "ahci", 1: "hpsa"})
     host.sg_nodes({1: 1})
     return host
@@ -313,6 +327,22 @@ def test_the_probe_finds_the_drives_behind_the_controller(
     assert [snapshot.access.protocol for snapshot in snapshots(discovery)] == ["ATA", "SCSI"]
 
 
+def test_a_sleeping_drive_keeps_the_probe_going(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A drive in standby answers without data and is handed on like a drive
+    # that was read: discovery keeps its previous state (FR-203), and its answer
+    # proves that the device ID exists, so the probe reads on (ADR 0032).
+    host = hpe_host(tmp_path, monkeypatch)
+    host.behave("cciss0.json", standby="STANDBY")
+
+    discovery = host.discover()
+
+    outcomes = {found.candidate.type: found.outcome for found in discovery.devices}
+    assert outcomes == {"cciss,0": Outcome.STANDBY, "cciss,1": Outcome.MONITORED}
+    assert read_types(host) == ["cciss,0", "cciss,1", "cciss,2", "cciss,3", "cciss,4"]
+
+
 def test_the_location_is_the_controller_and_the_device_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -352,6 +382,10 @@ def test_a_drive_the_scan_lists_is_kept_over_the_probe(
 
     discovery = host.discover()
 
+    # The devices of the scan are read first, then those of the probe
+    # (ARCHITECTURE.md section 5): the drive that is found twice is read twice
+    # in this run and kept once, through the scan.
+    assert read_types(host) == ["sat", "cciss,0", "cciss,1", "cciss,2", "cciss,3", "cciss,4"]
     monitored = [found for found in discovery.devices if found.outcome is Outcome.MONITORED]
     assert [found.candidate.name for found in monitored] == ["/dev/sda", HPE_NODE]
     duplicate = [found for found in discovery.devices if found.reason is SkipReason.DUPLICATE]
@@ -429,3 +463,96 @@ def test_scan_says_when_the_probe_is_switched_off(
     text = scan_text(host.discover(probe_cciss=False))
 
     assert "is not probed: the probe is switched off with probe_cciss = false" in text
+
+
+# A run of `check` with the probe switched between runs
+
+
+class CheckHost(Host):
+    """A host the command line runs `check` against, with a state of its own.
+
+    The scenario frame does the same for a scenario (`tests/unit/frame.py`);
+    this one is for the synthetic HPE recording, where the configuration is
+    switched between runs.
+    """
+
+    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: Path) -> None:
+        super().__init__(tmp_path, monkeypatch, source)
+        self.root = tmp_path
+        self.state_path = tmp_path / "state" / "state.json"
+        self.config_path = tmp_path / "config.toml"
+        self.clock = Clock()
+        self.transport = RecordingTransport()
+        self.monkeypatch = monkeypatch
+
+    def write_config(self, extra: str = "") -> None:
+        """Write the configuration the command line reads."""
+        self.config_path.write_text(f'[smartctl]\npath = "{FAKE}"\n{extra}', encoding="utf-8")
+
+    def install(self) -> None:
+        """Point the command line at this host, its state and a recording transport."""
+        patch = self.monkeypatch
+        self.write_config()
+        bridge = self.root / "notify-bridge"
+        bridge.write_text("#!/bin/sh\necho '{\"ok\": true}'\n", encoding="utf-8")
+        bridge.chmod(0o755)
+        patch.setattr(config_module, "CONFIG_PATH", self.config_path)
+        patch.setattr(cli, "CONFIG_PATH", self.config_path)
+        patch.setattr(cli, "LAST_GOOD_CONFIG_PATH", self.root / "state" / "last-good-config.json")
+        patch.setattr(cli, "STATE_PATH", self.state_path)
+        patch.setattr(cli, "LOCK_PATH", self.root / "run" / "lock")
+        patch.setattr(cli, "BRIDGE_PATH", bridge)
+        patch.setattr(cli, "COROSYNC_CONF_PATH", self.root / "corosync.conf")
+        patch.setattr(cli, "HOST_PATHS", self.paths)
+        patch.setattr(cli, "clock", self.clock)
+        patch.setattr(cli, "node_name", lambda: "hpe1")
+        patch.setattr(cli, "build_transport", lambda _settings: self.transport)
+        patch.setattr(cli, "_reading", lambda _candidate: None)
+        host = self
+
+        def discover_on_host(config: Config, **kwargs: object) -> Discovery:
+            kwargs.update(runner=host, paths=host.paths)
+            return discover(config, **kwargs)  # type: ignore[arg-type]
+
+        patch.setattr(cli, "discover", discover_on_host)
+
+    def run(self) -> list[Notification]:
+        """Run `check` once, a timer interval later, and return what it sent."""
+        self.clock.advance(RUN_INTERVAL)
+        cli.main(["check"])
+        return self.transport.take()
+
+
+def check_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CheckHost:
+    host = CheckHost(tmp_path, monkeypatch, hpe_recording(tmp_path))
+    host.scsi_hosts({0: "ahci", 1: "hpsa"})
+    host.sg_nodes({1: 1})
+    host.install()
+    return host
+
+
+def test_switching_the_probe_off_forgets_its_drives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = check_host(tmp_path, monkeypatch)
+
+    (first,) = host.run()
+    assert first.event is EventType.FIRST_RUN
+
+    # The probe is switched off: the drives that only it can find are forgotten
+    # silently, not reported as missing, however many runs pass (ADR 0032).
+    host.write_config("[discovery]\nprobe_cciss = false\n")
+    assert host.run() == []
+    assert host.run() == []
+    state, error = read_state(host.state_path, now=host.clock())
+    assert error is None
+    assert state is not None
+    assert state.drives == {}
+
+    # Switched on again they are new records: no recovery, no summary.
+    host.write_config()
+    assert host.run() == []
+    state, error = read_state(host.state_path, now=host.clock())
+    assert error is None
+    assert state is not None
+    assert len(state.drives) == 2

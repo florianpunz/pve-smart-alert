@@ -159,18 +159,6 @@ def discover(
     scan = run_scan(settings, runner=runner)
     block_devices = read_block_devices(paths, runner=runner)
     scsi_hosts = read_scsi_hosts(paths)
-    # The probe comes after the scan and before the manual entries
-    # (ARCHITECTURE.md section 5). It reads its devices itself, so that a drive
-    # it finds is read once in the run, and every answer goes through the same
-    # examination as the devices of the other sources.
-    probing = probe_hpe(
-        scsi_hosts.hosts,
-        probe_cciss=config.discovery.probe_cciss,
-        smartctl=settings,
-        paths=paths,
-        runner=runner,
-        on_device=on_device,
-    )
 
     found: list[Found] = []
     seen: set[tuple[str, str]] = set()
@@ -186,6 +174,19 @@ def discover(
                 on_device=on_device,
             )
         )
+    # The probe comes after the scan and before the manual entries
+    # (ARCHITECTURE.md section 5). It reads its devices itself, so that every
+    # answer goes through the same examination as the devices of the other
+    # sources; a drive that the scan found as well is read twice in the run and
+    # kept once, through the scan (FR-106).
+    probing = probe_hpe(
+        scsi_hosts.hosts,
+        probe_cciss=config.discovery.probe_cciss,
+        smartctl=settings,
+        paths=paths,
+        runner=runner,
+        on_device=on_device,
+    )
     for candidate, collected in probing.readings:
         seen.add((candidate.name, candidate.type))
         found.append(
