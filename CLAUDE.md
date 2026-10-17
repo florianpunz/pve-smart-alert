@@ -46,6 +46,7 @@ Current milestone: **M5**, packaging, timer and installation, built and waiting 
 | `docs/adr/README.md` | You want to know why something is the way it is |
 | `docs/research/` | You need the evidence and the sources behind a decision |
 | `docs/check-catalog.md` | You work on checks or thresholds |
+| `docs/traceability.md` | You check which test or acceptance step verifies a requirement; a snapshot, made again for the release |
 | `ROADMAP.md` | You need the state of a milestone or plan the next step |
 | `OPEN-QUESTIONS.md` | Something is unclear; it may already be listed there |
 | `CONTRIBUTING.md` | You set up the development tools, commit, or add a fixture |
