@@ -16,7 +16,7 @@
 > - **M4 (done):** state and notification policy
 > - **M5 (in progress):** packaging, timer and installation
 > - **M6 (built, waits for a decision and its runs on a cluster node):** SAS and hardware RAID on recorded data; [docs/hardware-support.md](docs/hardware-support.md) says how each controller was verified
-> - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
+> - **M7 (started):** hardening, documentation and version 1.0, the version meant for regular use
 >
 > </details>
 

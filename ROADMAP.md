@@ -14,7 +14,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M4: State and notification policy | Done |
 | M5: Packaging, timer and installation | Built, waits for the remaining checks on a real Proxmox VE host and the acceptance on the test cluster |
 | M6: SAS and hardware RAID on recorded data | Built: slice 6 waits for its pull request (#20) and ADR 0034 for the maintainer; results 2 and 3 on a cluster node are open |
-| M7 | Planned |
+| M7 | Started: first work on three deliverables in open pull requests |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -304,7 +304,7 @@ Deliverables:
 - User documentation: installation, configuration reference, check catalog, notification routing examples, coexistence with smartd, hardware support, troubleshooting, manual page.
 - Review of the security points in [ARCHITECTURE.md](ARCHITECTURE.md), including handling of hostile strings in drive data.
 - Review of all default thresholds and policy defaults against the experience from the maintainer's cluster since M5.
-- All requirements checked off against tests or acceptance steps. Started on the branch `feature/requirements-traceability` (2026-10-17): [docs/traceability.md](docs/traceability.md) maps every requirement to the tests that cite it, tests found by topic and its acceptance step, and lists the 12 requirements with neither a test nor a passed acceptance step.
+- All requirements checked off against tests or acceptance steps. Started on the branch `feature/requirements-traceability` (2026-10-17): [docs/traceability.md](docs/traceability.md) maps every requirement to the tests that cite it, the sections and modules that name it, tests found by topic and its acceptance step, and lists the requirements that no test covers.
 - Release notes, version 1.0.0.
 
 Result you can test:
