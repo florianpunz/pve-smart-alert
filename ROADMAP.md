@@ -263,7 +263,7 @@ Result you can test:
 3. The same for a SAS drive scenario.
 4. The hardware support table states for every family how it was verified.
 
-Open questions this milestone answers or narrows: Q-R1 to Q-R6.
+Open questions this milestone answers or narrows: Q-R1 to Q-R7 and Q-R9 to Q-R11.
 
 State: built; the runs of results 2 and 3 on a cluster node are open. The work was split into six slices, one branch `feature/m6-<slice>` each, built one after the other and merged into `main` by pull request:
 
