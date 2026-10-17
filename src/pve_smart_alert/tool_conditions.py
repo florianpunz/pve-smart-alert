@@ -7,6 +7,12 @@ after the tool: once, reminded per severity, and cleared with a recovery
 which of them hold. `tool.state_reset` is a one-time event that the
 planner mentions in the summary after the reset. `tool.unsupported_controller`
 is read from the SCSI hosts that discovery found in sysfs (ADR 0030).
+
+Every one of them can be switched off in the configuration like a check of a
+drive, with `[checks."<id>"] enabled = false` (FR-408, ADR 0031). The notice
+about a controller whose drives cannot be read names how many drives the run
+monitors on the host and how that notice is switched off for a controller in
+HBA mode, whose drives all appear in the scan.
 """
 
 from __future__ import annotations
@@ -61,6 +67,14 @@ class ToolCondition:
 
 #: The condition of the controllers whose drives cannot be read (ADR 0030).
 UNSUPPORTED_CONTROLLER: Final = "tool.unsupported_controller"
+
+# What the notice about such a controller says about switching it off (ADR
+# 0031): a controller in HBA mode, whose drives the scan lists, needs no
+# notice, and the configuration of the tool switches it off like a check.
+_SWITCH_OFF: Final = (
+    "; if the controller runs in HBA mode and its drives all appear in scan,"
+    ' switch this notice off with [checks."tool.unsupported_controller"] enabled = false'
+)
 
 #: Every condition of the tool, by its stable identifier.
 TOOL_CONDITIONS: Final[Mapping[str, ToolCondition]] = {
@@ -155,15 +169,39 @@ def transport_degraded(
     return finding("tool.transport_degraded", f"{reason}; {consequence}")
 
 
-def unsupported_controller(hosts: Sequence[ScsiHost]) -> Finding | None:
+def unsupported_controller(
+    hosts: Sequence[ScsiHost], monitored: int | None = None
+) -> Finding | None:
     """Return `tool.unsupported_controller` for SCSI hosts whose drives cannot be read.
 
     One condition for all of them, which names each host and its driver; it
-    clears with a recovery when the last of them is gone (ADR 0030).
+    clears with a recovery when the last of them is gone (ADR 0030). It also
+    names how many drives this run monitors on the host, as far as the run
+    could count them, and how the notice is switched off for a controller
+    whose drives all appear in the scan (ADR 0031).
     """
     if not hosts:
         return None
-    return finding(UNSUPPORTED_CONTROLLER, describe_all(hosts))
+    return finding(
+        UNSUPPORTED_CONTROLLER,
+        describe_all(hosts) + _monitored_text(monitored) + _SWITCH_OFF,
+    )
+
+
+def _monitored_text(monitored: int | None) -> str:
+    """Return what the notice says about the drives this run monitors (ADR 0031).
+
+    The count is left out where the run could not count, which is the case
+    without smartctl and with a failed device scan: then it did not look for
+    all drives, and it reports that situation as a condition of its own.
+    """
+    if monitored is None:
+        return ""
+    if monitored == 0:
+        return "; no drive is monitored on this host"
+    if monitored == 1:
+        return "; 1 drive is monitored on this host"
+    return f"; {monitored} drives are monitored on this host"
 
 
 def _bridge_problem(path: Path, runner: ProcessRunner) -> str | None:

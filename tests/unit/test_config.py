@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from pve_smart_alert.config import (
+    TOOL_CHECK_IDS,
     Config,
     ConfigError,
     Detail,
@@ -27,6 +28,7 @@ from pve_smart_alert.config import (
     load_effective,
     load_last_good,
     save_last_good,
+    tool_conditions_enabled,
 )
 from pve_smart_alert.model import DriveClass, DriveIdentity
 
@@ -437,6 +439,61 @@ def test_a_check_that_is_off_by_default_can_be_switched_on(tmp_path: Path) -> No
     assert config.checks["nvme.error_log"].enabled is True
 
 
+# The enabled state of a condition of the tool (ADR 0031, FR-408)
+
+
+def test_a_condition_of_the_tool_can_be_switched_off(tmp_path: Path) -> None:
+    path = write_config(tmp_path, '[checks."tool.unsupported_controller"]\nenabled = false\n')
+
+    config = load_config(path)
+
+    assert config.checks["tool.unsupported_controller"].enabled is False
+    assert "tool.unsupported_controller" not in tool_conditions_enabled(config)
+    assert "tool.scan_failed" in tool_conditions_enabled(config)
+
+
+def test_every_condition_of_the_tool_is_on_by_default() -> None:
+    assert tool_conditions_enabled(Config()) == TOOL_CHECK_IDS
+
+
+def test_a_condition_of_the_tool_written_as_its_default_is_dropped(tmp_path: Path) -> None:
+    # The reference lists every condition with `enabled = true`, and loading it
+    # must change nothing (ADR 0011).
+    path = write_config(tmp_path, '[checks."tool.state_reset"]\nenabled = true\n')
+
+    config = load_config(path)
+
+    assert config.checks == {}
+    assert tool_conditions_enabled(config) == TOOL_CHECK_IDS
+
+
+def test_a_condition_of_the_tool_takes_no_threshold(tmp_path: Path) -> None:
+    # Its severity is fixed, so a threshold would silently do nothing.
+    path = write_config(tmp_path, '[checks."tool.scan_failed"]\nwarning = 3\n')
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert 'a condition of the tool accepts only "enabled"' in str(error.value)
+    assert error.value.key == 'checks."tool.scan_failed".warning'
+
+
+def test_a_condition_of_the_tool_cannot_be_set_for_one_drive(tmp_path: Path) -> None:
+    # It is about the host, not about one drive, so the per-drive table
+    # rejects it instead of silently doing nothing (ADR 0031).
+    path = write_config(
+        tmp_path,
+        '[[drive]]\nserial = "ANON-SN-0001"\n\n'
+        '[drive.checks."tool.scan_failed"]\nenabled = false\n',
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert "is a condition of the tool and cannot be set in [drive.checks]" in str(error.value)
+    assert error.value.key == 'drive.checks."tool.scan_failed"'
+
+
 def test_an_unknown_check_is_an_error(tmp_path: Path) -> None:
     path = write_config(tmp_path, '[checks."no.such_check"]\nenabled = false\n')
 
@@ -640,6 +697,7 @@ def test_the_last_good_configuration_survives_a_round_trip(tmp_path: Path) -> No
     path = write_config(
         tmp_path,
         '[notify]\ntransport = "mail"\n\n[checks."temperature"]\nwarning = { hdd = 48 }\n'
+        '\n[checks."tool.unsupported_controller"]\nenabled = false\n'
         '\n[[drive]]\nserial = "ANON-SN-0001"\nexclude = true\n',
     )
     config = load_config(path)

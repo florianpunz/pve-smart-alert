@@ -300,6 +300,23 @@ def test_config_show_names_the_origin_of_each_value(
     assert "confirm_runs = 2 (default)" in out
 
 
+def test_config_show_lists_the_conditions_of_the_tool(
+    capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
+) -> None:
+    # They take no threshold, only their enabled state (FR-408, ADR 0031).
+    config_path, _ = paths
+    config_path.write_text(
+        '[checks."tool.unsupported_controller"]\nenabled = false\n', encoding="utf-8"
+    )
+
+    assert cli.main(["config", "show"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert '"tool.unsupported_controller"  enabled = false (file)' in out
+    assert '"tool.smartctl_missing"  enabled = true (default)' in out
+    assert '"tool.state_reset"  enabled = true (default)' in out
+
+
 def test_config_show_defaults_prints_the_built_in_defaults(
     capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
 ) -> None:

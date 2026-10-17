@@ -33,14 +33,20 @@ The rules, in short (ADR 0009):
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
 from pve_smart_alert.checks import CATALOG, Worsening
-from pve_smart_alert.config import Config, NotifySettings, effective_check, effective_checks
+from pve_smart_alert.config import (
+    Config,
+    NotifySettings,
+    effective_check,
+    effective_checks,
+    tool_conditions_enabled,
+)
 from pve_smart_alert.model import (
     CheckKind,
     DriveClass,
@@ -329,6 +335,9 @@ class _Planner:
         self.config = config
         self.policy: NotifySettings = config.notify
         self.now = now
+        # The conditions of the tool the configuration leaves switched on; a
+        # switched-off one is dropped without a recovery (ADR 0031).
+        self.tool_enabled = tool_conditions_enabled(config)
 
     # The first run (ADR 0009, FR-516)
 
@@ -370,16 +379,16 @@ class _Planner:
             tool_items.append(_item(EventType.PROBLEM, finding, since=self.now))
         if tool_items:
             full.tool.last_notified = self.now
-        if self.observation.state_reset is not None:
-            tool_items.append(_state_reset_item(self.observation.state_reset))
+        reset = self._state_reset()
+        if reset is not None:
+            tool_items.append(reset)
         full.initialized = self.now
 
         if not self.policy.first_run_summary:
             notifications: tuple[Planned, ...] = ()
-            if self.observation.state_reset is not None:
+            if reset is not None:
                 # The reset is mentioned in the summary that follows it; without
                 # one, the tool says it on its own (docs/check-catalog.md).
-                reset = _state_reset_item(self.observation.state_reset)
                 notifications = (
                     Planned(MessageKind.TOOL, reset.severity, EventType.TOOL, tool=(reset,)),
                 )
@@ -403,10 +412,16 @@ class _Planner:
             tool=tuple(tool_items),
             skipped=self.observation.skipped,
             unreadable=tuple(unreadable),
-            state_reset=self.observation.state_reset,
+            state_reset=self.observation.state_reset if reset is not None else None,
             changes=(install,),
         )
         return Plan(empty, (summary,))
+
+    def _state_reset(self) -> Item | None:
+        """The one-time event `tool.state_reset`, unless it is switched off (ADR 0031)."""
+        if self.observation.state_reset is None or "tool.state_reset" not in self.tool_enabled:
+            return None
+        return _state_reset_item(self.observation.state_reset)
 
     def _notified(self, finding: Finding) -> ConditionRecord:
         return ConditionRecord(
@@ -640,8 +655,11 @@ class _Planner:
 
     def _tool(self) -> Planned | None:
         """Plan the conditions of the tool, on its pseudo-device (ADR 0009, FR-518)."""
+        enabled = self.tool_enabled
         present = {finding.check: finding for finding in self.observation.tool}
-        frozen = self.observation.tool_not_evaluated
+        # A condition that is switched off is not "not evaluated": the state
+        # entry goes, so that switching it off is not a freeze (ADR 0031).
+        frozen = self.observation.tool_not_evaluated & enabled
         scope = None
         if frozen:
             scope = {check for check in self.work.tool.conditions if check not in frozen}
@@ -650,6 +668,7 @@ class _Planner:
             present,
             locate=lambda state: state.tool,
             scope=scope,
+            enabled=enabled,
             confirm=lambda _c: 1,
         )
         if not outcome.items:
@@ -705,7 +724,7 @@ class _Planner:
         locate: _Locate,
         scope: set[str] | None,
         confirm: Callable[[str], int],
-        enabled: set[str] | None = None,
+        enabled: Collection[str] | None = None,
     ) -> _Outcome:
         """Apply the rules to the conditions of one drive or of the tool.
 

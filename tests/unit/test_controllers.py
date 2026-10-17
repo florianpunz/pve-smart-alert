@@ -202,6 +202,38 @@ def test_the_condition_names_every_unsupported_host() -> None:
     assert "SCSI host 5 has the driver mpi3mr" in finding.text
 
 
+def test_the_condition_names_how_many_drives_the_run_monitors() -> None:
+    finding = unsupported_controller((ScsiHost(2, "mpi3mr"),), 6)
+
+    assert finding is not None
+    assert "6 drives are monitored on this host" in finding.text
+
+
+def test_the_condition_names_a_host_that_monitors_no_drive() -> None:
+    finding = unsupported_controller((ScsiHost(2, "mpi3mr"),), 0)
+
+    assert finding is not None
+    assert "no drive is monitored on this host" in finding.text
+
+
+def test_the_condition_leaves_the_number_out_when_the_run_could_not_count() -> None:
+    # Without smartctl, and with a failed device scan, the run did not look for
+    # all drives, so the notice claims nothing about them (ADR 0031).
+    finding = unsupported_controller((ScsiHost(2, "mpi3mr"),))
+
+    assert finding is not None
+    assert "monitored on this host" not in finding.text
+
+
+def test_the_condition_says_how_it_is_switched_off() -> None:
+    finding = unsupported_controller((ScsiHost(2, "mpi3mr"),), 3)
+
+    assert finding is not None
+    # The key the message names is the key the configuration accepts (ADR 0031).
+    assert '[checks."tool.unsupported_controller"] enabled = false' in finding.text
+    assert "HBA mode" in finding.text
+
+
 # Discovery and scan
 
 
@@ -436,6 +468,11 @@ def items_of(sent: list[Notification], check: str) -> list[str]:
     ]
 
 
+def unwrapped(text: str) -> str:
+    """Return a body without the line breaks the renderer wraps it with."""
+    return " ".join(text.split())
+
+
 def test_a_missing_smartctl_does_not_clear_the_condition(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -486,3 +523,49 @@ def test_an_unreadable_sysfs_raises_nothing_on_its_own(
 
     assert "tool.unsupported_controller" not in first.body
     assert host.run("02-healthy") == []
+
+
+# Switching the condition off (FR-408, ADR 0031)
+
+
+def test_the_notice_names_how_many_drives_the_run_monitors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = installed(tmp_path, monkeypatch)
+    host.scsi_hosts(MPI3MR_SCSI_HOSTS)
+
+    (first,) = host.run("01-healthy")
+
+    assert "1 drive is monitored on this host" in unwrapped(first.body)
+
+
+def test_a_condition_that_is_switched_off_is_never_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = installed(tmp_path, monkeypatch)
+    host.scsi_hosts(MPI3MR_SCSI_HOSTS)
+    host.install('[checks."tool.unsupported_controller"]\nenabled = false\n')
+
+    (first,) = host.run("01-healthy")
+
+    assert first.event is EventType.FIRST_RUN
+    assert "tool.unsupported_controller" not in first.body
+    assert host.run("02-healthy") == []
+
+
+def test_switching_an_active_condition_off_is_no_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = notified_with_mpi3mr(tmp_path, monkeypatch)
+
+    host.install('[checks."tool.unsupported_controller"]\nenabled = false\n')
+    assert host.run("02-healthy") == []
+
+    # Switched on again, the controller is a new problem: the state entry was
+    # dropped without a recovery, like a check of a drive that is switched off
+    # (ADR 0009, ADR 0031).
+    host.install()
+    (again,) = host.run("02-healthy")
+
+    assert again.event is EventType.TOOL
+    assert "tool.unsupported_controller" in again.body

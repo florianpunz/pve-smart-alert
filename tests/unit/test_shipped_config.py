@@ -14,7 +14,7 @@ import tomllib
 from pathlib import Path
 
 from pve_smart_alert.checks import CATALOG, Check
-from pve_smart_alert.config import _SCHEMA, Config, load_config
+from pve_smart_alert.config import _SCHEMA, TOOL_CHECK_IDS, Config, load_config
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONFIG = REPOSITORY / "config" / "config.toml"
@@ -73,9 +73,14 @@ def test_the_reference_documents_every_key_of_the_program() -> None:
     # Every check of the catalog has its section, with exactly the keys that
     # have a default; the keys a check accepts are a superset of them, and a
     # severity without a default has no value to document (ADR 0011).
-    assert sections["checks"] == set(CATALOG)
+    # The conditions of the tool have their section as well, with the enabled
+    # state, the only key they take (ADR 0031).
+    assert sections["checks"] == set(CATALOG) | TOOL_CHECK_IDS
     documented = documented_checks(REFERENCE)
-    assert documented == {check.id: documented_keys_of(check) for check in CATALOG.values()}
+    assert documented == {
+        **{check.id: documented_keys_of(check) for check in CATALOG.values()},
+        **{name: {"enabled"} for name in TOOL_CHECK_IDS},
+    }
     for check in CATALOG.values():
         assert documented[check.id] <= check.settable
     # The per-drive overrides are documented as a commented example, because

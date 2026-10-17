@@ -220,6 +220,35 @@ warning = 1
 enabled = true
 warning = 1
 
+# The conditions of the tool itself (docs/check-catalog.md). Their severity is
+# fixed, so they take no threshold and no confirmation count; only the enabled
+# state can be set (FR-408, ADR 0031). Switching one off stops its notice, and
+# a condition that is active in the state is dropped without a recovery. The
+# tool condition `tool.unsupported_controller` names a controller whose drives
+# smartctl cannot read; a controller in HBA mode, whose drives all appear in
+# the scan, is monitored and needs no notice:
+
+[checks."tool.smartctl_missing"]
+enabled = true
+
+[checks."tool.smartctl_too_old"]
+enabled = true
+
+[checks."tool.scan_failed"]
+enabled = true
+
+[checks."tool.config_invalid"]
+enabled = true
+
+[checks."tool.state_reset"]
+enabled = true
+
+[checks."tool.transport_degraded"]
+enabled = true
+
+[checks."tool.unsupported_controller"]
+enabled = true
+
 # Overrides for one drive (FR-403). A drive is selected by exactly one of
 # model, serial or wwn, with the same meaning as in the exclude rules above.
 # The first entry that matches a drive wins. An entry can exclude the drive
