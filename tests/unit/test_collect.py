@@ -220,7 +220,9 @@ def test_another_json_format_is_unreadable() -> None:
         ("scsi", False),
         ("megaraid,0", False),
         ("scsi+megaraid,8", False),
-        ("areca,2/1", False),
+        # A drive behind an Areca SAS controller can be a SATA drive (ADR 0034).
+        ("areca,2/1", True),
+        ("areca", False),
         ("cciss", False),
     ],
 )
@@ -243,6 +245,27 @@ def test_the_cciss_type_decides_over_the_protocol() -> None:
     command = drive_command("/dev/sg1", "cciss,0", settings=settings(), protocol="SCSI")
 
     assert "--nocheck=standby" in command
+
+
+@pytest.mark.parametrize(
+    "device_type",
+    [
+        "3ware,1",
+        "areca,2",
+        "areca,1/1",
+        "aacraid,0,0,2",
+        "scsi+aacraid,1,0,4",
+        "sat,auto+aacraid,0,0,2",
+        "hpt,1/2/3",
+        "sssraid,0,1",
+    ],
+)
+def test_the_type_of_another_controller_decides_over_the_protocol(device_type: str) -> None:
+    # A drive behind 3ware, Areca or HighPoint is a SATA drive, and one behind
+    # Adaptec or SSSRAID can be: it is not woken, whatever the protocol of the
+    # scan says (FR-203, ADR 0034).
+    assert checks_standby(device_type) is True
+    assert checks_standby(device_type, "SCSI") is True
 
 
 def test_the_command_takes_name_and_type_as_found() -> None:

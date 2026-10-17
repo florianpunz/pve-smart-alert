@@ -302,8 +302,9 @@ def test_a_manual_device_that_is_not_one_is_an_error(
 @pytest.mark.parametrize(
     ("name", "device_type"),
     [
-        # The Linux examples of smartctl(8), 7.4 and 7.5, for the controllers
-        # that the scan does not list (Research 04).
+        # The types of smartctl(8), 7.4 and 7.5, for the controllers that the
+        # scan does not list, mostly on the nodes of its Linux examples
+        # (Research 04).
         ("/dev/twa0", "3ware,1"),
         ("/dev/twl0", "3ware,1"),
         ("/dev/twe0", "3ware,0"),
@@ -317,6 +318,9 @@ def test_a_manual_device_that_is_not_one_is_an_error(
         ("/dev/sg2", "cciss,0"),
         ("/dev/sg2", "scsi+cciss,0"),
         ("/dev/cciss/c0d0", "cciss,0"),
+        # Types that only look like the refused ones.
+        ("/dev/sdb", "usbjmicron,x,1"),
+        ("/dev/nvme0", "sntjmicron,1"),
     ],
 )
 def test_every_documented_pass_through_type_is_accepted(
@@ -344,7 +348,33 @@ def test_a_type_that_writes_to_the_drive_is_refused(tmp_path: Path, device_type:
         load_config(path)
 
     assert error.value.key == "discovery.device.type"
-    assert "reads by writing to a sector of the drive" in str(error.value)
+    assert "reads by writing to a sector of the RAID volume" in str(error.value)
+
+
+def test_a_last_good_configuration_keeps_no_type_that_writes_to_the_drive(
+    tmp_path: Path,
+) -> None:
+    # A build before the refusal could save such an entry as the last good
+    # configuration; a run that falls back to it does not read the drive with
+    # it (ADR 0012, ADR 0034).
+    last_good = tmp_path / "last-good-config.json"
+    save_last_good(
+        Config(
+            discovery=DiscoverySettings(
+                devices=(
+                    ManualDevice(name="/dev/sda", type="jmb39x,0"),
+                    ManualDevice(name="/dev/sg2", type="areca,2"),
+                )
+            )
+        ),
+        last_good,
+    )
+    path = write_config(tmp_path, '[[discovery.device]]\nname = "/dev/sda"\ntype = "jmb39x,0"\n')
+
+    config, error = load_effective(path, last_good=last_good)
+
+    assert error is not None
+    assert config.discovery.devices == (ManualDevice(name="/dev/sg2", type="areca,2"),)
 
 
 def test_manual_devices_must_be_tables(tmp_path: Path) -> None:

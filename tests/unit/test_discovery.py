@@ -638,7 +638,20 @@ def test_a_drive_in_jbod_mode_is_kept_once_as_its_block_device(megaraid: Host) -
 
 @pytest.mark.parametrize(
     "device_type",
-    ["aacraid,0,0,2", "scsi+aacraid,0,0,2", "hpt,1/2/3", "hpt,1/3", "3ware,2", "areca,1/1"],
+    [
+        "aacraid,0,0,2",
+        "scsi+aacraid,0,0,2",
+        "sat,auto+aacraid,0,0,2",
+        "hpt,1/2/3",
+        "hpt,1/3",
+        "3ware,2",
+        "areca,1/1",
+        # smartctl takes `sat` with its options before any of these types,
+        # and before MegaRAID and cciss as well (dev_interface.cpp of 7.5).
+        "sat,12+megaraid,2",
+        "sat,16+cciss,0",
+        "sat,auto+sssraid,0,1",
+    ],
 )
 def test_lsblk_of_the_node_does_not_describe_a_drive_of_another_controller(
     pve7: Host, device_type: str
@@ -679,6 +692,22 @@ def test_lsblk_of_the_node_does_not_describe_a_drive_of_another_controller(
     assert found.details.membership.zfs_pool is None
     assert found.snapshot is not None
     assert found.snapshot.membership.zfs_pool is None
+
+
+@pytest.mark.parametrize("device_type", ["jmb39x,0", "jms56x,1", "sat+jmb39x-q,2"])
+def test_a_type_that_writes_to_the_drive_never_reaches_smartctl(
+    pve7: Host, device_type: str
+) -> None:
+    # The configuration refuses such a type, but a last good configuration
+    # that an earlier build saved can still hold one (ADR 0011, ADR 0034).
+    candidate = Candidate("/dev/sda", device_type, Source.MANUAL)
+    assert not candidate.valid
+
+    found = pve7.discover(devices=(ManualDevice("/dev/sda", device_type),)).devices[-1]
+
+    assert found.outcome is Outcome.UNREADABLE
+    log = pve7.log.read_text(encoding="utf-8")
+    assert device_type not in log
 
 
 # When parts of the host fail (FR-205)

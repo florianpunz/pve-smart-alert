@@ -311,6 +311,10 @@ def test_a_cciss_type_is_recognized(device_type: str, cciss: bool) -> None:
         ("hpt,1/3", True),
         ("hpt,1/2/3", True),
         ("sssraid,0,1", True),
+        # `sat` with its options before the type (dev_interface.cpp of 7.5).
+        ("sat,auto+aacraid,0,0,2", True),
+        ("sat,12+megaraid,2", True),
+        ("sat,16+cciss,0", True),
         ("sat", False),
         ("scsi", False),
         ("nvme", False),

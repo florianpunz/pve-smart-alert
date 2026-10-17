@@ -65,12 +65,15 @@ HPE_NODE: Final = "/dev/sg1"
 HPE_BASE: Final = "hba/maintainer-truenas"
 HPE_DRIVES: Final = (("cciss0.json", "sdd.json", "cciss,0"), ("cciss1.json", "sdc.json", "cciss,1"))
 
-# The drives of the scenario `manual-pass-through`, one per type that
-# smartctl(8) of 7.4 and 7.5 documents for a controller the scan does not
-# list (Research 04), on a node of the form the manual shows for Linux: the
-# file of the step, the node, the type, and the recorded drive it is made of.
-# `/dev/sdb` and `/dev/sdc` are logical volumes of the host, as the manual's
-# `/dev/sda` is for `aacraid` and `hpt`.
+# The drives of the scenario `manual-pass-through`, one per controller type of
+# smartctl(8) of 7.4 and 7.5 besides MegaRAID and cciss (Research 04,
+# ADR 0034), on a node of the form the manual shows for Linux: the file of
+# the step, the node, the type, the recorded drive it is made of, and whether
+# a manual entry names it. The scan of smartctl lists the drives of an
+# SSSRAID controller by itself (`get_dev_sssraid` in os_linux.cpp of 7.4 and
+# 7.5); the others only a manual entry reaches. `/dev/sdc` and `/dev/sdd` are
+# logical volumes of the host, as the manual's `/dev/sda` is for `aacraid`
+# and `hpt`; the base recording has `/dev/sda` and `/dev/sdb` already.
 MANUAL_DRIVES: Final = (
     (
         "areca2.json",
@@ -78,6 +81,7 @@ MANUAL_DRIVES: Final = (
         "areca,2",
         "megaraid/scrutiny-megaraid-wd4000fyyx",
         "sda-megaraid0.json",
+        True,
     ),
     (
         "areca1-1.json",
@@ -85,16 +89,18 @@ MANUAL_DRIVES: Final = (
         "areca,1/1",
         "direct/libblockdev-seagate-st600mp0036",
         "sdb.json",
+        True,
     ),
-    ("3ware1.json", "/dev/twa0", "3ware,1", "direct/test-cluster-pve5", "sda.json"),
-    ("aacraid0-0-2.json", "/dev/sdb", "aacraid,0,0,2", "hba/maintainer-truenas", "sdc.json"),
-    ("hpt1-2-3.json", "/dev/sdc", "hpt,1/2/3", "direct/test-cluster-pve6", "sda.json"),
+    ("3ware1.json", "/dev/twa0", "3ware,1", "direct/test-cluster-pve5", "sda.json", True),
+    ("aacraid0-0-2.json", "/dev/sdc", "aacraid,0,0,2", "hba/maintainer-truenas", "sdc.json", True),
+    ("hpt1-2-3.json", "/dev/sdd", "hpt,1/2/3", "direct/test-cluster-pve6", "sda.json", True),
     (
         "sssraid0-1.json",
         "/dev/bsg/sssraid0",
         "sssraid,0,1",
         "direct/libblockdev-toshiba-al15seb120ny",
         "sdd.json",
+        False,
     ),
 )
 MANUAL_BASE: Final = "direct/standalone-pve1"
@@ -402,23 +408,29 @@ def hpe_host() -> Edit:
 
 
 def manual_host() -> Edit:
-    """Add a drive behind each controller that only a manual entry reaches (FR-104).
+    """Add a drive behind each controller other than MegaRAID and cciss (ADR 0034).
 
     Each drive of `MANUAL_DRIVES` is a recorded drive of another fixture,
     moved to the node and type of its controller and given the next
     placeholder serial number, without WWN or logical unit id (ADR 0023).
-    No drive behind these controllers was ever recorded, so the drives are
-    derived and what smartctl writes into the device fields of such a read
-    is not known; the scan lists only the recorded on-board drive. lsblk
-    shows the two logical volumes `/dev/sdb` and `/dev/sdc` that `aacraid`
-    and `hpt` read through, the first with a ZFS pool, and the frame names
-    the drives as manual entries.
+    The project has no recording of a drive behind these controllers, so the
+    drives are derived; their `info_name` is the one the source of
+    smartmontools writes (os_linux.cpp of 7.5), and the rest of their device
+    fields is not known (Q-R9). The scan lists the recorded on-board drive and
+    the SSSRAID drive; how it would list a logical volume of these
+    controllers is not known, and it lists none. lsblk shows the two logical
+    volumes `/dev/sdc` and `/dev/sdd` that `aacraid` and `hpt` read through,
+    the first with a ZFS pool, and the frame names the other drives as
+    manual entries.
     """
 
     def edit(documents: Documents) -> None:
         files = documents["recording.json"]["files"]
+        devices = documents["scan.json"]["devices"]
         assert isinstance(files, list)
-        for number, (file, name, device_type, base, source) in enumerate(MANUAL_DRIVES, start=2):
+        assert isinstance(devices, list)
+        for number, entry in enumerate(MANUAL_DRIVES, start=2):
+            file, name, device_type, base, source, manual = entry
             path = RECORDINGS / base / source
             document = json.loads(path.read_text(encoding="utf-8"))
             document["serial_number"] = f"ANON-SN-{number:04d}"
@@ -427,25 +439,28 @@ def manual_host() -> Edit:
             _place(document, name, device_type)
             documents[file] = document
             files.append(_recording_entry(file, document, exit_status=0))
+            if not manual:
+                devices.append(_scan_entry(document))
         recording = documents["recording.json"]
         recording["origin"] = (
             "Derived for the scenario manual-pass-through of tests/scenarios.py: the"
             " on-board SATA SSD of pve-test, and one recorded drive of another fixture"
-            " behind each controller that only a manual entry reaches; only the"
-            " on-board drive is recorded on this host"
+            " behind each controller other than MegaRAID and cciss; only the on-board"
+            " drive is recorded on this host"
         )
         lsblk = documents["lsblk.json"]["blockdevices"]
         assert isinstance(lsblk, list)
+        assert not {"sdc", "sdd"} & {device.get("name") for device in lsblk}
         lsblk.append(
             {
-                "name": "sdb",
-                "kname": "sdb",
+                "name": "sdc",
+                "kname": "sdc",
                 "type": "disk",
                 "tran": "sas",
                 "children": [
                     {
-                        "name": "sdb1",
-                        "kname": "sdb1",
+                        "name": "sdc1",
+                        "kname": "sdc1",
                         "type": "part",
                         "fstype": "zfs_member",
                         "label": "tank",
@@ -453,7 +468,7 @@ def manual_host() -> Edit:
                 ],
             }
         )
-        lsblk.append({"name": "sdc", "kname": "sdc", "type": "disk", "tran": None})
+        lsblk.append({"name": "sdd", "kname": "sdd", "type": "disk", "tran": None})
 
     return edit
 
@@ -641,7 +656,11 @@ SCENARIOS: Final = {
                 " reaches: Areca, 3ware, Adaptec, HighPoint and SSSRAID"
             ),
             prepare=(manual_host(),),
-            devices=tuple((name, device_type) for _, name, device_type, _, _ in MANUAL_DRIVES),
+            devices=tuple(
+                (name, device_type)
+                for _, name, device_type, _, _, manual in MANUAL_DRIVES
+                if manual
+            ),
             steps=(
                 Step("01-healthy", description="first run: one summary with seven drives"),
                 Step(
@@ -655,6 +674,7 @@ SCENARIOS: Final = {
         Scenario(
             name="megaraid-jbod",
             base=MEGARAID_BASE,
+            scsi_hosts={6: "megaraid_sas"},
             description=(
                 "A MegaRAID host whose SATA drive in JBOD mode is a block device as well,"
                 " next to a logical volume and a derived SAS drive"
@@ -668,6 +688,7 @@ SCENARIOS: Final = {
         Scenario(
             name="megaraid-id-change",
             base=MEGARAID_BASE,
+            scsi_hosts={6: "megaraid_sas"},
             description=(
                 "Two drives behind a MegaRAID controller whose device IDs change while one"
                 " has a finding, and then one of them is gone"
@@ -721,6 +742,7 @@ SCENARIOS: Final = {
         Scenario(
             name="megaraid-degraded",
             base=MEGARAID_BASE,
+            scsi_hosts={6: "megaraid_sas"},
             description=(
                 "A SATA and a derived SAS drive behind a MegaRAID controller that degrade"
                 " at the same time"
@@ -767,13 +789,44 @@ def write(documents: Documents, directory: Path) -> None:
 
 
 def build(scenario: Scenario, directory: Path) -> list[Path]:
-    """Write every step of a scenario below `directory`, one directory per step."""
+    """Write every step of a scenario below `directory`, one directory per step.
+
+    The manual entries of the scenario are written next to the steps as
+    `manual-entries.toml`, for the configuration of a real host.
+    """
     paths = []
     for step in scenario.steps:
         path = directory / step.name
         write(documents_of(scenario, step), path)
         paths.append(path)
+    if scenario.devices:
+        entries = "".join(
+            f'[[discovery.device]]\nname = "{name}"\ntype = "{kind}"\n\n'
+            for name, kind in scenario.devices
+        )
+        (directory / "manual-entries.toml").write_text(entries, encoding="utf-8")
     return paths
+
+
+def prerequisites(scenario: Scenario) -> list[str]:
+    """Return what a real host needs besides the steps to show the scenario.
+
+    The test frame writes the SCSI hosts and SCSI generic nodes into a
+    temporary sysfs and the manual entries into the configuration; a real
+    host brings the first two itself, or does not show that part.
+    """
+    notes = []
+    if scenario.devices:
+        notes.append("the manual entries of manual-entries.toml in the configuration")
+    if scenario.scsi_hosts:
+        hosts = ", ".join(
+            f"host{number} {driver}" for number, driver in scenario.scsi_hosts.items()
+        )
+        notes.append(f"the SCSI hosts {hosts} in sysfs")
+    if scenario.sg_nodes:
+        nodes = ", ".join(f"sg{node} on host{host}" for node, host in scenario.sg_nodes.items())
+        notes.append(f"the SCSI generic nodes {nodes}")
+    return notes
 
 
 def main(argv: Sequence[str]) -> int:
@@ -788,11 +841,16 @@ def main(argv: Sequence[str]) -> int:
     if arguments.command == "list":
         for scenario in SCENARIOS.values():
             print(f"{scenario.name}: {scenario.description}")
+            for note in prerequisites(scenario):
+                print(f"  needs {note}")
             for step in scenario.steps:
                 print(f"  {step.name:<16} {step.description}")
         return 0
-    for path in build(SCENARIOS[arguments.scenario], arguments.directory):
+    scenario = SCENARIOS[arguments.scenario]
+    for path in build(scenario, arguments.directory):
         print(path)
+    for note in prerequisites(scenario):
+        print(f"needs {note}", file=sys.stderr)
     return 0
 
 
@@ -816,10 +874,27 @@ def _place(document: dict[str, object], name: str, device_type: str) -> None:
 
 
 def _info_name(name: str, device_type: str) -> str:
-    """Return the name smartctl shows for a device, as in the Telegraf recording."""
-    number = device_type.rpartition(",")[2]
-    behind = f" [megaraid_disk_{int(number):02d}]" if "megaraid" in device_type else ""
-    return f"{name}{behind}" + (" [SAT]" if device_type.startswith("sat") else "")
+    """Return the name smartctl shows for a device.
+
+    For MegaRAID as in the Telegraf recording; for the other controllers as
+    the constructors of their devices in os_linux.cpp of smartmontools 7.5
+    write it. A number the type leaves out, the enclosure of `areca,N` and the
+    port of `hpt,L/M`, is 1 here.
+    """
+    base, _, numbers = device_type.rpartition("+")[2].partition(",")
+    parts = [int(part) for part in numbers.replace("/", ",").split(",") if part.isdigit()]
+    padded = [*parts, 1, 1, 1]
+    names = {
+        "megaraid": f"megaraid_disk_{padded[0]:02d}",
+        "3ware": f"3ware_disk_{padded[0]:02d}",
+        "areca": f"areca_disk#{padded[0]:02d}_enc#{padded[1]:02d}",
+        "aacraid": f"aacraid_disk_{padded[0]:02d}_{padded[1]:02d}_{padded[2]}",
+        "hpt": "hpt_disk_" + "/".join(str(part) for part in padded[:3]),
+        "sssraid": f"sssraid_disk_{padded[0]:02d}_{padded[1]:02d}",
+    }
+    behind = names.get(base)
+    text = f"{name} [{behind}]" if behind else name
+    return text + (" [SAT]" if device_type.startswith("sat") else "")
 
 
 def _scan_entry(document: dict[str, object]) -> dict[str, object]:
