@@ -118,7 +118,7 @@ class ScenarioHost(Host):
             for name, kind in self.scenario.devices
         )
         self.config_path.write_text(
-            f'[smartctl]\npath = "{FAKE}"\n{config}{manual}', encoding="utf-8"
+            f'[smartctl]\npath = "{FAKE}"\n{config}\n{manual}', encoding="utf-8"
         )
         self.state_path = self.state_dir / "state.json"
         bridge = root / "notify-bridge"

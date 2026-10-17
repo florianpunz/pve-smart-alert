@@ -302,9 +302,8 @@ def test_a_manual_device_that_is_not_one_is_an_error(
 @pytest.mark.parametrize(
     ("name", "device_type"),
     [
-        # The types of smartctl(8), 7.4 and 7.5, for the controllers that the
-        # scan does not list, mostly on the nodes of its Linux examples
-        # (Research 04).
+        # The controller types of smartctl(8), 7.4 and 7.5, mostly on the
+        # nodes of its Linux examples (Research 04).
         ("/dev/twa0", "3ware,1"),
         ("/dev/twl0", "3ware,1"),
         ("/dev/twe0", "3ware,0"),

@@ -364,12 +364,13 @@ def hpe_host() -> Edit:
         drives = {file: documents[source] for file, source, _ in HPE_DRIVES}
         documents.clear()
         files: list[dict[str, object]] = []
-        for disk, (file, _, device_type) in enumerate(HPE_DRIVES):
+        for file, _, device_type in HPE_DRIVES:
             document = copy.deepcopy(drives[file])
             device = _device_of(document)
             device["name"] = HPE_NODE
-            device["type"] = "cciss"
-            device["info_name"] = f"{HPE_NODE} [cciss_disk_{disk:02d}]"
+            device["type"], device["info_name"] = _written_type(
+                HPE_NODE, device_type, device.get("protocol")
+            )
             smartctl = document["smartctl"]
             assert isinstance(smartctl, dict)
             smartctl["argv"] = [
@@ -438,9 +439,9 @@ def manual_host() -> Edit:
             document.pop("logical_unit_id", None)
             _place(document, name, device_type)
             documents[file] = document
-            files.append(_recording_entry(file, document, exit_status=0))
+            files.append(_recording_entry(file, document, exit_status=0, device_type=device_type))
             if not manual:
-                devices.append(_scan_entry(document))
+                devices.append(_scan_entry(document, device_type))
         recording = documents["recording.json"]
         recording["origin"] = (
             "Derived for the scenario manual-pass-through of tests/scenarios.py: the"
@@ -469,6 +470,21 @@ def manual_host() -> Edit:
             }
         )
         lsblk.append({"name": "sdd", "kname": "sdd", "type": "disk", "tran": None})
+
+    return edit
+
+
+def standby(file: str, mode: str) -> Edit:
+    """Make the drive of one file answer that it is in standby, as smartctl does.
+
+    The fake smartctl answers so when the tool asks it not to wake the drive;
+    a SCSI drive names its power condition in words, such as STANDBY BY TIMER
+    (scsiprint.cpp of 7.4 and 7.5).
+    """
+
+    def edit(documents: Documents) -> None:
+        behavior = documents.setdefault("behavior.json", {})
+        behavior[file] = {"standby": mode}
 
     return edit
 
@@ -652,8 +668,9 @@ SCENARIOS: Final = {
             name="manual-pass-through",
             base=MANUAL_BASE,
             description=(
-                "One derived drive behind each controller that only a manual entry"
-                " reaches: Areca, 3ware, Adaptec, HighPoint and SSSRAID"
+                "One derived drive behind each controller other than MegaRAID and cciss:"
+                " Areca, 3ware, Adaptec and HighPoint through manual entries, SSSRAID"
+                " from the scan"
             ),
             prepare=(manual_host(),),
             devices=tuple(
@@ -668,6 +685,15 @@ SCENARIOS: Final = {
                     (attribute("3ware1.json", 197, 3), grown_defects("aacraid0-0-2.json", 150)),
                     "pending sectors behind 3ware and grown defects behind Adaptec:"
                     " one warning each, without device ID",
+                ),
+                Step(
+                    "03-sas-standby",
+                    (
+                        attribute("3ware1.json", 197, 3),
+                        grown_defects("aacraid0-0-2.json", 150),
+                        standby("sssraid0-1.json", "STANDBY BY TIMER"),
+                    ),
+                    "the SAS drive behind SSSRAID is in standby: not woken, nothing",
                 ),
             ),
         ),
@@ -816,6 +842,12 @@ def prerequisites(scenario: Scenario) -> list[str]:
     host brings the first two itself, or does not show that part.
     """
     notes = []
+    first = documents_of(scenario, scenario.steps[0]).get("lsblk.json")
+    if first is not None and first != load(scenario.base).get("lsblk.json"):
+        notes.append(
+            "block devices as in the lsblk.json of the steps, which only the test frame"
+            " replays; a real host answers lsblk itself"
+        )
     if scenario.devices:
         notes.append("the manual entries of manual-entries.toml in the configuration")
     if scenario.scsi_hosts:
@@ -863,11 +895,15 @@ def _attribute_table(document: dict[str, object]) -> list[dict[str, object]]:
 
 
 def _place(document: dict[str, object], name: str, device_type: str) -> None:
-    """Make a drive output one of a drive reached through `name` with `device_type`."""
+    """Make a drive output one of a drive reached through `name` with `device_type`.
+
+    The call names `device_type`; the device fields are what smartctl writes
+    for it (`_written_type`). The recording entry and the scan name the type
+    of the call, which is what the fake smartctl answers by.
+    """
     device = _device_of(document)
     device["name"] = name
-    device["type"] = device_type
-    device["info_name"] = _info_name(name, device_type)
+    device["type"], device["info_name"] = _written_type(name, device_type, device.get("protocol"))
     smartctl = document.get("smartctl")
     assert isinstance(smartctl, dict)
     smartctl["argv"] = ["smartctl", "--json=c", "--xall", f"--device={device_type}", name]
@@ -886,6 +922,7 @@ def _info_name(name: str, device_type: str) -> str:
     padded = [*parts, 1, 1, 1]
     names = {
         "megaraid": f"megaraid_disk_{padded[0]:02d}",
+        "cciss": f"cciss_disk_{padded[0]:02d}",
         "3ware": f"3ware_disk_{padded[0]:02d}",
         "areca": f"areca_disk#{padded[0]:02d}_enc#{padded[1]:02d}",
         "aacraid": f"aacraid_disk_{padded[0]:02d}_{padded[1]:02d}_{padded[2]}",
@@ -897,19 +934,45 @@ def _info_name(name: str, device_type: str) -> str:
     return text + (" [SAT]" if device_type.startswith("sat") else "")
 
 
-def _scan_entry(document: dict[str, object]) -> dict[str, object]:
+def _written_type(name: str, device_type: str, protocol: object) -> tuple[str, str]:
+    """Return the type and `info_name` that smartctl 7.5 writes for a read.
+
+    `3ware`, `areca` and `hpt` keep the name of their device class, without
+    the numbers. `cciss`, `aacraid` and `sssraid` are read through an implicit
+    `sat,auto`, which writes `sat` and the suffix ` [SAT]` for a SATA drive,
+    and keeps the type of the device class with ` [SCSI]` for a SAS drive
+    (os_linux.cpp and scsiata.cpp of 7.5). Every other type is written as it
+    was called, as in the recordings of MegaRAID.
+    """
+    info_name = _info_name(name, device_type)
+    base = device_type.partition(",")[0]
+    if base in {"3ware", "areca", "hpt"}:
+        return base, info_name
+    if base in {"cciss", "aacraid", "sssraid"}:
+        if protocol == "ATA":
+            return "sat", f"{info_name} [SAT]"
+        return ("cciss" if base == "cciss" else device_type), f"{info_name} [SCSI]"
+    return device_type, info_name
+
+
+def _scan_entry(document: dict[str, object], device_type: str | None = None) -> dict[str, object]:
     device = _device_of(document)
-    return {key: device[key] for key in ("name", "info_name", "type", "protocol")}
+    entry: dict[str, object] = {
+        key: device[key] for key in ("name", "info_name", "type", "protocol")
+    }
+    if device_type is not None:
+        entry["type"] = device_type
+    return entry
 
 
 def _recording_entry(
-    file: str, document: dict[str, object], *, exit_status: int
+    file: str, document: dict[str, object], *, exit_status: int, device_type: str | None = None
 ) -> dict[str, object]:
     device = _device_of(document)
     return {
         "file": file,
         "device": device["name"],
-        "type": device["type"],
+        "type": device_type or device["type"],
         "protocol": device["protocol"],
         "exit_status": exit_status,
     }
