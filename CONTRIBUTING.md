@@ -58,7 +58,7 @@ The linter, the formatter and the type checker are configured in `pyproject.toml
 - Every fixture gets an entry in `tests/fixtures/SOURCES.md` with its origin and its license.
 - A change to the text or the fields of a notification updates its golden file in `tests/fixtures/golden/`: `PVE_SMART_ALERT_UPDATE_GOLDEN=1 make test` rewrites them, and the diff belongs to the change.
 - A host whose drives change from run to run is a scenario in `tests/scenarios.py`: a base recording and the edits of each step. The scenario tests run the program once per step with the clock, the state directory and the transport of `tests/unit/frame.py`.
-- Recordings contributed by users are welcome. Attach them to an issue; they are anonymized on the way in.
+- Recordings contributed by users are welcome, above all of the controllers that [docs/hardware-support.md](docs/hardware-support.md) labels "Experimental": MegaRAID with SAS drives, HPE Smart Array with `hpsa` or `smartpqi`, Adaptec, Areca, `mpi3mr` in HBA personality, and NVMe drives behind a tri-mode controller. Record the host with `pve-smart-alert dump-fixture --all`, as that document describes, look at the archive, and attach it to an issue with the drivers of the SCSI hosts and the controller model. A recording comes into the project under AGPL-3.0-or-later, like every contribution; it is checked for identifiers again on the way in.
 - Data taken from another project is marked in the `recording.json` of its fixture, and the project is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and in `debian/copyright`.
 
 ## Commits and branches

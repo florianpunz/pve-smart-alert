@@ -138,7 +138,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | NFR-13 | **Security.** Configuration shall be writable by root only; state shall be readable by root only. External commands shall be executed without a shell and with validated arguments. The tool shall open no network socket of its own. | I, T |
 | NFR-14 | **Privacy.** Serial numbers and WWNs shall appear only in notifications, in the state file and in the journal. Fixtures produced by `dump-fixture` shall not contain them. | T |
 | NFR-15 | **Testability.** Every check and every rule of the notification policy shall be covered by an automated test that needs neither root nor a Proxmox VE host nor real drives. | T |
-| NFR-16 | **Hardware coverage evidence.** Every controller family named in the documentation shall carry one of the evidence labels defined in [ADR 0016](docs/adr/0016-test-strategy.md). | I |
+| NFR-16 | **Hardware coverage evidence.** Every controller family named in the documentation shall carry one of the evidence labels defined in [ADR 0016](docs/adr/0016-test-strategy.md). The labels are in [docs/hardware-support.md](docs/hardware-support.md). | I, T |
 | NFR-17 | **Cluster independence.** A node shall evaluate its drives and send notifications when the cluster has no quorum. No state shall be shared between nodes. | A |
 | NFR-18 | **Detection delay.** With default settings a new condition shall be notified within 35 minutes of becoming visible in SMART data, or within 65 minutes for checks that need confirmation. | T |
 | NFR-19 | **Language.** All code, comments, documentation, configuration keys, log messages and notification texts shall be in English. | I |

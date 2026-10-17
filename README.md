@@ -15,7 +15,7 @@
 > - **M3 (done):** evaluation and configuration
 > - **M4 (done):** state and notification policy
 > - **M5 (in progress):** packaging, timer and installation
-> - **M6 (in progress):** SAS and hardware RAID on recorded data
+> - **M6 (built, waits for its runs on a cluster node):** SAS and hardware RAID on recorded data; [docs/hardware-support.md](docs/hardware-support.md) says how each controller was verified
 > - **M7 (planned):** hardening, documentation and version 1.0, the version meant for regular use
 >
 > </details>
@@ -129,6 +129,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
 - [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
+- [docs/hardware-support.md](docs/hardware-support.md): which drives and controllers are supported, how each was verified, and how to contribute a recording of your hardware
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
 - [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
