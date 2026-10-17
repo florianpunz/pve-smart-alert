@@ -156,6 +156,11 @@ _SECONDS: Final[Mapping[str, int]] = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 # type made of the words, numbers and separators of `smartctl --device`.
 DEVICE_NAME_PATTERN: Final = re.compile(r"/dev/[A-Za-z0-9._:+@/-]{1,250}")
 DEVICE_TYPE_PATTERN: Final = re.compile(r"[a-z0-9]+(?:[,/+-][a-z0-9]+){0,15}")
+# The types of the JMicron RAID bridges, `jmb39x,N`, `jmb39x-q,N`,
+# `jmb39x-q2,N` and `jms56x,N`, whose commands smartctl issues as a write to
+# a sector of the RAID volume and does not write back when it is stopped
+# (smartctl(8) of 7.4 and 7.5). The tool only reads drives (ADR 0012).
+WRITING_DEVICE_TYPE: Final = re.compile(r"(?:^|\+)(?:jmb39x(?:-q2?)?|jms56x)(?:[,+]|$)")
 
 
 class ConfigError(Exception):
@@ -1298,6 +1303,13 @@ def _device(entry: Mapping[str, object], number: int, text: str) -> ManualDevice
         raise ConfigError(
             f'"type" in {where} must be a device type of smartctl such as "sat" or'
             f' "megaraid,0", found "{device_type}"',
+            key="discovery.device.type",
+            line=_find_line(text, "type"),
+        )
+    if WRITING_DEVICE_TYPE.search(device_type):
+        raise ConfigError(
+            f'"type" in {where} is "{device_type}", which smartctl reads by writing to a'
+            " sector of the drive; the tool only reads drives",
             key="discovery.device.type",
             line=_find_line(text, "type"),
         )

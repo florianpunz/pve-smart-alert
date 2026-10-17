@@ -299,6 +299,54 @@ def test_a_manual_device_that_is_not_one_is_an_error(
     assert message in str(error.value)
 
 
+@pytest.mark.parametrize(
+    ("name", "device_type"),
+    [
+        # The Linux examples of smartctl(8), 7.4 and 7.5, for the controllers
+        # that the scan does not list (Research 04).
+        ("/dev/twa0", "3ware,1"),
+        ("/dev/twl0", "3ware,1"),
+        ("/dev/twe0", "3ware,0"),
+        ("/dev/sg2", "areca,2"),
+        ("/dev/sg3", "areca,24/8"),
+        ("/dev/sda", "aacraid,0,0,2"),
+        ("/dev/sdb", "scsi+aacraid,1,0,4"),
+        ("/dev/sda", "hpt,1/3"),
+        ("/dev/sda", "hpt,1/2/3"),
+        ("/dev/bsg/sssraid0", "sssraid,0,1"),
+        ("/dev/sg2", "cciss,0"),
+        ("/dev/sg2", "scsi+cciss,0"),
+        ("/dev/cciss/c0d0", "cciss,0"),
+    ],
+)
+def test_every_documented_pass_through_type_is_accepted(
+    tmp_path: Path, name: str, device_type: str
+) -> None:
+    path = write_config(
+        tmp_path, f'[[discovery.device]]\nname = "{name}"\ntype = "{device_type}"\n'
+    )
+
+    assert load_config(path).discovery.devices == (ManualDevice(name=name, type=device_type),)
+
+
+@pytest.mark.parametrize(
+    "device_type",
+    ["jmb39x,0", "jmb39x-q,1", "jmb39x-q2,2", "jmb39x,0,s33,force", "jms56x,1+sat", "sat+jmb39x,0"],
+)
+def test_a_type_that_writes_to_the_drive_is_refused(tmp_path: Path, device_type: str) -> None:
+    # smartctl(8) issues the commands of these types as writes to a sector
+    # of the RAID volume; the tool only reads drives (ADR 0012).
+    path = write_config(
+        tmp_path, f'[[discovery.device]]\nname = "/dev/sda"\ntype = "{device_type}"\n'
+    )
+
+    with pytest.raises(ConfigError) as error:
+        load_config(path)
+
+    assert error.value.key == "discovery.device.type"
+    assert "reads by writing to a sector of the drive" in str(error.value)
+
+
 def test_manual_devices_must_be_tables(tmp_path: Path) -> None:
     path = write_config(tmp_path, '[discovery]\ndevice = ["/dev/sdz"]\n')
 
