@@ -23,7 +23,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | FR-101 | The tool shall find all directly attached SATA, SAS and NVMe drives of the host without any per-drive configuration. | T, A |
 | FR-102 | The tool shall find physical drives behind MegaRAID-family controllers as reported by the device scan of smartctl, without configuration. | T |
 | FR-103 | The tool shall be able to find physical drives behind HPE Smart Array controllers by probing, where smartctl supports the pass-through, and shall name a controller that it does not probe. This function is experimental in version 1 and can be switched off. | T |
-| FR-104 | The tool shall accept manually configured devices, each given as a device name and a smartctl device type. | T |
+| FR-104 | The tool shall accept manually configured devices, each given as a device name and a smartctl device type. A type that smartctl reads by writing to the drive is refused ([ADR 0034](docs/adr/0034-manual-entries-of-other-pass-through-types.md), NFR-04). | T |
 | FR-105 | The tool shall identify a drive by model and serial number. Device node, device type and controller device ID shall not be part of the identity. | T |
 | FR-106 | A drive that is reachable through more than one path shall be evaluated and reported once per run. | T |
 | FR-107 | The tool shall skip, without raising any finding: logical volumes of RAID controllers, virtual disks, devices that are not disks, disks without SMART capability, devices on remote transports (iSCSI, Fibre Channel, NVMe over Fabrics), and devices matched by an exclude rule. | T |
@@ -138,7 +138,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | NFR-13 | **Security.** Configuration shall be writable by root only; state shall be readable by root only. External commands shall be executed without a shell and with validated arguments. The tool shall open no network socket of its own. | I, T |
 | NFR-14 | **Privacy.** Serial numbers and WWNs shall appear only in notifications, in the state file and in the journal. Fixtures produced by `dump-fixture` shall not contain them. | T |
 | NFR-15 | **Testability.** Every check and every rule of the notification policy shall be covered by an automated test that needs neither root nor a Proxmox VE host nor real drives. | T |
-| NFR-16 | **Hardware coverage evidence.** Every controller family named in the documentation shall carry one of the evidence labels defined in [ADR 0016](docs/adr/0016-test-strategy.md). | I |
+| NFR-16 | **Hardware coverage evidence.** Every controller family named in the documentation shall carry one of the evidence labels defined in [ADR 0016](docs/adr/0016-test-strategy.md). The labels are in [docs/hardware-support.md](docs/hardware-support.md). | I, T |
 | NFR-17 | **Cluster independence.** A node shall evaluate its drives and send notifications when the cluster has no quorum. No state shall be shared between nodes. | A |
 | NFR-18 | **Detection delay.** With default settings a new condition shall be notified within 35 minutes of becoming visible in SMART data, or within 65 minutes for checks that need confirmation. | T |
 | NFR-19 | **Language.** All code, comments, documentation, configuration keys, log messages and notification texts shall be in English. | I |

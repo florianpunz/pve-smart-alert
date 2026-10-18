@@ -26,7 +26,7 @@ It covers:
 
 ## Principles
 
-- **Read-only.** The tool changes nothing on the host except its own files, and it only reads from drives. It does not enable SMART, start self-tests or touch smartd.
+- **Read-only.** The tool changes nothing on the host except its own files, and it only reads from drives; smartctl itself may create the device nodes of some RAID controllers ([ADR 0034](docs/adr/0034-manual-entries-of-other-pass-through-types.md)). It does not enable SMART, start self-tests or touch smartd.
 - **No extra dependencies.** It uses what a Proxmox VE host already has: Python, Perl, smartmontools.
 - **Transparent decisions.** Every alert names the check, the value and the threshold. Every check can be adjusted or switched off, globally or for one drive.
 - **Fail loudly.** If the tool cannot do its job (smartctl missing, configuration broken, notification route down), that is itself reported.

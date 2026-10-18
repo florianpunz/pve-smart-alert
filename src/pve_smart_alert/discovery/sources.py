@@ -20,6 +20,7 @@ from pve_smart_alert.collect import JSON_FORMAT_MAJOR, version_of
 from pve_smart_alert.config import (
     DEVICE_NAME_PATTERN,
     DEVICE_TYPE_PATTERN,
+    WRITING_DEVICE_TYPE,
     ManualDevice,
     SmartctlSettings,
 )
@@ -52,11 +53,14 @@ class Candidate:
 
         Both are passed as arguments, so they are checked against strict
         patterns, also when the scan reports them (ARCHITECTURE.md section 14).
+        A type that smartctl reads by writing to the drive never reaches it,
+        from whichever source it comes (ADR 0012, ADR 0034).
         """
         return (
             DEVICE_NAME_PATTERN.fullmatch(self.name) is not None
             and ".." not in PurePosixPath(self.name).parts
             and DEVICE_TYPE_PATTERN.fullmatch(self.type) is not None
+            and WRITING_DEVICE_TYPE.search(self.type) is None
         )
 
 

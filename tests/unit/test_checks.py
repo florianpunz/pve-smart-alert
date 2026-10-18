@@ -147,6 +147,30 @@ def test_switched_off_smart_is_a_notice_that_names_the_command() -> None:
     assert "smartctl -s on /dev/sda" in finding.text
 
 
+@pytest.mark.parametrize(
+    ("name", "device_type"),
+    [
+        ("/dev/sdc", "aacraid,0,0,2"),
+        ("/dev/sg2", "areca,2"),
+        ("/dev/bus/6", "sat+megaraid,14"),
+        ("/dev/sg1", "cciss,0"),
+    ],
+)
+def test_the_command_for_a_drive_behind_a_controller_names_its_type(
+    name: str, device_type: str
+) -> None:
+    # Without the type the command would address the node, which is the
+    # logical volume or the controller, not the drive (ADR 0034).
+    snapshot = replace(
+        drive(smart_available=True, smart_enabled=False),
+        access=DeviceAccess(name, device_type, "ATA"),
+    )
+
+    (finding,) = evaluate(snapshot)
+
+    assert f"smartctl -s on -d {device_type} {name}" in finding.text
+
+
 def test_the_temperature_limits_differ_per_class() -> None:
     assert (
         checks_of(drive(DriveClass.HDD, metrics={"temperature.current": 61}))["temperature"]

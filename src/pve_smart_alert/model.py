@@ -46,6 +46,21 @@ FIELD_DEVICE_ID: Final = "device-id"
 # second the device ID.
 _PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+|scsi\+)?(megaraid|cciss),([0-9]+)")
 
+# The types that read a drive behind a controller through a node of the host
+# that is not the drive: the two above, and the other controller types of
+# smartctl(8) of 7.4 and 7.5 (Research 04, ADR 0034): `3ware,N`, `areca,N`
+# and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`, and
+# `sssraid,E,S`. Before `megaraid`, `cciss`, `aacraid` and `sssraid` smartctl
+# takes `scsi+` and `sat` with its options, such as `sat,auto+`, and refuses
+# them before the ATA types `3ware`, `areca` and `hpt` (dev_interface.cpp of
+# 7.5); the pattern takes them before every type. The node can be a
+# logical volume, such as /dev/sda for `aacraid` and `hpt`, so what the host
+# tells about it is not about the drive.
+BEHIND_CONTROLLER_TYPE: Final = re.compile(
+    r"(?:sat(?:,[a-z0-9]+)*\+|scsi\+)?"
+    r"(?:megaraid|cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
+)
+
 # Longer field values are cut. Field values go into the configuration of the
 # notification system and drive data is untrusted (ARCHITECTURE.md section 14).
 MAX_FIELD_VALUE: Final = 128
@@ -169,6 +184,16 @@ def pass_through_id(device_type: str) -> str | None:
     """
     match = _PASS_THROUGH_TYPE.fullmatch(device_type)
     return match.group(2) if match is not None else None
+
+
+def behind_controller(device_type: str) -> bool:
+    """Whether a type reads a drive behind a controller, not the node it is given.
+
+    The location, the membership and the inquiry data that the host shows
+    for the node are then not those of the drive (ADR 0028). Only the types
+    of `pass_through_id` have a device ID as well.
+    """
+    return BEHIND_CONTROLLER_TYPE.fullmatch(device_type) is not None
 
 
 def is_cciss_type(device_type: str) -> bool:

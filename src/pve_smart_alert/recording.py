@@ -30,8 +30,9 @@ class Recording:
     """What one host answered, before anonymization.
 
     `drives` are the drive outputs by the name of their file without
-    `.json`, `exits` their exit statuses. `scan` is `None` when the source
-    has no device scan. `source` says where a recording of another project
+    `.json`, `exits` their exit statuses, and `calls` the device name and
+    type each was read with, where they are known. `scan` is `None` when the
+    source has no device scan. `source` says where a recording of another project
     was taken from: repository, commit, path and copyright (ADR 0026).
     """
 
@@ -42,6 +43,7 @@ class Recording:
     scan_exit: int | None
     drives: dict[str, Mapping[str, object]] = field(default_factory=dict)
     exits: dict[str, int | None] = field(default_factory=dict)
+    calls: dict[str, tuple[str, str]] = field(default_factory=dict)
     lsblk: object = None
     lsblk_exit: int | None = None
     lsblk_command: str | None = None
@@ -137,11 +139,15 @@ def _metadata(
         drive = recording.drives[stem]
         access = drive.get("device")
         access = access if isinstance(access, dict) else {}
+        # The type of the call, not the one smartctl writes into the output:
+        # for `3ware,N` it writes `3ware`, for a SATA drive read as `cciss,N`
+        # `sat`. The fake smartctl answers by the type of the call (ADR 0016).
+        name, device_type = recording.calls.get(stem, (access.get("name"), access.get("type")))
         files.append(
             {
                 "file": f"{stem}.json",
-                "device": access.get("name"),
-                "type": access.get("type"),
+                "device": name,
+                "type": device_type,
                 "protocol": access.get("protocol"),
                 "class": drive_class(drive),
                 "model": _model(drive),

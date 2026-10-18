@@ -25,6 +25,7 @@ from enum import StrEnum
 from typing import Final
 
 from pve_smart_alert.config import Detail, SmartctlSettings
+from pve_smart_alert.model import behind_controller
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
 # Bit 0: the command line was not accepted. Bit 1: the device could not be
@@ -35,8 +36,10 @@ FAILPOWER: Final = 0b10
 # What smartctl writes when `--nocheck=standby` ends the call before the data,
 # in 7.4 and 7.5: an information message that names the power mode and the
 # exit status of FAILPOWER, for ATA (ataprint.cpp) and for SCSI
-# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA.
-STANDBY_MESSAGE: Final = re.compile(r"Device is in (\S+) mode")
+# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA. The name
+# of an ATA mode is one word, such as STANDBY; the name of a SCSI power
+# condition has several, such as STANDBY BY TIMER.
+STANDBY_MESSAGE: Final = re.compile(r"Device is in (.+?) mode(?:, exit\(|$)")
 
 # The major version of the JSON format this tool reads (ADR 0004).
 JSON_FORMAT_MAJOR: Final = 1
@@ -46,10 +49,14 @@ JSON_FORMAT_MAJOR: Final = 1
 # `sat+megaraid,N`, and the USB bridges.
 _STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
 
-# The `cciss,N` forms, which get the standby check whatever their protocol says:
-# a drive behind an HPE Smart Array controller can be a SATA or a SAS drive, and
-# smartctl implements the power mode check for both (ADR 0032).
-_CCISS_TYPES: Final = re.compile(r"(?:sat\+|scsi\+)?cciss,[0-9]+")
+# The drives behind an HPE Smart Array, 3ware, Areca, Adaptec, HighPoint or
+# SSSRAID controller get the standby check whatever their protocol says: such
+# a drive can be a SATA drive, behind 3ware and HighPoint and behind an Areca
+# SATA controller it always is, and smartctl implements the power mode check
+# for SCSI as well (ADR 0032, ADR 0034). MegaRAID is not among them, because
+# its type tells a SATA drive (`sat+megaraid,N`) from a SAS drive
+# (`megaraid,N`).
+_MEGARAID_TYPE: Final = re.compile(r"(?:.*\+)?megaraid,.*")
 
 
 class Status(StrEnum):
@@ -88,13 +95,14 @@ def checks_standby(device_type: str, protocol: str | None = None) -> bool:
     """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
     The option is `--nocheck=standby`, and a call that ends because of it is
-    recorded as standby, not as unreadable (ADR 0004). A `cciss,N` device is
-    included whatever its protocol says, because its drive can be a SAS drive
-    and smartctl checks the power mode for SCSI as well (ADR 0032). For every
-    other type the protocol of the device scan decides where it is known, and
-    for a manual device the type does.
+    recorded as standby, not as unreadable (ADR 0004). A drive behind an HPE
+    Smart Array, 3ware, Areca, Adaptec, HighPoint or SSSRAID controller is
+    included whatever its protocol says, because it can be a SATA drive and
+    smartctl checks the power mode for SCSI as well (ADR 0032, ADR 0034). For
+    every other type the protocol of the device scan decides where it is
+    known, and for a manual device the type does.
     """
-    if _CCISS_TYPES.fullmatch(device_type) is not None:
+    if behind_controller(device_type) and _MEGARAID_TYPE.fullmatch(device_type) is None:
         return True
     if protocol is not None:
         return protocol == "ATA"

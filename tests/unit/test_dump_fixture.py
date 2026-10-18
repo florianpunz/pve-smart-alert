@@ -19,6 +19,7 @@ from hosts import REAL_SERIALS, REAL_VALUES, Host, write_real_looking_recording
 from pve_smart_alert import cli
 from pve_smart_alert.anonymize import AnonymizationError
 from pve_smart_alert.config import Config, ManualDevice
+from pve_smart_alert.discovery import Outcome
 from pve_smart_alert.dump import Dump, DumpError, dump_fixture
 
 NOW: Final = datetime(2026, 10, 7, 12, 0, 0, tzinfo=UTC)
@@ -103,6 +104,44 @@ def test_the_drives_are_read_as_the_collector_reads_them(host: Host, tmp_path: P
     assert ["--scan-open", "--json=c"] in calls
     assert ["--json=c", "--xall", "--device=sat", "--nocheck=standby", "/dev/sda"] in calls
     assert ["--json=c", "--xall", "--device=nvme", "/dev/nvme0"] in calls
+
+
+def test_a_recording_names_the_type_of_the_call_and_replays(
+    host: Host, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # smartctl writes `3ware` without the disk number into the output of a
+    # drive read as `3ware,1`, and `sat` for a SATA drive read through cciss
+    # or aacraid (os_linux.cpp and scsiata.cpp of 7.5). The recording names
+    # the type of the call, so that the fake smartctl replays the archive
+    # with the same call (ADR 0016).
+    drive = host.drive("sda.json")
+    drive["device"] = {
+        "name": "/dev/twa0",
+        "info_name": "/dev/twa0 [3ware_disk_01]",
+        "type": "3ware",
+        "protocol": "ATA",
+    }
+    host.add_file("twa0.json", drive, device="/dev/twa0", device_type="3ware,1")
+    entries = (ManualDevice("/dev/twa0", "3ware,1"),)
+
+    files = contents(dump(host, tmp_path, ["/dev/twa0"], devices=entries).archive)
+
+    recording = json.loads(files["recording.json"])
+    (entry,) = [
+        item for item in recording["files"] if item["file"] not in ("scan.json", "lsblk.json")
+    ]
+    assert (entry["device"], entry["type"]) == ("/dev/twa0", "3ware,1")
+    replay = tmp_path / "replay"
+    replay.mkdir()
+    for name, text in files.items():
+        (replay / name).write_text(text, encoding="utf-8")
+    replayed = Host(tmp_path / "again", monkeypatch, replay)
+    (found,) = [
+        item
+        for item in replayed.discover(devices=entries).devices
+        if item.candidate.name == "/dev/twa0"
+    ]
+    assert found.outcome is Outcome.MONITORED
 
 
 def test_selected_devices_only(host: Host, tmp_path: Path) -> None:

@@ -33,7 +33,13 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from pve_smart_alert.model import Location, Membership, pass_through_id, sanitize_field_value
+from pve_smart_alert.model import (
+    Location,
+    Membership,
+    behind_controller,
+    pass_through_id,
+    sanitize_field_value,
+)
 from pve_smart_alert.paths import DISK_LINKS_DIR, LSBLK_PATH, SYSFS_DIR
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
@@ -148,8 +154,10 @@ def details_of(
     device_type: str = "",
 ) -> Details:
     """Return what the host tells about the device with this name and type."""
-    device_id = pass_through_id(device_type)
-    if device_id is not None:
+    if behind_controller(device_type):
+        device_id = pass_through_id(device_type)
+        if device_id is None:
+            return Details()
         return Details(location=Location(controller=_controller(name, paths), device_id=device_id))
 
     base = PurePosixPath(name).name

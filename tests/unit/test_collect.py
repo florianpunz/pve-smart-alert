@@ -96,6 +96,42 @@ def test_a_sleeping_drive_is_not_read(recording: Path) -> None:
     assert collected.document is None
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [
+        # The names of scsiprint.cpp in 7.4 and 7.5 for which `-n standby`
+        # ends the call: a SCSI drive names its power condition in words.
+        "LOW POWER",
+        "STANDBY BY TIMER",
+        "STANDBY BY COMMAND",
+        "STANDBY_Y BY TIMER",
+        "STANDBY_Y BY COMMAND",
+        # The names of ataprint.cpp for which it does.
+        "SLEEP",
+        "STANDBY",
+        "STANDBY_Y",
+    ],
+)
+def test_a_scsi_drive_in_standby_is_standby(mode: str) -> None:
+    command = [str(FAKE), "--json=c", "--xall", "--device=aacraid,0,0,2", "--nocheck=standby"]
+    document = {
+        "json_format_version": [1, 0],
+        "smartctl": {
+            "version": [7, 5],
+            "argv": command,
+            "messages": [
+                {"string": f"Device is in {mode} mode, exit(2)", "severity": "information"}
+            ],
+            "exit_status": 2,
+        },
+    }
+
+    collected = judge(json.dumps(document), 2, command=command, duration=0.1)
+
+    assert collected.status is Status.STANDBY
+    assert collected.reason == mode
+
+
 def test_a_standby_exit_is_standby_for_every_device_type() -> None:
     # smartctl writes the same message for ATA and for SCSI (ataprint.cpp and
     # scsiprint.cpp in 7.5), so a call that ends because of the standby check
@@ -220,7 +256,9 @@ def test_another_json_format_is_unreadable() -> None:
         ("scsi", False),
         ("megaraid,0", False),
         ("scsi+megaraid,8", False),
-        ("areca,2/1", False),
+        # A drive behind an Areca SAS controller can be a SATA drive (ADR 0034).
+        ("areca,2/1", True),
+        ("areca", False),
         ("cciss", False),
     ],
 )
@@ -243,6 +281,28 @@ def test_the_cciss_type_decides_over_the_protocol() -> None:
     command = drive_command("/dev/sg1", "cciss,0", settings=settings(), protocol="SCSI")
 
     assert "--nocheck=standby" in command
+
+
+@pytest.mark.parametrize(
+    "device_type",
+    [
+        "3ware,1",
+        "areca,2",
+        "areca,1/1",
+        "aacraid,0,0,2",
+        "scsi+aacraid,1,0,4",
+        "sat,auto+aacraid,0,0,2",
+        "hpt,1/2/3",
+        "sssraid,0,1",
+    ],
+)
+def test_the_type_of_another_controller_decides_over_the_protocol(device_type: str) -> None:
+    # A drive behind 3ware, HighPoint or an Areca SATA controller is a SATA
+    # drive, and one behind an Areca SAS controller, Adaptec or SSSRAID can be:
+    # it is read with the standby check, whatever the protocol of the scan
+    # says (FR-203, ADR 0034).
+    assert checks_standby(device_type) is True
+    assert checks_standby(device_type, "SCSI") is True
 
 
 def test_the_command_takes_name_and_type_as_found() -> None:

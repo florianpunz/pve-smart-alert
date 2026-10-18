@@ -85,6 +85,15 @@ probe_cciss = true
 #   [[discovery.device]]
 #   name = "/dev/sg3"
 #   type = "areca,2"
+#
+# The types of smartctl for the controllers the scan does not list are
+# 3ware,N, areca,N and areca,N/E, aacraid,H,L,ID, hpt,L/M and hpt,L/M/N
+# and cciss,N, on the node the manual page of smartctl names for the
+# controller; the scan lists the drives of MegaRAID and SSSRAID controllers
+# by itself. The JMicron types jmb39x, jmb39x-q, jmb39x-q2 and jms56x are
+# refused, because smartctl reads them by writing to a sector of the RAID
+# volume. docs/hardware-support.md in the source
+# repository says how each controller was verified.
 device = []
 
 # Drives that are not monitored. Each rule selects drives by exactly one of
