@@ -217,6 +217,23 @@ def test_a_pool_label_of_lsblk_is_shown_without_its_control_characters(
     assert "Injected" in used
 
 
+def test_the_mode_of_a_drive_in_standby_is_shown_clean_and_cut(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `scan` quotes the power mode from the message of smartctl, which a
+    # misbehaving smartctl can make as long as it likes (collect.py).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    host.behave("sda.json", standby="STANDBY\x1b[2J\x9b31m" + "Y" * 5000)
+    discovery = discover(host.config(), runner=host, paths=host.paths)
+
+    lines = render(discovery, smartctl_path=SMARTCTL)
+
+    line = next(line for line in lines if "in standby (" in line)
+    assert "STANDBY" in line
+    assert len(line) < 300
+    assert_clean("".join(lines))
+
+
 HOSTILE_VOLUME: Final = "MR9361\x1b[2J\x9b31m\nInjected" + "M" * 5000
 
 
@@ -429,8 +446,9 @@ def test_the_progress_line_names_a_device_clean(
 def test_the_dry_run_shows_what_a_drive_says_about_its_health_clean(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A SAS drive that fails its verdict names the informational exception
-    # in its own words, which the finding quotes (checks.py, `_health`).
+    # A SAS drive that fails its verdict names the informational exception,
+    # as smartctl words it from its codes, which the finding quotes
+    # (checks.py, `_health`).
     host = ScenarioHost(tmp_path, monkeypatch, "hba-sas")
     path = host.steps["02-grown-defects"] / "sdc.json"
     drive = json.loads(path.read_text(encoding="utf-8"))
