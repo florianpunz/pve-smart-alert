@@ -148,6 +148,8 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 
 ## Traceability
 
+Which tests and acceptance steps relate to each requirement, and which requirements no test covers, is in [docs/traceability.md](docs/traceability.md), a dated snapshot.
+
 | Goal in [PROJECT.md](PROJECT.md) | Requirements |
 | --- | --- |
 | 1. One-command installation, no care afterwards | FR-701 to FR-705, NFR-01, NFR-05, NFR-06 |
