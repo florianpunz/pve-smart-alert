@@ -2,12 +2,13 @@
 .\" The manual page of pve-smart-alert. It repeats the command reference,
 .\" the files, the exit status and the notifications of the README and of
 .\" ARCHITECTURE.md on purpose, for a host without the repository (CLAUDE.md).
-.TH PVE\-SMART\-ALERT 8 "2026-10-17" "pve\-smart\-alert" "System Administration"
 .\" Commands, options and paths are meant to be copied: no hyphenation, and
-.\" no stretched gaps before a long path. The man macros of groff reset the
-.\" adjustment to the string AD at every paragraph, so it is set there.
-.nh
+.\" no stretched gaps before a long path. The man macros of groff take the
+.\" adjustment from the string AD in TH and in tagged paragraphs, so it is set
+.\" before TH.
 .ds AD l
+.TH PVE\-SMART\-ALERT 8 "2026-10-17" "pve\-smart\-alert" "System Administration"
+.nh
 .SH NAME
 pve\-smart\-alert \- SMART drive alerts for Proxmox VE
 .SH SYNOPSIS
@@ -122,8 +123,8 @@ or
 with advice where something can be done.
 .TP
 .B config check
-Validate the configuration file and report its first error, with the key
-and, where it can be found, the line.
+Validate the configuration file and report its first error, with its key
+where it has one and its line where it can be found.
 A file that passes is saved as the last good configuration.
 .TP
 .B config show
@@ -335,7 +336,12 @@ reaches the notification system as
 .B system\-mail
 with the severity
 .B unknown
-and none of these fields.
+and only the fields
+.B type
+(with the value
+.BR system\-mail )
+and
+.BR hostname .
 .B pve\-smart\-alert doctor
 warns when a severity of the tool reaches no enabled target.
 .SH SEE ALSO

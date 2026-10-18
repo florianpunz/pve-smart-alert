@@ -44,11 +44,11 @@ wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert
 wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
 
-The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` one line per run.
+The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary.
 
 - On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
 - The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
-- The interval is changed with a drop-in, not in the configuration file of the tool; a drop-in survives upgrades of the package. The timer settings of a drop-in add to those of the package ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)), so the drop-in that `systemctl edit pve-smart-alert.timer` opens first empties `OnUnitActiveSec=`, which resets `OnBootSec=` as well, and then sets both. For a run every hour:
+- The interval is changed with a drop-in, not in the configuration file of the tool; a drop-in survives upgrades of the package. The timers that a drop-in sets are added to those of the package, and an empty `OnUnitActiveSec=` removes all of them, `OnBootSec=` included ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)). So the drop-in, which `systemctl edit pve-smart-alert.timer` opens, first empties `OnUnitActiveSec=` and then sets both. For a run every hour:
 
   ```ini
   [Timer]
@@ -72,7 +72,7 @@ The installed tool has these commands:
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
 | `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |
-| `pve-smart-alert config check` | Validates the whole configuration file and names the first error with its key and, where it can be found, its line; the exit status is then non-zero (FR-405) |
+| `pve-smart-alert config check` | Validates the whole configuration file and names the first error, with its key where it has one and its line where it can be found; the exit status is then non-zero (FR-405) |
 | `pve-smart-alert config show` | Prints every key with its effective value and where the value comes from, the file or the built-in default (FR-407); `--defaults` prints the built-in ones |
 | `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604) |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |

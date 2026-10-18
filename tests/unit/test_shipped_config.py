@@ -74,7 +74,7 @@ def test_the_reference_is_installed_at_the_path_the_tool_names() -> None:
     directory = REFERENCE_PATH.parent.relative_to("/")
     assert re.search(rf"^config/{REFERENCE_PATH.name}\s+{directory}$", install, re.MULTILINE)
     rules = (REPOSITORY / "debian" / "rules").read_text(encoding="utf-8")
-    assert re.search(r"^\tdh_compress\b.*\s-X\.toml$", rules, re.MULTILINE)
+    assert re.search(r"^override_dh_compress:\n\tdh_compress\b.*\s-X\.toml$", rules, re.MULTILINE)
 
 
 def test_the_reference_documents_every_key_of_the_program() -> None:
