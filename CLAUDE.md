@@ -48,6 +48,7 @@ Current milestone: **M5**, packaging, timer and installation, built and waiting 
 | `docs/check-catalog.md` | You work on checks or thresholds |
 | `docs/hardware-support.md` | You touch discovery of a controller family, or its evidence changes |
 | `docs/traceability.md` | You check which tests and acceptance steps relate to a requirement; a snapshot, made again for the release |
+| `docs/troubleshooting.md`, `man/pve-smart-alert.8` | You change a command, a `doctor` line or a behavior a user acts on; both describe what the tool does now |
 | `ROADMAP.md` | You need the state of a milestone or plan the next step |
 | `OPEN-QUESTIONS.md` | Something is unclear; it may already be listed there |
 | `CONTRIBUTING.md` | You set up the development tools, commit, or add a fixture |
@@ -73,11 +74,11 @@ These follow from the decision records. They are not hard rules, but deviating f
 Other agents pick this project up with no memory of earlier sessions, so the markdown files are their only source of truth.
 Keep them current as part of every change, not as a separate task afterwards.
 
-- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, `docs/hardware-support.md`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
+- Whenever a change affects what a living document says, update that document in the same piece of work. Living documents are README, PROJECT, REQUIREMENTS, ARCHITECTURE, ROADMAP, OPEN-QUESTIONS, CONTRIBUTING, SECURITY, `docs/check-catalog.md`, `docs/hardware-support.md`, `docs/troubleshooting.md`, `man/pve-smart-alert.8`, the index files in `docs/adr/` and `docs/research/`, `tests/fixtures/SOURCES.md` and this file.
 - Records are different. Accepted ADRs and research notes describe a point in time and are not brought up to date. A changed decision gets a new ADR that supersedes the old one (ADR 0001); new evidence gets a new research note or a dated addition to an existing one. `docs/traceability.md` is a snapshot in the same sense: it is dated and is made again for the release instead of being brought up to date with every change.
 - Status has one home. `ROADMAP.md` says per milestone what is done, what is in progress and what is next. `CLAUDE.md` carries at most two sentences (current milestone, next step) and no dated history. README carries the short status for users. Every other document links to `ROADMAP.md` instead of stating a status of its own.
 - Record what another agent needs to continue without asking: decisions and their reasons (ADR), changed behavior or interfaces (ARCHITECTURE, CHANGELOG), new setup or config steps (README, CONTRIBUTING), known issues and open work (OPEN-QUESTIONS, ROADMAP).
 - `CHANGELOG.md` lists what the tool does for a user. A decision that is not built yet belongs in its ADR, not in the changelog.
 - Keep the README in line with what the tool actually does and how it is installed, configured and used right now.
-- Document only what matters. Test: would another agent or a user make a wrong decision or lose time without this? If not, leave it out. No step-by-step logs of routine edits and no restating what the code already makes obvious. State each fact in one place and link to it. Two exceptions are on purpose: `AGENTS.md` repeats the hard rules, and `CONTRIBUTING.md` summarizes the rules for human contributors.
+- Document only what matters. Test: would another agent or a user make a wrong decision or lose time without this? If not, leave it out. No step-by-step logs of routine edits and no restating what the code already makes obvious. State each fact in one place and link to it. Three exceptions are on purpose: `AGENTS.md` repeats the hard rules, `CONTRIBUTING.md` summarizes the rules for human contributors, and the manual page `man/pve-smart-alert.8` repeats the command reference, the files, the exit status and the notifications of the README and ARCHITECTURE for a host without the repository.
 - In living documents, fix or remove outdated statements instead of appending new ones next to them.

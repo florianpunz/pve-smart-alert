@@ -56,7 +56,7 @@ for path in \
 	/usr/lib/systemd/system/pve-smart-alert.timer \
 	/usr/lib/systemd/system/pve-smart-alert-failure.service \
 	/etc/pve-smart-alert/config.toml \
-	/usr/share/doc/pve-smart-alert/config.reference.toml.gz \
+	/usr/share/doc/pve-smart-alert/config.reference.toml \
 	/usr/share/doc/pve-smart-alert/copyright; do
 	[ -e "$path" ] || fail "not installed: $path"
 	echo "ok $path"

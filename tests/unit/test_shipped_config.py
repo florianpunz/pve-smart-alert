@@ -10,11 +10,13 @@ catalog here.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
 from pve_smart_alert.checks import CATALOG, Check
 from pve_smart_alert.config import _SCHEMA, TOOL_CHECK_IDS, Config, load_config
+from pve_smart_alert.paths import REFERENCE_PATH
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONFIG = REPOSITORY / "config" / "config.toml"
@@ -61,6 +63,18 @@ def test_the_shipped_configuration_is_only_a_header() -> None:
 def test_the_shipped_configuration_points_to_the_reference() -> None:
     # The file is only useful if it says where the keys are written down.
     assert "config.reference.toml" in CONFIG.read_text(encoding="utf-8")
+
+
+def test_the_reference_is_installed_at_the_path_the_tool_names() -> None:
+    # dh_compress compresses a file below /usr/share/doc that is larger than
+    # 4 KiB unless debian/rules excludes it, so the reference would be
+    # installed as config.reference.toml.gz, a path that neither `doctor`,
+    # the shipped configuration nor the documentation names (ADR 0011).
+    install = (REPOSITORY / "debian" / "pve-smart-alert.install").read_text(encoding="utf-8")
+    directory = REFERENCE_PATH.parent.relative_to("/")
+    assert re.search(rf"^config/{REFERENCE_PATH.name}\s+{directory}$", install, re.MULTILINE)
+    rules = (REPOSITORY / "debian" / "rules").read_text(encoding="utf-8")
+    assert re.search(r"^override_dh_compress:\n\tdh_compress\b.*\s-X\.toml$", rules, re.MULTILINE)
 
 
 def test_the_reference_documents_every_key_of_the_program() -> None:

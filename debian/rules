@@ -36,3 +36,10 @@ override_dh_install:
 # 13.24.2, see ARCHITECTURE.md section 13.
 override_dh_installsystemd:
 	dh_installsystemd pve-smart-alert.timer
+
+# The reference configuration keeps the path that ADR 0011 names and that
+# `doctor`, the shipped config.toml and the documentation give. It is larger
+# than 4 KiB, so dh_compress would otherwise install it as
+# config.reference.toml.gz.
+override_dh_compress:
+	dh_compress -X.toml

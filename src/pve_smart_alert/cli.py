@@ -135,8 +135,9 @@ def build_parser() -> argparse.ArgumentParser:
         "scan",
         help="find the drives of this host and show what each one is",
         description=(
-            "Find the drives of this host, read each of them once, and show every device"
-            " found with its source and what became of it."
+            "Find the drives of this host, read them, and show every device found with its"
+            " source and what became of it; a drive that two sources find is read twice and"
+            " kept once."
         ),
     )
 
@@ -195,8 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
         "check",
         help="validate the configuration file",
         description=(
-            "Validate the whole configuration file. Errors name the key and the"
-            " line, and the command exits non-zero (FR-405)."
+            "Validate the whole configuration file and name the first error, with its"
+            " key where it has one and its line where it can be found; the command"
+            " then exits non-zero (FR-405)."
         ),
     )
     show = config_commands.add_parser(
