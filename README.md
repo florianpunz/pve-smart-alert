@@ -133,7 +133,7 @@ Both give a hint, not a delivery receipt: a rule they cannot decide, such as a t
 - [docs/adr/](docs/adr/README.md): one record per architecture decision
 - [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
 - [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
-- [docs/traceability.md](docs/traceability.md): the tests and acceptance steps of every requirement
+- [docs/traceability.md](docs/traceability.md): the tests and acceptance steps of every requirement, a dated snapshot
 - [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): what is not settled yet
 - [CLAUDE.md](CLAUDE.md): binding rules for contributors and AI agents
 
