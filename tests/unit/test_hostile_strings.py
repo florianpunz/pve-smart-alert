@@ -217,7 +217,6 @@ def test_a_pool_label_of_lsblk_is_shown_without_its_control_characters(
     assert "Injected" in used
 
 
-
 def test_the_mode_of_a_drive_in_standby_is_shown_clean_and_cut(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
