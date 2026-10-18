@@ -34,7 +34,7 @@ Never work around a hard rule silently, and never relax one because a single req
 
 PVE SMART Alert (`pve-smart-alert`) checks the SMART data of all drives of a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-Current milestone: **M5**, packaging, timer and installation, built and waiting for its checks on a real host; **M6**, SAS and hardware RAID on recorded data, is built with all six slices, slice 6 in pull request #20 with ADR 0034 waiting for the maintainer, and its runs on a cluster node are open (`ROADMAP.md`). Next step: the remaining host checks of M5 and the acceptance of M5 and M6 on the cluster.
+Current milestone: **M5**, packaging, timer and installation, built and waiting for its checks on a real host; **M6**, SAS and hardware RAID on recorded data, is built with all six slices, slice 6 in pull request #20, and its runs on a cluster node are open (`ROADMAP.md`). Next step: the remaining host checks of M5 and the acceptance of M5 and M6 on the cluster.
 
 ### Where things are
 
