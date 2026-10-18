@@ -14,7 +14,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M4: State and notification policy | Done |
 | M5: Packaging, timer and installation | Built, waits for the remaining checks on a real Proxmox VE host and the acceptance on the test cluster |
 | M6: SAS and hardware RAID on recorded data | Built: slice 6 waits for its pull request (#20); results 2 and 3 on a cluster node are open |
-| M7 | Planned |
+| M7 | Started; see its section |
 
 The section of a milestone says what of it is done and what comes next.
 
@@ -314,6 +314,11 @@ Result you can test:
 3. The tool has run on the cluster for at least four weeks without a false alert and without a failed run.
 4. An upgrade from 0.5.x to 1.0.0 keeps configuration and state.
 5. The acceptance checklists of M1 and M5 pass on the current Proxmox VE 9.x release, not only on the version the cluster ran during development.
+
+State: started on 2026-10-17, nothing of it merged yet.
+
+- Built, not merged: hostile strings in drive data. `tests/unit/test_hostile_strings.py` feeds a model, serial number and firmware with C0 and C1 controls, an ANSI escape, newlines, a TAB, a right-to-left override, a lone surrogate, a very long value and Handlebars and shell syntax, a pool label and the inquiry data of a logical volume with escapes, and a device name of the scan that fails its check, through `scan`, `status`, `check --dry-run`, the notifications, their fields and data, a mail, the journal lines, the progress line and the state file, and the answer of a transport through `test-notification` and the journal lines; the bridge gets a separate string with Handlebars and shell syntax.
+- Still open for the security review: the other points of [ARCHITECTURE.md](ARCHITECTURE.md) section 14; how the notification system renders the data of a message (Q-N11); a cut value carries no mark; a model or serial number of control characters only is left out of the fields; a selector copied from `scan` misses a drive whose model holds a removed character, because the identity keeps it (ADR 0005).
 
 ## After 1.0
 

@@ -186,6 +186,26 @@ def test_text_outside_ascii_survives(tmp_path: Path) -> None:
     assert run.calls[0]["data"]["subject"] == "Laufwerk schlägt fehl"
 
 
+@requires_perl
+def test_template_syntax_and_shell_metacharacters_stay_data(tmp_path: Path) -> None:
+    # A string of a drive can hold the syntax of Handlebars or of a shell. The
+    # bridge passes it on as data of the fixed template of the tool and never
+    # as a template or a command (ARCHITECTURE.md section 14).
+    hostile = "{{body}} {{{subject}}} $(reboot); `id` | rm -rf / \u202e"
+    request = request_document(
+        data={"subject": hostile, "body": hostile}, fields={"model": hostile, "type": "x"}
+    )
+
+    run = run_bridge(tmp_path, request=request)
+
+    assert run.returncode == 0
+    call = run.calls[0]
+    assert call["template"] == "pve-smart-alert"
+    assert call["data"]["subject"] == hostile
+    assert call["data"]["body"] == hostile
+    assert call["fields"]["model"] == hostile
+
+
 # What the notification system logged
 
 

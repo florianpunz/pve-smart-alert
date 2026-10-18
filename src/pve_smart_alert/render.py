@@ -35,6 +35,7 @@ from pve_smart_alert.model import (
     Notification,
     Severity,
     pass_through_id,
+    printable,
 )
 from pve_smart_alert.paths import CONFIG_PATH, COROSYNC_CONF_PATH
 from pve_smart_alert.planner import RANK, DriveInfo, DriveMessage, Item, MessageKind, Planned
@@ -427,13 +428,14 @@ def _first_run(planned: Planned, context: RenderContext) -> Notification:
         lines += ["", "Devices without usable data:"]
         for seen in planned.unreadable:
             reason = f": {_clean(seen.reason)}" if seen.reason else ""
-            lines.append(f"  {seen.access.name} [{seen.access.type}]{reason}")
+            lines.append(f"  {_clean(seen.access.name)} [{_clean(seen.access.type)}]{reason}")
     if planned.skipped:
         lines += ["", "Skipped devices:"]
         for skipped in planned.skipped:
             detail = f" ({_clean(skipped.detail)})" if skipped.detail else ""
             lines.append(
-                f"  {skipped.access.name} [{skipped.access.type}]: {skipped.reason}{detail}"
+                f"  {_clean(skipped.access.name)} [{_clean(skipped.access.type)}]:"
+                f" {skipped.reason}{detail}"
             )
     tool = [item for item in planned.tool if item.check != "tool.state_reset"]
     if tool:
@@ -506,14 +508,18 @@ def _drive_name(drive: DriveInfo) -> str:
     """Return a drive as the subject names it: device, model and serial number (FR-508)."""
     model = _clean(drive.model or "unknown model")
     serial = _clean(drive.serial) if drive.serial else "no serial number"
+    # The name is checked before it reaches smartctl, but a device of the scan
+    # whose name fails the check is still named, as unreadable.
+    name = _clean(drive.name)
     if drive.model is None:
-        return drive.name
-    return f"{drive.name} {model} ({serial})"
+        return name
+    return f"{name} {model} ({serial})"
 
 
 def _drive_line(drive: DriveInfo) -> str:
-    described = _drive_name(drive).removeprefix(drive.name).strip()
-    return f"{drive.name} [{drive.type}] {described}".rstrip()
+    name = _clean(drive.name)
+    described = _drive_name(drive).removeprefix(name).strip()
+    return f"{name} [{_clean(drive.type)}] {described}".rstrip()
 
 
 def _opening(message: DriveMessage, node: str) -> str:
@@ -532,7 +538,7 @@ def _host(context: RenderContext) -> list[str]:
 
 def _drive_block(drive: DriveInfo) -> list[str]:
     """Return the header block of a drive (FR-507)."""
-    where = f"{drive.name} [{drive.type}]"
+    where = f"{_clean(drive.name)} [{_clean(drive.type)}]"
     if not drive.present and drive.last_seen is not None:
         where += f", last read {format_time(drive.last_seen)}"
     lines = [_labelled("Drive", where)]
@@ -660,8 +666,8 @@ def _data(planned: Planned) -> dict[str, object]:
     """Return the structured data for templates that an administrator overrides (ADR 0008)."""
     drives = [
         {
-            "device": message.drive.name,
-            "type": message.drive.type,
+            "device": _clean(message.drive.name),
+            "type": _clean(message.drive.type),
             "model": _clean(message.drive.model or ""),
             "serial": _clean(message.drive.serial or ""),
             "wwn": message.drive.wwn,
@@ -678,7 +684,7 @@ def _data(planned: Planned) -> dict[str, object]:
         "severity": planned.severity.value,
         "drives": drives,
         "findings": [
-            {**_item_data(item), "device": message.drive.name}
+            {**_item_data(item), "device": _clean(message.drive.name)}
             for message in planned.drives
             for item in message.items
         ]
@@ -773,10 +779,7 @@ def _clean(value: str | None, *, limit: int = _MAX_TEXT) -> str:
     """Return a string from a drive, safe to write into a message (ARCHITECTURE.md section 14)."""
     if value is None:
         return ""
-    without_controls = "".join(
-        " " if character < " " or character == "\x7f" else character for character in value
-    )
-    return " ".join(without_controls.split())[:limit]
+    return printable(value, limit=limit)
 
 
 def _cleaned(item: Item) -> str:
