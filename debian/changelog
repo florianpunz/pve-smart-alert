@@ -1,3 +1,26 @@
+pve-smart-alert (0.5.0~dev5) unstable; urgency=medium
+
+  * Pre-release of 0.5.0 for test hosts (ADR 0027), the content of the test
+    build 0.5.0~dev4 (of milestone M6 the HPE Smart Array probe (ADR 0032),
+    the notice about an unsupported controller with the number of monitored
+    drives and the switch for the conditions of the tool (ADR 0031), the
+    manual entries of the other pass-through types (ADR 0034) and the
+    hardware support table; of milestone M7 the removal of control characters
+    from drive strings, and the reference configuration installed at the path
+    the tool names), with three fixes from the checks on pve1 of
+    2026-10-18: a command interrupted with Ctrl+C says so on standard error
+    and exits with status 130 instead of ending in a traceback;
+    scripts/install.sh says what became of the package, whether the version
+    is installed already, from which version to which it changed, that it was
+    installed again, or that apt did not finish, and it refuses a package
+    whose name is not pve-smart-alert or whose version is not the pinned one;
+    a purge removes /usr/share/pve-smart-alert, so that a byte code cache
+    written there by something other than the launcher no longer keeps the
+    directory (ADR 0035); and, separately, the package installs the manual
+    page, which until now the documentation named and no package carried.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Fri, 30 Oct 2026 18:23:00 +0000
+
 pve-smart-alert (0.5.0~dev3) unstable; urgency=medium
 
   * Pre-release of 0.5.0 for test hosts (ADR 0027): the notification field
