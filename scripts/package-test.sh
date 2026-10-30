@@ -57,7 +57,8 @@ for path in \
 	/usr/lib/systemd/system/pve-smart-alert-failure.service \
 	/etc/pve-smart-alert/config.toml \
 	/usr/share/doc/pve-smart-alert/config.reference.toml \
-	/usr/share/doc/pve-smart-alert/copyright; do
+	/usr/share/doc/pve-smart-alert/copyright \
+	/usr/share/man/man8/pve-smart-alert.8.gz; do
 	[ -e "$path" ] || fail "not installed: $path"
 	echo "ok $path"
 done
@@ -82,6 +83,14 @@ fi
 perl -c /usr/libexec/pve-smart-alert/notify-bridge
 /usr/libexec/pve-smart-alert/notify-bridge --check || true
 
+step "byte code that something else wrote"
+# A Python run by hand against the installed tree leaves a cache that dpkg
+# cannot remove afterwards; it was found on `pve1` on 2026-10-18. Purge has to
+# take the directory of the package with it, and the check below says so.
+mkdir -p /usr/share/pve-smart-alert/pve_smart_alert/__pycache__
+printf 'not from the package\n' \
+	>/usr/share/pve-smart-alert/pve_smart_alert/__pycache__/stray.cpython-312.pyc
+
 step "purge"
 apt-get purge -qq --yes pve-smart-alert
 for path in \
@@ -90,6 +99,7 @@ for path in \
 	/usr/share/pve-smart-alert \
 	/usr/libexec/pve-smart-alert \
 	/usr/sbin/pve-smart-alert \
+	/usr/share/man/man8/pve-smart-alert.8.gz \
 	/usr/share/pve-manager/templates/default/pve-smart-alert-subject.txt.hbs \
 	/usr/share/pve-manager/templates/default/pve-smart-alert-body.txt.hbs \
 	/usr/lib/systemd/system/pve-smart-alert.timer \

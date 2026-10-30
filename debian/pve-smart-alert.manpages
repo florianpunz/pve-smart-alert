@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The manual page, installed by dh_installman and compressed by dh_compress
+# (ADR 0013).
+man/pve-smart-alert.8

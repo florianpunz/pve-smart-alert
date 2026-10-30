@@ -85,6 +85,11 @@ EXIT_PROBLEM = 1
 EXIT_USAGE = 2
 # Another run holds the lock. Not an error of the run that holds it (FR-605).
 EXIT_LOCKED = 3
+# The command was interrupted with Ctrl+C. The number is the one a shell
+# reports for a program that died from SIGINT, so that a script that tests for
+# an interruption keeps working; the run itself says what happened instead of
+# ending in a traceback.
+EXIT_INTERRUPTED = 130
 
 # Where a run reads lsblk, the links below /dev/disk and sysfs. The tests
 # point it at a temporary tree (ADR 0016).
@@ -219,9 +224,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the program and return its exit status."""
-    parser = build_parser()
-    arguments = parser.parse_args(argv)
+    try:
+        parser = build_parser()
+        arguments = parser.parse_args(argv)
+        return _run(arguments, parser)
+    except KeyboardInterrupt:
+        # Ctrl+C in a command that runs in a terminal: a traceback says
+        # nothing that the line does not say (seen on `pve1` on 2026-10-18,
+        # where `doctor` was interrupted inside `pvesh`).
+        print(f"{PROGRAM}: interrupted", file=sys.stderr)
+        return EXIT_INTERRUPTED
 
+
+def _run(arguments: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """Run the command that the arguments name."""
     if arguments.command == "test-notification":
         return _test_notification(arguments)
     if arguments.command == "doctor":

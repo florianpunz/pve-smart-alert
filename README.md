@@ -46,7 +46,7 @@ wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/downloa
 
 The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary.
 
-- On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state.
+- On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state, and with everything below `/usr/share/pve-smart-alert` ([ADR 0035](docs/adr/0035-purge-removes-the-package-directory.md)).
 - The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
 - The interval is changed with a drop-in, not in the configuration file of the tool; a drop-in survives upgrades of the package. The timers that a drop-in sets are added to those of the package, and an empty `OnUnitActiveSec=` removes all of them, `OnBootSec=` included ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)). So the drop-in, which `systemctl edit pve-smart-alert.timer` opens, first empties `OnUnitActiveSec=` and then sets both. For a run every hour:
 
@@ -93,7 +93,7 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
-A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
+A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; 3 when another run holds the lock; and 130 when the command was interrupted with Ctrl+C, which says so instead of ending in a traceback. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail. A command typed in a terminal sends no failure mail; the service is stopped with SIGTERM rather than interrupted with Ctrl+C.
 
 ## Coexistence with smartd
 
