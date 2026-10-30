@@ -62,6 +62,7 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0002](0002-supported-platforms-and-version-baseline.md), [0004](0004-smartctl-json-as-data-source.md) | Proxmox VE 9.2 ships smartmontools 7.5, not 7.4 ([Research 06](../research/06-test-cluster-recordings.md)). 7.4 remains the version to support for older 9.x hosts |
 | [0008](0008-notification-integration.md) | The test command alone does not make "no matcher matched" visible: the notification system accepts such a notification without an error and without a log line. The routing check of [0020](0020-routing-check.md) does |
 | [0014](0014-repository-structure.md) | The layout tree is a snapshot of 2026-10-04; the repository itself shows the current layout. Commit messages now start with a type prefix such as `feat:` or `docs:`, as [CONTRIBUTING.md](../../CONTRIBUTING.md) describes |
+| [0013](0013-packaging-and-installation.md) | The purge also removes `/usr/share/pve-smart-alert/`: a byte code cache written there by a Python run that bypassed the launcher survived dpkg and kept the directory (`pve1`, 2026-10-18). The decision itself, that purge removes the paths of the tool and no foreign file, is unchanged |
 
 ## Adding a record
 

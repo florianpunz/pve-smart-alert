@@ -262,6 +262,10 @@ carry on with the last good configuration.
 For
 .BR check ,
 another run holds the lock; the service counts this as success.
+.TP
+.B 130
+The command was interrupted with Ctrl+C.
+It says so on standard error instead of ending in a traceback.
 .SH FILES
 .TP
 .I \%/etc/pve\-smart\-alert/config.toml

@@ -93,7 +93,7 @@ The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every va
 - All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
 - Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
 
-A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; and 3 when another run holds the lock. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail.
+A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; 3 when another run holds the lock; and 130 when the command was interrupted with Ctrl+C, which says so instead of ending in a traceback. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail. A command typed in a terminal sends no failure mail; the service is stopped with SIGTERM rather than interrupted with Ctrl+C.
 
 ## Coexistence with smartd
 
