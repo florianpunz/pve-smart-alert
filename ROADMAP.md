@@ -197,7 +197,7 @@ Goal: one command, then no care.
 
 Deliverables:
 
-- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts. The service accepts exit status 3 of `pve-smart-alert check`, a run skipped because another one holds the lock, as success (`SuccessExitStatus=3`) ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page follows with the user documentation in M7.
+- Complete Debian package with units, failure reporter, reference configuration and maintainer scripts. The service accepts exit status 3 of `pve-smart-alert check`, a run skipped because another one holds the lock, as success (`SuccessExitStatus=3`) ([ADR 0013](docs/adr/0013-packaging-and-installation.md), [ADR 0006](docs/adr/0006-scheduling.md)). The manual page is part of the package since the user documentation of M7.
 - Release pipeline: build on tag, lintian, package test in a clean container, checksums, release assets under stable names, `install.sh`.
 - Decision on which systemd sandboxing options are safe.
 
@@ -330,8 +330,8 @@ State: started on 2026-10-17. Three parts are merged, in pull requests #21, #22 
 - Still open for the security review: the other points of [ARCHITECTURE.md](ARCHITECTURE.md) section 14; how the notification system renders the data of a message (Q-N11); a cut value carries no mark; a model or serial number of control characters only is left out of the fields; a selector copied from `scan` misses a drive whose model holds a removed character, because the identity keeps it (ADR 0005).
 - Done, merged in pull request #22: [docs/traceability.md](docs/traceability.md), a dated snapshot that relates every requirement to its tests and acceptance steps and lists the requirements that no test covers and those whose acceptance step ROADMAP does not have.
 - Still open for result 2: a test for NFR-07, and a step for NFR-07 and NFR-09, which the two lists of the table name; the acceptance steps that the table names and that are not ticked here; how a requirement verified by inspection alone, such as NFR-19, counts for result 2; and a check of the table row by row when it is made again for the release.
-- Done, merged in pull request #23: [docs/troubleshooting.md](docs/troubleshooting.md) and the source of the manual page, `man/pve-smart-alert.8`, which the package does not install yet; with them the package installs the reference configuration uncompressed, at the path the tool names.
-- Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own; the package does not install the manual page yet, which [ADR 0013](docs/adr/0013-packaging-and-installation.md) provides for; the notice `tool.unsupported_controller` names its table and key on one line, which is not valid TOML, in the wording that [ADR 0031](docs/adr/0031-switching-tool-conditions-off.md) prescribes; while the file is invalid, `config show` shows the values of the last good configuration with origins taken from the invalid file.
+- Done, merged in pull request #23: [docs/troubleshooting.md](docs/troubleshooting.md) and the source of the manual page, `man/pve-smart-alert.8`, which the package installs since the fix of `0.5.0~dev5`; with them the package installs the reference configuration uncompressed, at the path the tool names.
+- Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own; the notice `tool.unsupported_controller` names its table and key on one line, which is not valid TOML, in the wording that [ADR 0031](docs/adr/0031-switching-tool-conditions-off.md) prescribes; while the file is invalid, `config show` shows the values of the last good configuration with origins taken from the invalid file.
 
 ## After 1.0
 

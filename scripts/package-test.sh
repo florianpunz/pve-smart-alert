@@ -57,7 +57,8 @@ for path in \
 	/usr/lib/systemd/system/pve-smart-alert-failure.service \
 	/etc/pve-smart-alert/config.toml \
 	/usr/share/doc/pve-smart-alert/config.reference.toml \
-	/usr/share/doc/pve-smart-alert/copyright; do
+	/usr/share/doc/pve-smart-alert/copyright \
+	/usr/share/man/man8/pve-smart-alert.8.gz; do
 	[ -e "$path" ] || fail "not installed: $path"
 	echo "ok $path"
 done
@@ -98,6 +99,7 @@ for path in \
 	/usr/share/pve-smart-alert \
 	/usr/libexec/pve-smart-alert \
 	/usr/sbin/pve-smart-alert \
+	/usr/share/man/man8/pve-smart-alert.8.gz \
 	/usr/share/pve-manager/templates/default/pve-smart-alert-subject.txt.hbs \
 	/usr/share/pve-manager/templates/default/pve-smart-alert-body.txt.hbs \
 	/usr/lib/systemd/system/pve-smart-alert.timer \
