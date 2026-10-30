@@ -82,6 +82,14 @@ fi
 perl -c /usr/libexec/pve-smart-alert/notify-bridge
 /usr/libexec/pve-smart-alert/notify-bridge --check || true
 
+step "byte code that something else wrote"
+# A Python run by hand against the installed tree leaves a cache that dpkg
+# cannot remove afterwards; it was found on `pve1` on 2026-10-18. Purge has to
+# take the directory of the package with it, and the check below says so.
+mkdir -p /usr/share/pve-smart-alert/pve_smart_alert/__pycache__
+printf 'not from the package\n' \
+	>/usr/share/pve-smart-alert/pve_smart_alert/__pycache__/stray.cpython-312.pyc
+
 step "purge"
 apt-get purge -qq --yes pve-smart-alert
 for path in \
