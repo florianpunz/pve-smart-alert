@@ -38,6 +38,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0031](0031-switching-tool-conditions-off.md) | Switch a condition of the tool off, and name the monitored drives of the notice | Accepted | The key that switches a condition of the tool off, and what the notice about an unsupported controller names |
 | [0032](0032-hpe-smart-array-probe.md) | Probe the drives behind an HPE Smart Array controller | Accepted | The scope of the `cciss,N` probe, the node it reads, when it stops, the key that switches it off, its `device-id` and its standby check |
 | [0034](0034-manual-entries-of-other-pass-through-types.md) | Drives behind the other RAID controllers | Accepted | That a drive behind Areca, 3ware, Adaptec, HighPoint or SSSRAID takes nothing lsblk shows for its node and is not woken in standby, that the JMicron types never reach smartctl, and that these types have no `device-id` in version 1 |
+| [0035](0035-purge-removes-the-package-directory.md) | Purge removes the directory of the Python package | Accepted | That a purge removes `/usr/share/pve-smart-alert/` with everything in it, and why a foreign file in the tool's directory goes too |
 
 ## Confirmed by the maintainer
 
@@ -62,7 +63,8 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0002](0002-supported-platforms-and-version-baseline.md), [0004](0004-smartctl-json-as-data-source.md) | Proxmox VE 9.2 ships smartmontools 7.5, not 7.4 ([Research 06](../research/06-test-cluster-recordings.md)). 7.4 remains the version to support for older 9.x hosts |
 | [0008](0008-notification-integration.md) | The test command alone does not make "no matcher matched" visible: the notification system accepts such a notification without an error and without a log line. The routing check of [0020](0020-routing-check.md) does |
 | [0014](0014-repository-structure.md) | The layout tree is a snapshot of 2026-10-04; the repository itself shows the current layout. Commit messages now start with a type prefix such as `feat:` or `docs:`, as [CONTRIBUTING.md](../../CONTRIBUTING.md) describes |
-| [0013](0013-packaging-and-installation.md) | The purge also removes `/usr/share/pve-smart-alert/`: a byte code cache written there by a Python run that bypassed the launcher survived dpkg and kept the directory (`pve1`, 2026-10-18). The decision itself, that purge removes the paths of the tool and no foreign file, is unchanged |
+| [0012](0012-read-only-and-coexistence-with-smartd.md) | Extended by [0035](0035-purge-removes-the-package-directory.md): a purge removes the directory of the tool with everything in it, including a file that no package owns |
+| [0013](0013-packaging-and-installation.md) | Superseded by [0035](0035-purge-removes-the-package-directory.md) for the paths that a purge removes only; every other part of the record governs as before |
 
 ## Adding a record
 
