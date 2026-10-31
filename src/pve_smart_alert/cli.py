@@ -210,9 +210,9 @@ def build_parser() -> argparse.ArgumentParser:
         "show",
         help="print the effective configuration",
         description=(
-            "Print every key with its effective value and where the value comes"
-            " from: the file, the built-in default or the last good configuration"
-            " (FR-407)."
+            "Print every key with its effective value and, for the values that"
+            " carry one, its origin: the file, the built-in default or the last"
+            " good configuration (FR-407)."
         ),
     )
     show.add_argument(
