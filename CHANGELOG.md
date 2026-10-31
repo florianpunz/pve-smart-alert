@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 
 - [docs/hardware-support.md](docs/hardware-support.md) states for every controller family how its support was verified, with the evidence labels of ADR 0016, and how to record a host with `pve-smart-alert dump-fixture` and contribute the archive (NFR-16).

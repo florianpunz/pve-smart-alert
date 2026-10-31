@@ -1,3 +1,14 @@
+pve-smart-alert (0.5.0) unstable; urgency=medium
+
+  * Release 0.5.0, milestone M5: one command installs the tool on a Proxmox
+    VE node, a systemd timer runs the check every 30 minutes and after a
+    reboot, a failed run is reported by a short mail at most once a day, and
+    a purge removes every file of the tool. The acceptance passed on pve1 and
+    on the cluster node pve5 on 2026-10-31 (ROADMAP.md). The user-visible
+    changes of the test builds 0.5.0~dev1 to 0.5.0~dev5 are in CHANGELOG.md.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Sat, 31 Oct 2026 20:45:00 +0100
+
 pve-smart-alert (0.5.0~dev5) unstable; urgency=medium
 
   * Pre-release of 0.5.0 for test hosts (ADR 0027), the content of the test
