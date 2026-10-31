@@ -103,6 +103,8 @@ Addition of 2026-10-08: the acceptance run of milestone M1 on 2026-10-04, on the
 - When no matcher matches, the call returns success and logs nothing, exactly as a delivery that logs nothing. [ADR 0020](../adr/0020-routing-check.md) answers this with a check of the routing.
 - Seen in the acceptance run of that routing check on 2026-10-07: for a disabled matcher the library logs `skipping disabled matcher 'NAME'` instead of nothing.
 
+Addition of 2026-10-31: the acceptance run of milestone M5 on `pve5`, a node of the test cluster with Proxmox VE 9.2.24 and the build `0.5.0~dev5`, tested this route while pmxcfs was read-only. With `corosync` stopped the node had lost quorum (`pvecm status` reported `Cannot initialize CMAP service`). **Verified** in that run: `pve-smart-alert check` exited 0, and `test-notification --severity warning` was delivered through the bridge by the matcher `pve-smart-alert` to the target `docker-mailserver` and arrived in the inbox, so the notification configuration stays readable without quorum and the bridge needs no fallback. The other half, pmxcfs not running, was measured on `pve1` on 2026-10-18: the fallback handed the message to the mail command, but `proxmox-mail-forward` found no address for `root@pam` without pmxcfs, so it reached no person ([ARCHITECTURE.md](../../ARCHITECTURE.md) section 11, [ROADMAP.md](../../ROADMAP.md) M5). **Not verified**: that `/etc/pve/corosync.conf` keeps the cluster name while pmxcfs is read-only; the file was read on `pve5` in its first run, while the node was quorate (Q-N12).
+
 History, as evidence for the stability risk:
 
 | Date | Change | Effect on callers |
