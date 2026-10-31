@@ -52,8 +52,9 @@ def render(
     when the report shows the built-in defaults or the last good
     configuration; it decides the origin of each value. `error` names a
     file that could not be used. `last_good` says that the values come
-    from the last good configuration, not from the file, so every value is
-    credited to it.
+    from the last good configuration, not from the file, so every value of
+    the settings and checks is credited to it; the per-drive overrides are
+    shown as configured and carry no origin.
     """
     document = raw if raw is not None else {}
     origin = _FROM_LAST_GOOD if last_good else None
@@ -269,8 +270,9 @@ def _interval(value: timedelta | None) -> str:
 def _origin_for(origin: str | None) -> Callable[[Mapping[str, object], str], str]:
     """Return the function that names where a value comes from.
 
-    With `origin`, every value is credited to it, which is how the report
-    shows the last good configuration: no value of it comes from the file.
+    With `origin`, every value that carries an origin is credited to it,
+    which is how the report shows the last good configuration: no such
+    value comes from the file.
     """
 
     def origin_of(section: Mapping[str, object], key: str) -> str:
