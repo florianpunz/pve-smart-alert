@@ -2,7 +2,8 @@
 """The report of `pve-smart-alert config show` (FR-407).
 
 Every key of the effective configuration with its value and the origin of
-that value: the configuration file or the built-in default. The thresholds
+that value: the configuration file, the built-in default, or the last good
+configuration while the file cannot be used. The thresholds
 of the one check that differs per drive class are shown per class, as the
 global configuration leaves them for each class; the per-drive overrides
 are listed as they are configured, because which of them applies is known
@@ -48,19 +49,21 @@ def render(
     """Return the lines of the report.
 
     `raw` is the configuration document as it lies in the file, or `None`
-    when the report shows the built-in defaults; it decides the origin of
-    each value. `error` names a file that could not be used. `last_good`
-    says that the values come from the last good configuration, not from
-    the file, so no value is credited to the file.
+    when the report shows the built-in defaults or the last good
+    configuration; it decides the origin of each value. `error` names a
+    file that could not be used. `last_good` says that the values come
+    from the last good configuration, not from the file, so every value is
+    credited to it.
     """
     document = raw if raw is not None else {}
     origin = _FROM_LAST_GOOD if last_good else None
     lines = ["effective configuration of this host"]
     source = config.source
     if last_good:
+        assert source is not None, "the last good configuration has a source"
         lines.append(
-            f"file:      {source if source is not None else 'none'}"
-            " (the last good configuration; the configuration file is invalid)"
+            f"file:      {source}"
+            " (the last good configuration; the configuration file could not be used)"
         )
     else:
         lines.append(

@@ -55,7 +55,7 @@ The commands are described in the [README](../README.md#commands) and in the man
 
 - `pve-smart-alert config check` validates the file and names the first error it finds, with its key where it has one and its line where it can be found; run it again after each fix. A file that passes is saved as the last good configuration.
 - A file that does not validate never stops a run: the last configuration that passed is used, or the built-in defaults, and the run reports `tool.config_invalid`. `doctor` says in the line `config` which configuration runs continue with. `scan`, `test-notification` and `dump-fixture` stop with exit status 2 on an invalid file instead.
-- `pve-smart-alert config show` prints every key with its effective value and whether it comes from the file or is the default. While the file is invalid, the values are those of the last good configuration, and the origins are not reliable.
+- `pve-smart-alert config show` prints every key with its effective value and where it comes from: the file, the built-in default, or the last good configuration. While the configuration file cannot be used, the values are those of the last good configuration, every value is marked `(last good)`, and the header names the file that holds it.
 - The interval of the timer is not a key of this file; [README](../README.md#installation) shows the drop-in that changes it. If the line `timer` of `doctor` names two intervals, the drop-in lacks the empty `OnUnitActiveSec=` that removes the interval of the package.
 
 ## The same problem arrives twice

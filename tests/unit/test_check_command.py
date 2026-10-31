@@ -337,7 +337,7 @@ def test_config_show_works_with_an_invalid_file(
     # The last good configuration is shown, and the error with it (FR-406).
     # The values are not those of the invalid file, so the origins are not
     # taken from the invalid file either.
-    config_path, _ = paths
+    config_path, last_good = paths
     config_path.write_text('[notify]\ntransport = "mail"\n', encoding="utf-8")
     cli.main(["config", "check"])
     capsys.readouterr()
@@ -349,10 +349,32 @@ def test_config_show_works_with_an_invalid_file(
     assert "unknown key" in captured.err
     assert 'transport = "mail"' in captured.out
     assert 'transport = "pve-notify"' not in captured.out
-    # No value is credited to the invalid file.
+    # No value is credited to the file, and none to the built-in default:
+    # every value comes from the last good configuration.
     assert "(last good)" in captured.out
     assert "(file)" not in captured.out
+    assert "(default)" not in captured.out
+    # The header names the file that holds the last good configuration.
+    assert str(last_good) in captured.out
     assert "the last good configuration" in captured.out
+
+
+def test_config_show_without_a_last_good_uses_the_defaults(
+    capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
+) -> None:
+    # The file cannot be used and no last good configuration exists: the
+    # built-in defaults apply, and no value is credited to the file.
+    config_path, _ = paths
+    config_path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+
+    assert cli.main(["config", "show"]) == cli.EXIT_OK
+
+    captured = capsys.readouterr()
+    assert "unknown key" in captured.err
+    assert "none, the built-in defaults apply" in captured.out
+    assert "(default)" in captured.out
+    assert "(last good)" not in captured.out
+    assert "(file)" not in captured.out
 
 
 def test_a_threshold_changed_in_the_configuration_changes_the_dry_run(
