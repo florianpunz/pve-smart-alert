@@ -533,16 +533,21 @@ def _config_check() -> int:
 
 def _config_show(*, defaults: bool) -> int:
     """Print the effective configuration and the origin of each value (FR-407)."""
-    raw = None if defaults else _raw_document(CONFIG_PATH)
+    last_good = False
     if defaults:
-        config, error = Config(), None
+        config, error, raw = Config(), None, None
     else:
         config, error = load_effective(last_good=LAST_GOOD_CONFIG_PATH)
+        # A file that could not be used says nothing about the values that
+        # are shown: they come from the last good configuration, or from the
+        # built-in defaults when there is none.
+        raw = None if error is not None else _raw_document(CONFIG_PATH)
+        last_good = error is not None and config.source is not None
     if error is not None:
         # What a run uses is shown even then, and the error with it.
         print(f"{PROGRAM}: {error}", file=sys.stderr)
 
-    for line in render_config_report(config, raw, error=error):
+    for line in render_config_report(config, raw, error=error, last_good=last_good):
         print(line)
     return EXIT_OK
 

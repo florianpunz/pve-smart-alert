@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `pve-smart-alert config show` names the last good configuration as the origin of every value while the configuration file cannot be used, instead of crediting the values to the file that could not be used (FR-406, FR-407).
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

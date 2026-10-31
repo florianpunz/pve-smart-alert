@@ -335,17 +335,24 @@ def test_config_show_works_with_an_invalid_file(
     capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
 ) -> None:
     # The last good configuration is shown, and the error with it (FR-406).
+    # The values are not those of the invalid file, so the origins are not
+    # taken from the invalid file either.
     config_path, _ = paths
     config_path.write_text('[notify]\ntransport = "mail"\n', encoding="utf-8")
     cli.main(["config", "check"])
     capsys.readouterr()
-    config_path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+    config_path.write_text('[notify]\ntransport = "pve-notify"\ntimeout = 30\n', encoding="utf-8")
 
     assert cli.main(["config", "show"]) == cli.EXIT_OK
 
     captured = capsys.readouterr()
     assert "unknown key" in captured.err
     assert 'transport = "mail"' in captured.out
+    assert 'transport = "pve-notify"' not in captured.out
+    # No value is credited to the invalid file.
+    assert "(last good)" in captured.out
+    assert "(file)" not in captured.out
+    assert "the last good configuration" in captured.out
 
 
 def test_a_threshold_changed_in_the_configuration_changes_the_dry_run(
