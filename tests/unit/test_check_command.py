@@ -354,9 +354,12 @@ def test_config_show_works_with_an_invalid_file(
     assert "(last good)" in captured.out
     assert "(file)" not in captured.out
     assert "(default)" not in captured.out
-    # The header names the file that holds the last good configuration.
-    assert str(last_good) in captured.out
-    assert "the last good configuration" in captured.out
+    # The header names the file that holds the last good configuration and
+    # says why the file itself was not used.
+    assert (
+        f"file:      {last_good} (the last good configuration;"
+        " the configuration file could not be used)"
+    ) in captured.out
 
 
 def test_config_show_without_a_last_good_uses_the_defaults(
@@ -365,13 +368,14 @@ def test_config_show_without_a_last_good_uses_the_defaults(
     # The file cannot be used and no last good configuration exists: the
     # built-in defaults apply, and no value is credited to the file.
     config_path, _ = paths
-    config_path.write_text("[notify]\ntimeout = 30\n", encoding="utf-8")
+    config_path.write_text('[notify]\ntransport = "pve-notify"\ntimeout = 30\n', encoding="utf-8")
 
     assert cli.main(["config", "show"]) == cli.EXIT_OK
 
     captured = capsys.readouterr()
     assert "unknown key" in captured.err
     assert "none, the built-in defaults apply" in captured.out
+    assert 'transport = "auto"' in captured.out
     assert "(default)" in captured.out
     assert "(last good)" not in captured.out
     assert "(file)" not in captured.out
