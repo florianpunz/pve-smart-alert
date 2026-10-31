@@ -482,7 +482,8 @@ pve-smart-alert 1.0.0 on pve1
 | State file is unreadable or has an unknown schema | File is renamed, empty state is used, `tool.state_reset`. Next notification is one summary |
 | State directory is not writable | Run fails after delivering what it can. The failure unit reports it |
 | Another run holds the lock | Exit with a message and exit status 3. Not an error: the service accepts it with `SuccessExitStatus=3` (section 13) |
-| pmxcfs is not available | The bridge fails. The mail fallback is used |
+| pmxcfs is not running | The bridge fails. The mail fallback is used. Measured on `pve1` on 2026-10-18: the fallback hands the message to the mail command, but `proxmox-mail-forward` finds no address for `root@pam` without pmxcfs, so it reaches no person |
+| The node has lost quorum and pmxcfs is read-only | The bridge works: the notification configuration and `/etc/pve/corosync.conf` stay readable. Measured on `pve5` on 2026-10-31: the check exited 0, and `test-notification` was delivered by the matcher `pve-smart-alert` to the target `docker-mailserver` |
 | Notify bridge fails, is missing, or times out | Mail fallback in the same run. `tool.transport_degraded`, warning, when the bridge fails its `--check` at the start of a run |
 | Template cannot be rendered by Proxmox VE | Detected from the library's log output. Treated like a bridge failure |
 | All matched targets fail | The notification counts as not delivered and is planned again in the next run |
