@@ -4,17 +4,17 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package now brings a systemd timer that runs the check every 30 minutes. This is work in progress of M5: it has not been accepted on a real Proxmox VE host yet, and there is no release.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`; there is no public release yet, because the repository is still private.
 >
 > <details>
-> <summary>Next: M5, packaging, timer and installation</summary>
+> <summary>Next: M6 and M7</summary>
 >
 > - **M0 (done):** development tooling
 > - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
 > - **M3 (done):** evaluation and configuration
 > - **M4 (done):** state and notification policy
-> - **M5 (in progress):** packaging, timer and installation
+> - **M5 (accepted on pve1 and pve5):** packaging, timer and installation
 > - **M6 (built, waits for its runs on a cluster node):** SAS and hardware RAID on recorded data; [docs/hardware-support.md](docs/hardware-support.md) says how each controller was verified
 > - **M7 (started):** hardening, documentation and version 1.0, the version meant for regular use
 >
