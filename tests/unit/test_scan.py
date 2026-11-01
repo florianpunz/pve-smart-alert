@@ -9,6 +9,7 @@ real nodes.
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -264,3 +265,29 @@ def test_a_drive_without_a_controller_has_no_location_line(
     text = report(Host.of_node(tmp_path, monkeypatch, "pve7").discover())
 
     assert "Location:" not in text
+
+
+def test_a_drive_whose_model_holds_an_unprinted_character_gets_a_selector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `scan` prints the model with the character replaced by a space, and a
+    # selector compares the stored value. The line `Selector:` is the value
+    # as it is written into the configuration (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "ACME\x01X 8TB"
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    discovery = host.discover()
+
+    (line,) = [line for line in report(discovery).splitlines() if "Selector:" in line]
+    selector = tomllib.loads(line.split("Selector:", 1)[1].strip())
+    identity = next(
+        found.snapshot.identity
+        for found in discovery.devices
+        if found.snapshot is not None and found.candidate.name == entry["device"]
+    )
+    assert DriveSelector(SelectorKind.MODEL, selector["model"]).matches(identity)

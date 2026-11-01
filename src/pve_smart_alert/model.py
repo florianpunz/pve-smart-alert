@@ -62,10 +62,6 @@ BEHIND_CONTROLLER_TYPE: Final = re.compile(
     r"(?:megaraid|cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
 )
 
-# Longer field values are cut. Field values go into the configuration of the
-# notification system and drive data is untrusted (ARCHITECTURE.md section 14).
-MAX_FIELD_VALUE: Final = 128
-
 
 class Severity(StrEnum):
     """Severity of the tool, seen from the finding.
@@ -123,6 +119,12 @@ class EventType(StrEnum):
 # --dry-run` print them, as in a message (ARCHITECTURE.md section 14).
 MAX_PRINTED: Final = 200
 
+# The limit of a notification field is that of a printed value, so that the
+# body and a matcher see the same value up to the cut (ADR 0036). Field
+# values go into the configuration of the notification system, and drive
+# data is untrusted (ARCHITECTURE.md section 14).
+MAX_FIELD_VALUE: Final = MAX_PRINTED
+
 
 # The Unicode categories that `without_controls` replaces: the controls (Cc),
 # the format characters (Cf), among them the controls of the direction of
@@ -161,15 +163,57 @@ def printable(value: str, *, limit: int) -> str:
     return " ".join(without_controls(value).split())[:limit]
 
 
+def printed(value: str, *, limit: int) -> str:
+    """Return a string of a drive for output; a value that was cut carries a mark.
+
+    A reader who copies a cut value would get a value the tool never compares:
+    the mark says that there is more, and the selector line of `scan` names
+    the exact value (ADR 0036).
+    """
+    collapsed = " ".join(without_controls(value).split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[:limit] + "…"
+
+
+def exact_string(value: str) -> str:
+    """Return a value as a TOML basic string that names exactly this value.
+
+    Control and format characters are written as `\\uXXXX` escapes, a quote
+    and a backslash are escaped, and a character outside the basic
+    multilingual plane as `\\UXXXXXXXX`. A lone surrogate is written as an
+    escape as well, although TOML has no value for it; `scan` prints the line
+    of such a drive all the same (ADR 0036).
+    """
+    parts: list[str] = []
+    for character in value:
+        if character == "\\":
+            parts.append("\\\\")
+        elif character == '"':
+            parts.append('\\"')
+        elif unicodedata.category(character) in NOT_PRINTED:
+            code = ord(character)
+            parts.append(f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}")
+        else:
+            parts.append(character)
+    return f'"{"".join(parts)}"'
+
+
 def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
     A field value never contains a comma, because Proxmox VE splits the value
     list of an exact matcher on commas, so a comma inside a value would change
     the meaning of a rule. Otherwise it is `printable`, so that a value cannot
-    break the line it is written to (ADR 0008, ARCHITECTURE.md section 14).
+    break the line it is written to (ADR 0008, ARCHITECTURE.md section 14). A
+    value that cleaning would leave empty, such as a model or serial number of
+    control characters only, is carried as its exact escaped form instead, so
+    that a matcher can still select the drive (ADR 0036).
     """
-    return printable(value.replace(",", ";"), limit=limit)
+    cleaned = printable(value.replace(",", ";"), limit=limit)
+    if cleaned or not value.strip():
+        return cleaned
+    return exact_string(value)[:limit]
 
 
 def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:

@@ -10,6 +10,7 @@ import pytest
 
 from pve_smart_alert.model import (
     MAX_FIELD_VALUE,
+    MAX_PRINTED,
     NOTIFICATION_TYPE,
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
@@ -26,9 +27,11 @@ from pve_smart_alert.model import (
     Snapshot,
     WearSource,
     behind_controller,
+    exact_string,
     is_cciss_type,
     node_name,
     pass_through_id,
+    printed,
     sanitize_field_value,
 )
 
@@ -89,6 +92,23 @@ def test_sanitize_cuts_long_values() -> None:
 
 def test_sanitize_keeps_an_empty_value_empty() -> None:
     assert sanitize_field_value("   ") == ""
+
+
+def test_a_cut_value_carries_a_mark() -> None:
+    # A copy of a cut value is not the value (ADR 0036).
+    assert printed("s" * (MAX_PRINTED + 50), limit=MAX_PRINTED) == "s" * MAX_PRINTED + "…"
+    assert printed("short", limit=MAX_PRINTED) == "short"
+
+
+def test_the_exact_form_escapes_what_cannot_be_printed() -> None:
+    assert exact_string('ACME\x01"X" 8TB') == '"ACME\\u0001\\"X\\" 8TB"'
+    assert exact_string("back\\slash") == '"back\\\\slash"'
+
+
+def test_a_field_value_of_control_characters_only_is_escaped() -> None:
+    # Cleaning would leave nothing, and a field that is left out cannot be
+    # matched at all (ADR 0036).
+    assert sanitize_field_value("\x01") == '"\\u0001"'
 
 
 def test_sanitize_keeps_characters_that_are_not_ascii() -> None:

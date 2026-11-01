@@ -40,6 +40,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0032](0032-hpe-smart-array-probe.md) | Probe the drives behind an HPE Smart Array controller | Accepted | The scope of the `cciss,N` probe, the node it reads, when it stops, the key that switches it off, its `device-id` and its standby check |
 | [0034](0034-manual-entries-of-other-pass-through-types.md) | Drives behind the other RAID controllers | Accepted | That a drive behind Areca, 3ware, Adaptec, HighPoint or SSSRAID takes nothing lsblk shows for its node and is not woken in standby, that the JMicron types never reach smartctl, and that these types have no `device-id` in version 1 |
 | [0035](0035-purge-removes-the-package-directory.md) | Purge removes the directory of the Python package | Accepted | That a purge removes `/usr/share/pve-smart-alert/` with everything in it, and why a foreign file in the tool's directory goes too |
+| [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) | Select a drive by the value the tool prints | Accepted | Printed identity, selector line, length limits of a printed value and a notification field |
 | [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 
 ## Confirmed by the maintainer

@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Final
 
-from pve_smart_alert.model import MAX_PRINTED, printable, without_controls
+from pve_smart_alert.model import MAX_PRINTED, printed, without_controls
 from pve_smart_alert.planner import RANK
 from pve_smart_alert.state import ConditionRecord, DriveRecord, State, format_time, state_to_json
 
@@ -60,9 +60,9 @@ def render(state: State, *, path: Path) -> list[str]:
         lines += ["", "Skipped devices:"]
         for key, skipped in sorted(state.skipped.items()):
             name, _, device_type = key.partition("|")
-            name = printable(name, limit=MAX_PRINTED)
-            device_type = printable(device_type, limit=MAX_PRINTED)
-            cleaned = printable(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""
+            name = printed(name, limit=MAX_PRINTED)
+            device_type = printed(device_type, limit=MAX_PRINTED)
+            cleaned = printed(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""
             detail = f" ({cleaned})" if cleaned else ""
             lines.append(
                 f"  {name} [{device_type}]: {skipped.reason}{detail}, since"
@@ -80,13 +80,13 @@ def render_json(state: State, *, path: Path) -> str:
 
 def _drive_line(record: DriveRecord) -> str:
     access = record.last_access
-    name = printable(access.name, limit=MAX_PRINTED)
-    device_type = printable(access.type, limit=MAX_PRINTED)
+    name = printed(access.name, limit=MAX_PRINTED)
+    device_type = printed(access.type, limit=MAX_PRINTED)
     identity = record.identity
     if identity is None:
         return f"{name} [{device_type}], never answered with an identity"
-    model = printable(identity.model, limit=MAX_PRINTED)
-    serial = printable(identity.serial or "no serial number", limit=MAX_PRINTED)
+    model = printed(identity.model, limit=MAX_PRINTED)
+    serial = printed(identity.serial or "no serial number", limit=MAX_PRINTED)
     return f"{name} [{device_type}] {model} ({serial})"
 
 

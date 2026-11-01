@@ -19,7 +19,16 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.discovery import Discovery, Found, Outcome, Source
-from pve_smart_alert.model import MAX_PRINTED, Membership, Snapshot, printable, without_controls
+from pve_smart_alert.model import (
+    MAX_PRINTED,
+    DriveIdentity,
+    Membership,
+    Snapshot,
+    exact_string,
+    printable,
+    printed,
+    without_controls,
+)
 from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC
 
 # From this difference on, both values are shown (ADR 0021).
@@ -71,8 +80,8 @@ def _smartctl_line(discovery: Discovery, path: Path) -> str:
 def _device(found: Found) -> Iterator[str]:
     candidate = found.candidate
     # A name of the scan need not be valid, and can be arbitrarily long.
-    name = printable(candidate.name, limit=MAX_PRINTED)
-    kind = printable(candidate.type, limit=MAX_PRINTED)
+    name = printed(candidate.name, limit=MAX_PRINTED)
+    kind = printed(candidate.type, limit=MAX_PRINTED)
     yield f"{name} [{kind}], {_SOURCES[candidate.source]}: {_outcome(found)}"
     snapshot = found.snapshot
     if snapshot is not None:
@@ -85,6 +94,22 @@ def _device(found: Found) -> Iterator[str]:
             yield _labelled("Location", location)
     if found.collected is not None:
         yield _labelled("Read in", f"{found.collected.duration_seconds:.2f} s")
+
+
+def _selector_lines(identity: DriveIdentity) -> Iterator[str]:
+    """Return the selector of a value that `scan` does not print as it is (ADR 0036).
+
+    A model or serial number that holds a character cleaning replaces, or that
+    is longer than a printed value, is printed cleaned or cut. The line
+    `Selector:` carries the value as a TOML string, exactly as it is written
+    into the configuration. A value longer than the printed limit is cut as
+    well and carries the mark; such a drive is selected with a model wildcard.
+    """
+    if printable(identity.model, limit=MAX_PRINTED) != identity.model:
+        yield _labelled("Selector", f"model = {exact_string(identity.model)}")
+    serial = identity.serial
+    if serial is not None and printable(serial, limit=MAX_PRINTED) != serial:
+        yield _labelled("Selector", f"serial = {exact_string(serial)}")
 
 
 def _outcome(found: Found) -> str:
@@ -103,6 +128,7 @@ def _drive(snapshot: Snapshot) -> Iterator[str]:
     identity = snapshot.identity
     yield _labelled("Model", identity.model)
     yield _labelled("Serial", identity.serial or "none reported")
+    yield from _selector_lines(identity)
     if identity.wwn is not None:
         yield _labelled("WWN", identity.wwn)
     if snapshot.firmware is not None:
@@ -169,4 +195,4 @@ def _probing(device_ids: tuple[int, ...]) -> str:
 
 def _labelled(label: str, value: str) -> str:
     """Return one line below a device. The values line up, and none is longer than a message's."""
-    return f"  {label + ':':<10} {printable(value, limit=MAX_PRINTED)}"
+    return f"  {label + ':':<10} {printed(value, limit=MAX_PRINTED)}"
