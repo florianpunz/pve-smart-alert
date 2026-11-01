@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from frame import ScenarioHost
 from hosts import FAKE, RECORDINGS, Host
 
 from pve_smart_alert import cli
@@ -147,6 +148,29 @@ def test_the_dry_run_of_sas_drives_behind_an_hba(
     # Every drive is read and parsed; none is unreadable.
     assert "4 monitored, 0 in standby, 0 unreadable" in out
     assert "no findings" in out
+
+
+def test_the_dry_run_shows_the_findings_of_each_drive_behind_one_controller(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Result 2 of milestone M6: two drives behind one MegaRAID controller share
+    # the device name /dev/bus/6, and each keeps its own findings.
+    host = ScenarioHost(tmp_path, monkeypatch, "megaraid-degraded")
+    host.install()
+    host.step("02-degraded")
+
+    assert cli.main(["check", "--dry-run"]) == cli.EXIT_PROBLEM
+
+    report = capsys.readouterr().out.partition("Planned notifications")[0]
+    sata = report.index("/dev/bus/6 [sat+megaraid,14]")
+    sas = report.index("/dev/bus/6 [megaraid,8]")
+    assert sata < sas
+    assert "ata.pending_sectors" in report[sata:sas]
+    assert "scsi.grown_defects" not in report[sata:sas]
+    assert "scsi.grown_defects" in report[sas:]
+    assert "ata.pending_sectors" not in report[sas:]
 
 
 def test_the_dry_run_uses_the_last_good_configuration(

@@ -127,9 +127,10 @@ class Delivery:
 class RunResult:
     """What one run did.
 
-    `discovery` and `evaluations` feed the report of a dry run. `ok` is false
-    when a notification was not handed over or the state could not be saved,
-    which makes the run fail (FR-607).
+    `discovery` and `findings` feed the report of a dry run; `findings` is
+    keyed by `Access.key`, the device name and the smartctl type. `ok` is
+    false when a notification was not handed over or the state could not be
+    saved, which makes the run fail (FR-607).
     """
 
     config: Config
@@ -287,7 +288,11 @@ def _observe(
     *,
     not_evaluated: frozenset[str] = frozenset(),
 ) -> tuple[Observation, dict[str, list[Finding]]]:
-    """Return what this run saw, for the planner, and the findings per device."""
+    """Return what this run saw, for the planner, and the findings per device.
+
+    The findings are keyed by the device name and smartctl type, because two
+    drives behind one controller share the device name.
+    """
     drives: list[DriveSeen] = []
     skipped: list[SkippedSeen] = []
     findings: dict[str, list[Finding]] = {}
@@ -299,7 +304,7 @@ def _observe(
             record = state.drives.get(identity_key(snapshot.identity, access))
             baselines = record.baselines if record is not None else {}
             drive_findings = evaluate(snapshot, settings, baselines)
-            findings[found.candidate.name] = drive_findings
+            findings[access.key] = drive_findings
             drives.append(
                 DriveSeen(
                     access,
