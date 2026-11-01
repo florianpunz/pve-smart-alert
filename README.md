@@ -1,6 +1,6 @@
 <img alt="pve-smart-alert" src="docs/img/banner.png" />
 
-<h1 align="center">Proxmox Virtual Enviroment - S.M.A.R.T. Disk Alert</h1>
+<h1 align="center">PVE SMART Alert</h1>
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
