@@ -598,6 +598,13 @@ SCENARIOS: Final = {
             ),
         ),
         Scenario(
+            name="twenty-four-drives",
+            base="direct/standalone-pve1",
+            description=("One SATA SSD copied to 24 responsive drives, for the run time of NFR-07"),
+            prepare=(copies("sda.json", 24),),
+            steps=(Step("01-healthy", description="first run: one summary with 24 drives"),),
+        ),
+        Scenario(
             name="onboard-sata-nvme",
             base="direct/test-cluster-pve7",
             description=(
