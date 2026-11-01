@@ -82,5 +82,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The finding `smart.disabled` of a drive behind a controller names the command with its type, such as `smartctl -s on -d aacraid,0,0,2 /dev/sdc`; without it the command addressed the logical volume or the controller.
 - A JMicron RAID type, `jmb39x`, `jmb39x-q`, `jmb39x-q2` or `jms56x`, never reaches smartctl: a manual entry with it is refused as invalid configuration, and a last good configuration drops it. smartctl reads such a drive by writing to a sector of the RAID volume, and the tool only reads drives ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
 
-[Unreleased]: https://github.com/florianpunz/pve-smart-alert/commits/main
+[Unreleased]: https://github.com/florianpunz/pve-smart-alert/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/florianpunz/pve-smart-alert/releases/tag/v0.5.0
