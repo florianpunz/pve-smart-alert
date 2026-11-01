@@ -42,6 +42,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0035](0035-purge-removes-the-package-directory.md) | Purge removes the directory of the Python package | Accepted | That a purge removes `/usr/share/pve-smart-alert/` with everything in it, and why a foreign file in the tool's directory goes too |
 | [0031](0031-switching-tool-conditions-off.md) | Its limit of 128 characters for the text of a condition is superseded by the limit of 200 characters for a printed value and a notification field in [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) |
 | [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) | Select a drive by the value the tool prints | Accepted | Printed identity, selector line, length limits of a printed value and a notification field |
+| [0037](0037-unambiguous-state-keys.md) | Unambiguous keys in the state file | Accepted | How a drive record is keyed, and the migration to schema 2 |
 | [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 
 ## Confirmed by the maintainer

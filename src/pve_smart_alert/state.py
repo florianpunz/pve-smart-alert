@@ -61,7 +61,7 @@ __all__ = [
 
 #: The schema this version writes. A file of a higher one is set aside
 #: like a corrupt file, which keeps a downgrade from misreading it.
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 
 #: How long the record of a drive that is no longer seen is kept, so that a
 #: returning drive is recognized (ADR 0007).
@@ -71,9 +71,50 @@ RETENTION: Final = timedelta(days=90)
 # document of the next one.
 Migration = Callable[[dict[str, object]], dict[str, object]]
 
-#: The migrations, by the version they start from. Version 1 is the first
-#: schema, so there is none yet; the mechanism is tested with its own table.
-MIGRATIONS: Final[Mapping[int, Migration]] = {}
+
+def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
+    """Re-key the drives of a schema-1 document (ADR 0037).
+
+    Schema 1 joined the parts of the key with `|`, so a model with a `|` and
+    a serial number could meet another drive's key. The record of each drive
+    carries its identity and its last access, from which the unambiguous key
+    follows; a record that carries neither keeps its old key.
+    """
+    drives = document.get("drives")
+    if not isinstance(drives, dict):
+        return document
+    keyed: dict[str, object] = {}
+    for key, entry in drives.items():
+        migrated = _migrated_key(entry) if isinstance(entry, dict) else None
+        keyed[migrated if migrated is not None else key] = entry
+    document["drives"] = keyed
+    return document
+
+
+def _migrated_key(entry: Mapping[str, object]) -> str | None:
+    """Return the schema-2 key of one drive record of schema 1, if it can be computed."""
+    identity_node = entry.get("identity")
+    access_node = entry.get("last_access")
+    if not isinstance(identity_node, dict) or not isinstance(access_node, dict):
+        return None
+    model = identity_node.get("model")
+    serial = identity_node.get("serial")
+    wwn = identity_node.get("wwn")
+    name = access_node.get("name")
+    device_type = access_node.get("type")
+    if not isinstance(model, str) or not isinstance(name, str) or not isinstance(device_type, str):
+        return None
+    identity = DriveIdentity.of(
+        model,
+        serial=serial if isinstance(serial, str) else None,
+        wwn=wwn if isinstance(wwn, str) else None,
+    )
+    return identity_key(identity, Access(name, device_type))
+
+
+#: The migrations, by the version they start from. Version 1 joined the parts
+#: of a drive key with `|`; version 2 writes them as a JSON array (ADR 0037).
+MIGRATIONS: Final[Mapping[int, Migration]] = {1: _migrate_keys}
 
 
 class StateError(Exception):
@@ -229,14 +270,17 @@ def identity_key(identity: DriveIdentity, access: Access | None = None) -> str:
     Model and serial number, or model and WWN when there is no serial
     number. A drive without either has no stable identity and is keyed by
     the path it was read through as well, because two such drives may well
-    be two drives.
+    be two drives. The parts are written as a JSON array, so that no part
+    can be split at a character that another part contains (ADR 0037).
     """
+    parts = [identity.model]
     if identity.serial is not None:
-        return f"{identity.model}|{identity.serial}"
-    if identity.wwn is not None:
-        return f"{identity.model}|wwn:{identity.wwn}"
-    where = f"|device:{access.key}" if access is not None else ""
-    return f"{identity.model}{where}"
+        parts += ["serial", identity.serial]
+    elif identity.wwn is not None:
+        parts += ["wwn", identity.wwn]
+    elif access is not None:
+        parts += ["device", access.key]
+    return json.dumps(parts)
 
 
 def load_state(
