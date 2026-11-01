@@ -385,6 +385,13 @@ and only the fields
 .BR system\-mail )
 and
 .BR hostname .
+A webhook target that writes a field of the notification into a JSON body
+has to use the helper
+.BR "{{json serial}}" ,
+or
+.BR escape ,
+because the notification system renders a webhook body without escaping;
+a mail target escapes the text of the message itself.
 .B pve\-smart\-alert doctor
 warns when a severity of the tool reaches no enabled target.
 .SH SEE ALSO

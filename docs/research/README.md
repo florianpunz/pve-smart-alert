@@ -5,7 +5,7 @@ The ADRs in [`../adr/`](../adr/) refer to them instead of repeating the evidence
 
 | Note | Question |
 | --- | --- |
-| [01 Notification integration](01-notification-integration.md) | How can an external tool feed a message into the Proxmox VE notification system? |
+| [01 Notification integration](01-notification-integration.md) | How can an external tool feed a message into the Proxmox VE notification system? Addition on how the system renders the data of a message, in a mail, a webhook and Gotify (2026-11-01) |
 | [02 Built-in SMART handling](02-builtin-smart-handling.md) | What does Proxmox VE already do, where is the gap, and how are duplicate alerts avoided? |
 | [03 SMART indicators and smartctl JSON](03-smart-indicators.md) | Which values predict failure, and how do SATA, SAS and NVMe differ in `smartctl --json`? Addition on what reaches the tool of a hostile string (2026-10-17) |
 | [04 Hardware RAID](04-hardware-raid.md) | How are drives behind RAID controllers found, and which controllers are realistic? Addition on the other controller types in the source of smartmontools (2026-10-17) |
