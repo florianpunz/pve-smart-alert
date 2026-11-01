@@ -79,5 +79,6 @@ def test_every_named_scenario_exists() -> None:
 
 def test_every_scenario_is_in_the_table() -> None:
     # The two scenarios of milestone M4 show the notification policy on the
-    # on-board drives, and the table names them there.
+    # on-board drives, and the scenario `twenty-four-drives` shows the run
+    # time of NFR-07 there; the table names them.
     assert set(SCENARIOS) <= named_scenarios()

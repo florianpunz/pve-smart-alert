@@ -538,9 +538,10 @@ def grown_defects(file: str, count: int) -> Edit:
 
 
 #: The scenarios, by name. The steps of `pending-sectors` and `five-hot`
-#: follow the acceptance steps of milestone M4 in ROADMAP.md. The others are
-#: named after the controller family they show, as milestone M6 asks, and
-#: `docs/hardware-support.md` names the scenario of every family.
+#: follow the acceptance steps of milestone M4 in ROADMAP.md, and
+#: `twenty-four-drives` holds the drives the run-time test of NFR-07 needs.
+#: The others are named after the controller family they show, as milestone
+#: M6 asks, and `docs/hardware-support.md` names the scenario of every family.
 SCENARIOS: Final = {
     scenario.name: scenario
     for scenario in (
@@ -596,6 +597,13 @@ SCENARIOS: Final = {
                     "confirmed: one summary instead of five",
                 ),
             ),
+        ),
+        Scenario(
+            name="twenty-four-drives",
+            base="direct/standalone-pve1",
+            description=("One SATA SSD copied to 24 responsive drives, for the run time of NFR-07"),
+            prepare=(copies("sda.json", 24),),
+            steps=(Step("01-healthy", description="first run: one summary with 24 drives"),),
         ),
         Scenario(
             name="onboard-sata-nvme",

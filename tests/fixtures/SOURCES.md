@@ -39,12 +39,13 @@ These recordings come from the test data of other projects, read at a pinned com
 
 ## Scenarios: `../scenarios.py`
 
-The scenario tests of the notification policy replay a host whose drives change from run to run ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recordings.
+The scenario tests replay a host from a recording above. Their steps change the drives from run to run, except in `twenty-four-drives`, `megaraid-jbod` and `unsupported-mpi3mr`, which repeat the same host; `twenty-four-drives` holds it for the run-time test of NFR-07 ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recordings.
 
 | Scenario | Base | Changes |
 | --- | --- | --- |
 | `pending-sectors` | `direct/standalone-pve1` | The raw value of attribute 197 set to 3 and to 20, an attribute 197 entry with made-up flags added where the drive has none, and the drive removed from the scan and the recording |
 | `five-hot` | `direct/standalone-pve1` | Four copies of the drive as `/dev/sdb` to `/dev/sde` with the serial numbers `ANON-SN-0002` to `ANON-SN-0005` and without WWN, and the temperature of all five set to 65 °C |
+| `twenty-four-drives` | `direct/standalone-pve1` | 23 copies of the drive as `/dev/sdb` to `/dev/sdx` with the serial numbers `ANON-SN-0002` to `ANON-SN-0024` and without WWN, for the run time of NFR-07 |
 | `onboard-sata-nvme` | `direct/test-cluster-pve7` | The media and data integrity errors of `nvme0` set to 2 |
 | `hba-sas` | `hba/maintainer-truenas` | The grown defect list of `sdc` set to 150 |
 | `hpe-smart-array` | `hba/maintainer-truenas` | **Synthetic** host: the SATA SSD `sdd` and the SAS SSD `sdc` given the device fields that smartctl writes for a read of `cciss,0` and `cciss,1` on `/dev/sg1` (`sat` and ` [SAT]` for the SATA SSD, `cciss` and ` [SCSI]` for the SAS SSD), everything else of the recording taken away, and an empty scan; it is also the recording of the probe tests. Then the raw value of attribute 197 of `cciss,0` set to 3 |
