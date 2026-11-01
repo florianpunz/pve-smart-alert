@@ -85,9 +85,16 @@ skipped with a reason.
 A drive that two sources find is read twice and kept once; a device that is
 listed twice with the same name and type is read once.
 For a drive it shows model, serial number, class, what uses it, its wear
-value with the source and, behind a MegaRAID or HPE Smart Array controller,
-the controller and the device ID; a drive behind another controller shows
-the node and type instead.
+value with the source and, for a drive read as
+.BR megaraid,N ,
+.BR sat+megaraid,N ,
+.BR scsi+megaraid,N ,
+.BR cciss,N ,
+.BR sat+cciss,N
+or
+.BR scsi+cciss,N ,
+the controller and the device ID; any other drive shows the node and type
+instead.
 A controller whose drives smartctl cannot read is named above the devices.
 The output holds the real serial numbers and WWNs.
 .TP
