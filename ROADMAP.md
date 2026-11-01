@@ -12,8 +12,8 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
 | M4: State and notification policy | Done |
-| M5: Packaging, timer and installation | Done, accepted on `pve1` and on the cluster node `pve5`; `pve6` and `pve7` are not monitored by the maintainer's decision |
-| M6: SAS and hardware RAID on recorded data | Built, all six slices merged; results 2 and 3 on a cluster node are open |
+| M5: Packaging, timer and installation | Done, accepted on `pve1` and on the cluster node `pve5`; released as `v0.5.0` on 2026-11-01; `pve6` and `pve7` are not monitored by the maintainer's decision |
+| M6: SAS and hardware RAID on recorded data | Done: all six slices merged; results 2 and 3 recorded on `pve-test` on 2026-11-01 |
 | M7: Hardening, documentation, release 1.0 | Started; the hostile-string tests, the traceability table and the user documentation are merged, the rest is open; see its section |
 
 The section of a milestone says what of it is done and what comes next.
@@ -216,7 +216,7 @@ From here on the tool runs permanently on the cluster node `pve5`; the maintaine
 
 Open questions this milestone answers: Q-N4, Q-N5 and Q-P1 to Q-P3.
 
-State: the development of M5 is on `main` since pull request #4, which merged the host-tested work of `feature/m5-packaging` onto the units of pull request #3; CI is green there. The acceptance passed on `pve1` on 2026-10-18 and 2026-10-30 (steps 1 to 4 with `0.5.0~dev4`, steps 5 and 7 with `0.5.0~dev5`) and on the cluster node `pve5` on 2026-10-31; by the maintainer's decision it stayed on these two hosts, so `pve6`, `pve7` and a reboot of a cluster node were left out, and `0.5.0` can be tagged. Builds for test hosts were pre-releases `0.5.0~devN` until then, so that each one installs as an upgrade ([ADR 0027](docs/adr/0027-pre-release-versions-for-test-builds.md)).
+State: the development of M5 is on `main` since pull request #4, which merged the host-tested work of `feature/m5-packaging` onto the units of pull request #3; CI is green there. The acceptance passed on `pve1` on 2026-10-18 and 2026-10-30 (steps 1 to 4 with `0.5.0~dev4`, steps 5 and 7 with `0.5.0~dev5`) and on the cluster node `pve5` on 2026-10-31; by the maintainer's decision it stayed on these two hosts, so `pve6`, `pve7` and a reboot of a cluster node were left out, and `v0.5.0` was released on 2026-11-01. Builds for test hosts were pre-releases `0.5.0~devN` until then, so that each one installs as an upgrade ([ADR 0027](docs/adr/0027-pre-release-versions-for-test-builds.md)).
 
 - Done: the three units of ADR 0006 in `systemd/` and the failure reporter `libexec/report-failure` in the package ([ARCHITECTURE.md](ARCHITECTURE.md) section 13); maintainer script snippets for the timer only, read from the source of debhelper 13.24.2; purge removes `/run/pve-smart-alert/` as well.
 - Done: the sandboxing of the check service, [ADR 0025](docs/adr/0025-sandboxing-of-the-check-service.md) (Q-P1).
@@ -274,13 +274,13 @@ Deliverables:
 Result you can test:
 
 1. `make test` runs scenarios named after each controller family and passes.
-2. On a cluster node, with the fake smartctl replaying the MegaRAID scenario, `pve-smart-alert scan` shows the physical drives behind the controller, skips the logical volume with a reason, and a degraded drive in the scenario produces a notification that names controller and device ID.
+2. On `pve-test` (a standalone Proxmox VE host; the maintainer decided on 2026-11-01 that it stands in for a cluster node for these runs), with the fake smartctl replaying the MegaRAID scenario, `pve-smart-alert scan` shows the physical drives behind the controller, skips the logical volume with a reason, and a degraded drive in the scenario produces a notification that names controller and device ID.
 3. The same for a SAS drive scenario.
 4. The hardware support table states for every family how it was verified.
 
 Open questions this milestone answers or narrows: Q-R1 to Q-R7 and Q-R9 to Q-R11.
 
-State: built; the runs of results 2 and 3 on a cluster node are open. The work was split into six slices, one branch `feature/m6-<slice>` each, built one after the other and merged into `main` by pull request:
+State: done. All six slices are merged, and results 2 and 3 were recorded on `pve-test` on 2026-11-01; by the maintainer's decision of that day the standalone host stands in for a cluster node for these two runs. The work was split into six slices, one branch `feature/m6-<slice>` each, built one after the other and merged into `main` by pull request:
 
 1. `recordings`: the public recordings of [Research 08](docs/research/08-public-recordings.md) as fixtures, and the anonymization of SCSI names and the import of other projects' test data ([ADR 0026](docs/adr/0026-recordings-of-scsi-drives-and-of-other-projects.md)).
 2. `scsi`: the parser for SCSI and SAS drives and the checks `scsi.*` of the catalog. Thresholds that rest only on recordings are listed in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) for the review in M7.
@@ -306,8 +306,8 @@ Decided for M6 (2026-10-16): the non-medium error count of SCSI drives is not ch
 Results you can test, as built:
 
 1. Partly done: for the families that recordings, derived or synthetic data can show, `make test` runs a scenario named after each and passes. Seven rows of the support table have none, because no replayable data of them exists, the tool never reads them, or a test of discovery covers them instead: SATA drives behind an HBA, SAS drives behind `mpt3sas`, the Intel RST volume (a test of discovery replays it), `smartpqi`, the old `cciss` driver, the JMicron types and drives behind USB bridges.
-2. Built on derived data: the scenarios `megaraid-jbod` and `megaraid-degraded` show it in the test frame. The run on a cluster node with the fake smartctl waits for the maintainer. On a cluster node the location shows the node without the driver `megaraid_sas`, because no node has such a SCSI host; `scenarios.py build` says so.
-3. Built on recorded data: the scenario `hba-sas` replays the TrueNAS recording with a derived finding; the derived SAS drive behind MegaRAID is in `megaraid-degraded`. The run on a cluster node waits for the maintainer.
+2. Done on `pve-test` on 2026-11-01, with the fake smartctl replaying `megaraid-degraded`: `scan` showed the two physical drives at `/dev/bus/6, device 14` and `/dev/bus/6, device 8` and skipped `/dev/sda` as a logical volume, with the reason that smartctl asks for `-d megaraid,N`; the degraded step sent two warnings, one per drive, whose mails name the controller node and the device ID in their `Location:` line. The location shows no driver `megaraid_sas`, because `pve-test` has no such SCSI host, as `scenarios.py build` says.
+3. Done on `pve-test` on 2026-11-01, with the fake smartctl replaying `hba-sas`: `scan` showed the four drives, and the degraded step sent one warning for the SAS drive `/dev/sdc` with 150 grown defects. A drive behind an HBA has no `device-id`, as ADR 0034 decides.
 4. Done: [docs/hardware-support.md](docs/hardware-support.md) states for every family how it was verified.
 
 ## M7: Hardening, documentation, release 1.0 (M)
