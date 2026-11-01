@@ -38,8 +38,12 @@ host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo unknown)
 # named the run.
 last_lines() {
 	if [ -n "${MONITOR_INVOCATION_ID:-}" ] && command -v "$journalctl" >/dev/null 2>&1; then
+		# No control character of a journal line reaches the mail: the tool
+		# cleans what it writes, but a traceback need not (ARCHITECTURE.md
+		# section 14). Tabs and line breaks stay.
 		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
-			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null
+			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null |
+			tr '\000-\010\013-\037\177' ' '
 	fi
 }
 

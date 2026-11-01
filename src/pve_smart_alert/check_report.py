@@ -65,10 +65,11 @@ def _drive_line(found: Found) -> str:
 
 
 def _finding_line(finding: Finding) -> str:
-    return (
-        f"  {finding.check:<{_CHECK_WIDTH}} {finding.severity.value:<{_SEVERITY_WIDTH}}"
-        f" {finding.text}"
-    )
+    # The text of a finding can carry a string of the drive, such as the
+    # informational exception of a SCSI drive: it is cut like any other
+    # (ARCHITECTURE.md section 14).
+    text = printable(finding.text, limit=MAX_PRINTED)
+    return f"  {finding.check:<{_CHECK_WIDTH}} {finding.severity.value:<{_SEVERITY_WIDTH}} {text}"
 
 
 def _summary(discovery: Discovery, evaluations: Sequence[tuple[Found, list[Finding]]]) -> str:

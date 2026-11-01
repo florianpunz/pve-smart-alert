@@ -670,7 +670,7 @@ def _data(planned: Planned) -> dict[str, object]:
             "type": _clean(message.drive.type),
             "model": _clean(message.drive.model or ""),
             "serial": _clean(message.drive.serial or ""),
-            "wwn": message.drive.wwn,
+            "wwn": _clean(message.drive.wwn) if message.drive.wwn is not None else None,
             "present": message.drive.present,
             "event": message.event.value if message.items else None,
             "severity": message.severity.value if message.items else None,

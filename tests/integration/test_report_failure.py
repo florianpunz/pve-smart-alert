@@ -140,6 +140,25 @@ def test_the_report_carries_the_last_lines_of_the_failed_run(tmp_path: Path) -> 
     assert "_SYSTEMD_INVOCATION_ID=0123456789abcdef0123456789abcdef" in arguments
 
 
+def test_the_last_lines_of_the_run_carry_no_control_character(tmp_path: Path) -> None:
+    # The tool cleans what it writes to the journal, but a traceback, or a
+    # line of a later build, may carry an escape sequence of a drive; the
+    # reporter does not rely on the lines it reads being clean
+    # (ARCHITECTURE.md section 14).
+    host = Host(tmp_path)
+    host.journalctl.write_text(
+        "#!/bin/sh\n"
+        'echo "2026-10-15T10:00:00+0000 pve1 pve-smart-alert[1234]: reading /dev/sdz\x1b[2J"\n',
+        encoding="utf-8",
+    )
+
+    host.report()
+
+    [mail] = host.sent()
+    assert "\x1b" not in mail
+    assert "[2J" in mail
+
+
 def test_a_second_failure_on_the_same_day_sends_nothing(tmp_path: Path) -> None:
     host = Host(tmp_path)
 

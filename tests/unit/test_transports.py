@@ -403,6 +403,26 @@ def test_the_fallback_takes_over_and_names_the_reason() -> None:
     assert note.body.endswith("Reason: every matched target of the notification system failed\n")
 
 
+def test_the_reason_of_the_fallback_carries_no_control_character() -> None:
+    # The reason is the answer of the bridge or of the mail command, an
+    # external program; it can carry an escape sequence or a line of its own
+    # (ARCHITECTURE.md section 14). The mail that is delivered is where it
+    # used to arrive unchanged.
+    primary = StubTransport(
+        TransportName.PVE_NOTIFY,
+        delivered=False,
+        error="refused: \x1b[2J550\nInjected: fake line",
+    )
+    fallback = StubTransport(TransportName.MAIL)
+
+    AutoTransport(primary=primary, fallback=fallback).send(make_notification())
+
+    body = fallback.sent[0].body
+    assert "\x1b" not in body
+    assert "\nInjected" not in body
+    assert body.endswith("Reason: refused: [2J550 Injected: fake line\n")
+
+
 def test_a_failure_without_a_reason_is_still_reported() -> None:
     primary = StubTransport(TransportName.PVE_NOTIFY, delivered=False)
     fallback = StubTransport(TransportName.MAIL)

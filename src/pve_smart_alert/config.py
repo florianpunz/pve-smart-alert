@@ -44,7 +44,7 @@ from pve_smart_alert.checks import (
     Thresholds,
     default_checks,
 )
-from pve_smart_alert.model import DriveClass, DriveIdentity
+from pve_smart_alert.model import DriveClass, DriveIdentity, toml_string
 from pve_smart_alert.paths import CONFIG_PATH, LAST_GOOD_CONFIG_PATH, SMARTCTL_PATH
 from pve_smart_alert.state import write_private
 
@@ -268,7 +268,7 @@ class DriveSelector:
 
     def describe(self) -> str:
         """Return the selector as it is written in the configuration."""
-        return f'{self.kind.value} = "{self.value}"'
+        return f"{self.kind.value} = {toml_string(self.value)}"
 
 
 def model_pattern(pattern: str) -> re.Pattern[str]:

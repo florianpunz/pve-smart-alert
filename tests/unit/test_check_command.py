@@ -15,11 +15,44 @@ import pytest
 from frame import ScenarioHost
 from hosts import FAKE, RECORDINGS, Host
 
-from pve_smart_alert import cli
+from pve_smart_alert import check_report, cli
 from pve_smart_alert import config as config_module
 from pve_smart_alert import run as run_module
+from pve_smart_alert.checks import evaluate
 from pve_smart_alert.config import Config
-from pve_smart_alert.discovery import Discovery, HostPaths, discover
+from pve_smart_alert.discovery import Discovery, Found, HostPaths, Outcome, discover
+from pve_smart_alert.discovery.sources import Candidate, Source
+from pve_smart_alert.model import (
+    Collection,
+    DeviceAccess,
+    DriveClass,
+    DriveIdentity,
+    Snapshot,
+)
+
+
+def test_a_long_string_of_a_finding_is_cut_in_the_dry_run() -> None:
+    # `health_detail` holds the informational exception that smartctl writes
+    # for a SCSI drive, and it can be arbitrarily long. Every string of a
+    # drive is length-limited before the dry run prints it
+    # (ARCHITECTURE.md section 14).
+    identity = DriveIdentity.of("SEAGATE ST600MP0036", serial="ANON-SN-0002")
+    snapshot = Snapshot(
+        identity=identity,
+        access=DeviceAccess("/dev/sdb", "scsi", "SCSI"),
+        drive_class=DriveClass.HDD,
+        collection=Collection(smartctl_version=(7, 5), exit_status=0),
+        health_passed=False,
+        health_detail="X" * 1000,
+    )
+    found = Found(Candidate("/dev/sdb", "scsi", Source.SCAN), Outcome.MONITORED, snapshot=snapshot)
+    discovery = Discovery(devices=(found,), smartctl_version=(7, 5))
+
+    lines = check_report.render(
+        discovery, [(found, evaluate(snapshot))], smartctl_path=Path("/usr/sbin/smartctl")
+    )
+
+    assert all(len(line) <= 300 for line in lines)
 
 
 def fake_smartctl_config(content: str = "") -> str:
@@ -322,6 +355,24 @@ def test_config_show_names_the_origin_of_each_value(
     assert "max_drive_notifications = 3" in out
     assert 'notice = "never"' in out
     assert "confirm_runs = 2 (default)" in out
+
+
+def test_config_show_writes_a_selector_as_a_string_that_can_be_copied_back(
+    capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
+) -> None:
+    # A model name can hold a quote or a backslash; the value is shown as a
+    # TOML string again, not with the quotes swapped for nothing (FR-407).
+    config_path, _ = paths
+    config_path.write_text(
+        '[[drive]]\nmodel = "ACME \\"X\\""\ncomment = "back\\\\slash"\nexclude = true\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["config", "show"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert 'model = "ACME \\"X\\""' in out
+    assert 'comment = "back\\\\slash"' in out
 
 
 def test_config_show_lists_the_conditions_of_the_tool(

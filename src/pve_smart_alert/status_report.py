@@ -60,6 +60,8 @@ def render(state: State, *, path: Path) -> list[str]:
         lines += ["", "Skipped devices:"]
         for key, skipped in sorted(state.skipped.items()):
             name, _, device_type = key.partition("|")
+            name = printable(name, limit=MAX_PRINTED)
+            device_type = printable(device_type, limit=MAX_PRINTED)
             cleaned = printable(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""
             detail = f" ({cleaned})" if cleaned else ""
             lines.append(
@@ -78,12 +80,14 @@ def render_json(state: State, *, path: Path) -> str:
 
 def _drive_line(record: DriveRecord) -> str:
     access = record.last_access
+    name = printable(access.name, limit=MAX_PRINTED)
+    device_type = printable(access.type, limit=MAX_PRINTED)
     identity = record.identity
     if identity is None:
-        return f"{access.name} [{access.type}], never answered with an identity"
+        return f"{name} [{device_type}], never answered with an identity"
     model = printable(identity.model, limit=MAX_PRINTED)
     serial = printable(identity.serial or "no serial number", limit=MAX_PRINTED)
-    return f"{access.name} [{access.type}] {model} ({serial})"
+    return f"{name} [{device_type}] {model} ({serial})"
 
 
 def _presence(record: DriveRecord) -> str | None:
