@@ -330,7 +330,7 @@ Result you can test:
 4. An upgrade from 0.5.x to 1.0.0 keeps configuration and state.
 5. The acceptance checklists of M1 and M5 pass on the current Proxmox VE 9.x release, not only on the version the cluster ran during development.
 6. On a host, with the fake smartctl replaying the scenario `twenty-four-drives`, the first run from a fresh state directory lists all 24 drives in its summary, and `time pve-smart-alert check` reports less than 60 seconds for that run (NFR-07).
-7. Between two runs of the timer no process of the tool remains on the host: `systemctl is-active pve-smart-alert.service` answers `inactive` and `pgrep -af pve_smart_alert` names none. The journal shows that the timer runs it, and `systemctl show pve-smart-alert.service -p Nice -p IOSchedulingClass -p IOSchedulingPriority` shows `Nice=10`, `IOSchedulingClass=best-effort` and `IOSchedulingPriority=7`, which every run inherits (NFR-09).
+7. Between two runs of the timer no process of the tool remains on the host: `systemctl is-active pve-smart-alert.service` answers `inactive` and `pgrep -af '[p]ve_smart_alert'` names none. The journal shows that the timer runs it, and `systemctl show pve-smart-alert.service -p Nice -p IOSchedulingClass -p IOSchedulingPriority` shows `Nice=10`, `IOSchedulingClass=best-effort` and `IOSchedulingPriority=7`, which every run inherits (NFR-09).
 
 State: started on 2026-10-17. Three parts are merged, in pull requests #21, #22 and #23; the rest is open and listed below.
 

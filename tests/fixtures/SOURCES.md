@@ -39,7 +39,7 @@ These recordings come from the test data of other projects, read at a pinned com
 
 ## Scenarios: `../scenarios.py`
 
-The scenario tests replay a host from a recording above, whose drives change from run to run except in `twenty-four-drives`, which holds one host for the run-time test of NFR-07 ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recordings.
+The scenario tests replay a host from a recording above. Their steps change the drives from run to run, except in `twenty-four-drives`, `megaraid-jbod` and `unsupported-mpi3mr`, which repeat the same host; `twenty-four-drives` holds it for the run-time test of NFR-07 ([ADR 0016](../../docs/adr/0016-test-strategy.md)). The steps are not committed as files: `tests/scenarios.py` derives each of them from a recording above when the tests run, or when `python3 tests/scenarios.py build NAME DIRECTORY` writes them for an acceptance run on a real host. Every step is therefore derived, and its license is that of its base recordings.
 
 | Scenario | Base | Changes |
 | --- | --- | --- |
