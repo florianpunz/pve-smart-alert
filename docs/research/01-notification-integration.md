@@ -103,6 +103,8 @@ Addition of 2026-10-08: the acceptance run of milestone M1 on 2026-10-04, on the
 - When no matcher matches, the call returns success and logs nothing, exactly as a delivery that logs nothing. [ADR 0020](../adr/0020-routing-check.md) answers this with a check of the routing.
 - Seen in the acceptance run of that routing check on 2026-10-07: for a disabled matcher the library logs `skipping disabled matcher 'NAME'` instead of nothing.
 
+Addition of 2026-10-31: the acceptance run of milestone M5 on `pve5`, a node of the test cluster with Proxmox VE 9.2.24 and the build `0.5.0~dev5`, tested this route on a node that had lost quorum: with `corosync` stopped, `pve5` dropped out of the cluster while the other two nodes stayed quorate, and `pvecm status` reported `Cannot initialize CMAP service`. **Verified** in that run: `pve-smart-alert check` exited 0, and `test-notification --severity warning` was delivered through the bridge by the matcher `pve-smart-alert` to the target `docker-mailserver` and arrived in the inbox, so the notification configuration stays readable without quorum and the bridge needs no fallback. In the same state `pvecm status` printed the cluster name `miloodc` from the corosync configuration. The other half, pmxcfs not running, was measured on `pve1` on 2026-10-18: the fallback handed the message to the mail command, but `proxmox-mail-forward` found no address for `root@pam` without pmxcfs, so it reached no person ([ARCHITECTURE.md](../../ARCHITECTURE.md) section 11, [ROADMAP.md](../../ROADMAP.md) M5). **Not verified**: the tool's own read of `/etc/pve/corosync.conf` and the cluster name in a rendered notification body; the run did not log them (Q-N12).
+
 History, as evidence for the stability risk:
 
 | Date | Change | Effect on callers |
@@ -162,6 +164,7 @@ Consequences:
 
 - Proxmox VE Administration Guide, chapter "Notifications" (9.2.13): <https://pve.proxmox.com/pve-docs/chapter-notifications.html>
 - `PVE::Notify`: <https://git.proxmox.com/?p=pve-cluster.git;a=blob;f=src/PVE/Notify.pm> and its history <https://git.proxmox.com/?p=pve-cluster.git;a=history;f=src/PVE/Notify.pm>
+- `pvecm status`, which reads the corosync configuration through pmxcfs: <https://git.proxmox.com/?p=pve-cluster.git;a=blob;f=src/PVE/CLI/pvecm.pm>
 - `libpve-notify-perl` package relations: <https://git.proxmox.com/?p=pve-cluster.git;a=blob;f=debian/control>
 - `proxmox-notify`: context <https://git.proxmox.com/?p=proxmox.git;a=blob;f=proxmox-notify/src/context/pve.rs>, renderer <https://git.proxmox.com/?p=proxmox.git;a=blob;f=proxmox-notify/src/renderer/mod.rs>, core <https://git.proxmox.com/?p=proxmox.git;a=blob;f=proxmox-notify/src/lib.rs>, send <https://git.proxmox.com/?p=proxmox.git;a=blob;f=proxmox-notify/src/api/common.rs>, matcher <https://git.proxmox.com/?p=proxmox.git;a=blob;f=proxmox-notify/src/matcher.rs>
 - Perl bindings: <https://git.proxmox.com/?p=proxmox-perl-rs.git;a=blob;f=common/src/bindings/notify.rs>, logger <https://git.proxmox.com/?p=proxmox-perl-rs.git;a=blob;f=common/src/logger.rs>

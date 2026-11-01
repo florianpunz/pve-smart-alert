@@ -78,7 +78,7 @@ Scope and reasons are in [PROJECT.md](PROJECT.md) and [ADR 0017](docs/adr/0017-s
 | --- | --- | --- |
 | FR-501 | Notifications shall be delivered through the Proxmox VE notification system with a severity of `info`, `notice`, `warning` or `error`, mapped from the finding severity. | A |
 | FR-502 | Every notification shall carry the metadata fields `type` with the value `pve-smart-alert` and `hostname` with the node name. | T, A |
-| FR-503 | A notification about a single drive shall in addition carry the fields `event`, `device`, `serial` and `model`, and, for a drive read through a pass-through type such as `megaraid,N`, the field `device-id` with its device ID. | T |
+| FR-503 | A notification about a single drive shall in addition carry the fields `event`, `device`, `serial` and `model`, and, for a drive read as `megaraid,N`, `sat+megaraid,N`, `scsi+megaraid,N`, `cciss,N`, `sat+cciss,N` or `scsi+cciss,N`, the field `device-id` with its device ID. A drive behind another pass-through controller carries no `device-id` in version 1 ([ADR 0034](docs/adr/0034-manual-entries-of-other-pass-through-types.md)). | T |
 | FR-504 | A matcher with the rule `match-field regex:type=^pve-smart-alert$` shall match all notifications of the tool and no built-in notification. | A |
 | FR-505 | If the primary transport fails, the same message shall be sent as mail to the local `root` user in the same run, with the severity in the subject. | T, A |
 | FR-506 | The transport shall be selectable: automatic with fallback, primary only, or mail only. | T |

@@ -115,9 +115,10 @@ exclude = []
 # that a check does not use by default can be set just the same; wear, for
 # example, never becomes critical by default (FR-307).
 #
-# A check of the kind condition also takes confirm_runs: in how many runs in
-# a row it has to be seen before it is notified. It is 1 for every condition
-# except the temperature, which needs 2 (FR-308).
+# A condition check that has a confirmation count also takes confirm_runs: in
+# how many runs in a row it has to be seen before it is notified. It is 1 for
+# every such condition except the temperature, which needs 2 (FR-308).
+# drive.unreadable takes only enabled; its count is notify.unreadable_runs.
 
 [checks."health.failed"]
 enabled = true

@@ -85,8 +85,16 @@ skipped with a reason.
 A drive that two sources find is read twice and kept once; a device that is
 listed twice with the same name and type is read once.
 For a drive it shows model, serial number, class, what uses it, its wear
-value with the source and, behind a RAID controller, the controller and the
-device ID.
+value with the source and, for a drive read as
+.BR megaraid,N ,
+.BR sat+megaraid,N ,
+.BR scsi+megaraid,N ,
+.BR cciss,N ,
+.BR sat+cciss,N
+or
+.BR scsi+cciss,N ,
+the controller and the device ID; any other drive shows the node and type
+instead.
 A controller whose drives smartctl cannot read is named above the devices.
 The output holds the real serial numbers and WWNs.
 .TP
@@ -183,8 +191,8 @@ and
 .B \%[notify.reminder]
 (transport and notification policy),
 .B [checks."\fIcheck\-id\fB"]
-(thresholds, enabled state and confirmation count of a check, and the
-enabled state of a condition of the tool), and
+(the thresholds and confirmation count that the check has, its enabled
+state, and the enabled state of a condition of the tool), and
 .B [[drive]]
 (overrides for one drive, selected by model pattern, serial number or WWN).
 .PP
@@ -294,7 +302,10 @@ The failure reporter, started through
 when a run of
 .B \%pve\-smart\-alert.service
 fails; it mails the last 30 lines of the run to root, at most once a day
-and once more after a reboot.
+and once more after a reboot. When the failed invocation wrote no journal
+line, as with a failing
+.BR ExecStartPre ,
+the mail says that the last lines are not available.
 .TP
 .I \%/usr/lib/systemd/system/pve\-smart\-alert.timer
 .TQ
@@ -327,8 +338,17 @@ one about the tool itself carries
 .B device
 with the value
 .BR pve\-smart\-alert .
-A drive behind a MegaRAID or HPE Smart Array controller also carries
-.BR device\-id .
+A drive read as
+.BR megaraid,N ,
+.BR sat+megaraid,N ,
+.BR scsi+megaraid,N ,
+.BR cciss,N ,
+.BR sat+cciss,N
+or
+.BR scsi+cciss,N
+also carries
+.BR device\-id ;
+a drive behind another controller carries no such field.
 A matcher with
 .B \%match\-field regex:type=^pve\-smart\-alert$
 selects all of them.

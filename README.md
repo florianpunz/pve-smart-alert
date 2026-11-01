@@ -1,20 +1,20 @@
 <img alt="pve-smart-alert" src="docs/img/banner.png" />
 
-<h1 align="center">Proxmox Virtual Enviroment - S.M.A.R.T. Disk Alert</h1>
+<h1 align="center">PVE SMART Alert</h1>
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package now brings a systemd timer that runs the check every 30 minutes. This is work in progress of M5: it has not been accepted on a real Proxmox VE host yet, and there is no release.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`; there is no public release yet, because the repository is still private.
 >
 > <details>
-> <summary>Next: M5, packaging, timer and installation</summary>
+> <summary>Next: M6 and M7</summary>
 >
 > - **M0 (done):** development tooling
 > - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
 > - **M2 (done):** discovery and collection for SATA and NVMe drives
 > - **M3 (done):** evaluation and configuration
 > - **M4 (done):** state and notification policy
-> - **M5 (in progress):** packaging, timer and installation
+> - **M5 (accepted on pve1 and pve5):** packaging, timer and installation
 > - **M6 (built, waits for its runs on a cluster node):** SAS and hardware RAID on recorded data; [docs/hardware-support.md](docs/hardware-support.md) says how each controller was verified
 > - **M7 (started):** hardening, documentation and version 1.0, the version meant for regular use
 >
@@ -59,7 +59,7 @@ The package enables a systemd timer that runs the first check right away and the
 
 - When a run fails, a short mail to root says so, at most once a day and once more after a reboot. It is sent without the code of the tool, so it also arrives when that code is broken.
 - The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
-- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, `probe_cciss` in `[discovery]`, which switches the experimental probe for the drives behind an HPE Smart Array controller off (it is on by default and runs on hosts with the driver `hpsa`), the thresholds, the enabled state and the confirmation count of every check in `[checks."<check-id>"]`, the enabled state of every condition of the tool itself in the same table, such as `enabled = false` in the table `[checks."tool.unsupported_controller"]` for a controller in HBA mode whose drives all appear in `scan`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
+- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, `probe_cciss` in `[discovery]`, which switches the experimental probe for the drives behind an HPE Smart Array controller off (it is on by default and runs on hosts with the driver `hpsa`), the enabled state of every check in `[checks."<check-id>"]`, the thresholds that the check has, and the confirmation count of a condition check that has one, the enabled state of every condition of the tool itself in the same table, such as `enabled = false` in the table `[checks."tool.unsupported_controller"]` for a controller in HBA mode whose drives all appear in `scan`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
 
 ## Commands
 
@@ -68,7 +68,7 @@ The installed tool has these commands:
 | Command | Does |
 | --- | --- |
 | `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, the timer with its schedule and next run, the Proxmox VE version, whether smartd mails root, in the line `controllers` a controller whose drives smartctl cannot read, such as one with the driver `mpi3mr`, and in the line `probe` the HPE Smart Array controllers of the host and whether their drives are probed (FR-603, FR-109, FR-103) |
-| `pve-smart-alert scan` | Finds the drives of the host and reads them in the order scan, probe, manual entries; a drive that two sources find is read twice and kept once. It shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it, its wear value with the source and, behind a RAID controller, the controller and the device ID (FR-108). Above the devices it names a controller whose drives smartctl cannot read, so that they are not monitored (FR-109), and every HPE Smart Array controller with the drives the probe found behind it, or why it was not probed (FR-103) |
+| `pve-smart-alert scan` | Finds the drives of the host and reads them in the order scan, probe, manual entries; a drive that two sources find is read twice and kept once. It shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it, its wear value with the source and, for a drive read as `megaraid,N`, `sat+megaraid,N`, `scsi+megaraid,N`, `cciss,N`, `sat+cciss,N` or `scsi+cciss,N`, the controller and the device ID; any other drive shows the node and type instead (FR-108, [ADR 0034](docs/adr/0034-manual-entries-of-other-pass-through-types.md)). Above the devices it names a controller whose drives smartctl cannot read, so that they are not monitored (FR-109), and every HPE Smart Array controller with the drives the probe found behind it, or why it was not probed (FR-103) |
 | `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
 | `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |

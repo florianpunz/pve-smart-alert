@@ -65,6 +65,7 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0014](0014-repository-structure.md) | The layout tree is a snapshot of 2026-10-04; the repository itself shows the current layout. Commit messages now start with a type prefix such as `feat:` or `docs:`, as [CONTRIBUTING.md](../../CONTRIBUTING.md) describes |
 | [0012](0012-read-only-and-coexistence-with-smartd.md) | Extended by [0035](0035-purge-removes-the-package-directory.md): a purge removes the directory of the tool with everything in it, including a file that no package owns |
 | [0013](0013-packaging-and-installation.md) | Superseded by [0035](0035-purge-removes-the-package-directory.md) for the paths that a purge removes only; every other part of the record governs as before |
+| [0020](0020-routing-check.md) | The example "without quorum" for `skip` does not hold: on `pve5` on 2026-10-31, with `corosync` stopped, the node had lost quorum but pmxcfs stayed readable, so `doctor` reported `routing` and `fallback` as `ok` ([ROADMAP.md](../../ROADMAP.md) M5, step 8; [Research 01](../research/01-notification-integration.md), addition of 2026-10-31). `skip` applies when the matchers cannot be read, as when pmxcfs is not running (`pve1`, 2026-10-18) |
 
 ## Adding a record
 
