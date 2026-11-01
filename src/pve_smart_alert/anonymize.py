@@ -67,6 +67,13 @@ _NAA6_VENDOR_DIGITS: Final = 7
 # (ADR 0023).
 MIN_SEARCHED_LENGTH: Final = 4
 
+# A device the scan names by its kernel name, such as /dev/sda or /dev/dm-0.
+# A manual entry can instead name a link such as
+# /dev/disk/by-id/ata-<model>_<serial>, whose name holds the serial number
+# of the drive: such a name is replaced like the value it holds (ADR 0023).
+_PLAIN_DEVICE: Final = re.compile(r"/dev/[a-z]+(?:[0-9]+|-[0-9]+)?")
+DEVICE_PLACEHOLDER: Final = "/dev/anon{}"
+
 
 class AnonymizationError(Exception):
     """A recording that cannot be anonymized safely.
@@ -115,6 +122,24 @@ class Anonymizer:
         # An NAA name that is not a WWN, by its lowercase digits, with the
         # digits of its placeholder (ADR 0026).
         self._names: dict[str, str] = {}
+        # A device name that is not a kernel name, by its name, with the
+        # placeholder name of this archive.
+        self._devices: dict[str, str] = {}
+
+    def learn_device(self, name: str) -> str:
+        """Return the name to record a device under (ADR 0023).
+
+        A kernel name such as `/dev/sda` is kept: it holds no identifier. A
+        name that is not one, such as a `by-id` link, can hold the serial
+        number of the drive, so it is replaced by a placeholder of this
+        archive, in the file name, the metadata and every text of the
+        recording alike.
+        """
+        if _PLAIN_DEVICE.fullmatch(name):
+            return name
+        if name not in self._devices:
+            self._devices[name] = DEVICE_PLACEHOLDER.format(len(self._devices) + 1)
+        return self._devices[name]
 
     def learn(self, drive: Mapping[str, object]) -> None:
         """Number the identifiers of one drive output that are new.
@@ -123,8 +148,8 @@ class Anonymizer:
         anonymized, so that the numbers follow the scan (ADR 0023).
         """
         serial = drive.get("serial_number")
-        if isinstance(serial, str) and serial and serial not in self._serials:
-            self._serials[serial] = SERIAL_PLACEHOLDER.format(_next(self._serials))
+        if isinstance(serial, str) and serial:
+            self._learn_serial(serial)
         wwn = _wwn(drive.get("wwn"))
         if wwn is not None and wwn not in self._wwns:
             self._wwns[wwn] = Wwn(wwn.naa, wwn.oui, _next(self._wwns))
@@ -173,8 +198,8 @@ class Anonymizer:
         """
         for node in _nodes(document):
             serial = node.get("serial")
-            if isinstance(serial, str) and serial.strip() and serial.strip() not in self._serials:
-                self._serials[serial.strip()] = SERIAL_PLACEHOLDER.format(_next(self._serials))
+            if isinstance(serial, str) and serial.strip():
+                self._learn_serial(serial.strip())
             wwn = node.get("wwn")
             if isinstance(wwn, str):
                 self._learn_lsblk_wwn(wwn)
@@ -210,6 +235,21 @@ class Anonymizer:
             anonymized_eui = self._learn_eui(nguid.group(2))
             if digits not in self._nguids:
                 self._nguids[digits] = f"{_next(self._nguids):016x}{anonymized_eui.hex}"
+
+    def _learn_serial(self, serial: str) -> str:
+        """Number a serial number, if it is new, and return its placeholder.
+
+        udev writes a space of a serial number as an underscore in the
+        `by-id` link and in the `id` and `id-link` of lsblk, so that form is
+        numbered with the same placeholder (ADR 0023).
+        """
+        if serial not in self._serials:
+            placeholder = SERIAL_PLACEHOLDER.format(_next(set(self._serials.values())))
+            self._serials[serial] = placeholder
+            udev_form = serial.replace(" ", "_")
+            if udev_form != serial:
+                self._serials[udev_form] = placeholder
+        return self._serials[serial]
 
     def _learn_wwn(self, digits: str) -> Wwn:
         """Number a WWN written as 16 digits, if it is new, and return its placeholder."""
@@ -282,6 +322,21 @@ class Anonymizer:
             kinds = ", ".join(dict.fromkeys(found))
             raise AnonymizationError(f"{name} still contains a real value: {kinds}")
 
+    def check_name(self, name: str) -> None:
+        """Raise when a file name of an archive still holds a real value.
+
+        The message names no value and no file: the file name itself can be
+        the value that is left (ADR 0023).
+        """
+        found = [
+            kind
+            for kind, value in self._searched_forms()
+            if len(value) >= MIN_SEARCHED_LENGTH and value.lower() in name.lower()
+        ]
+        if found:
+            kinds = ", ".join(dict.fromkeys(found))
+            raise AnonymizationError(f"a file name still contains a real value: {kinds}")
+
     def _searched_forms(self) -> Iterator[tuple[str, str]]:
         """Return every learned real value, in every form it is written in."""
         for serial in self._serials:
@@ -348,7 +403,7 @@ class Anonymizer:
     def _replace_in(self, text: str) -> str:
         # The longest values first, so that one that contains another is
         # replaced as a whole.
-        values = [*self._serials.items(), *self._uuids.items()]
+        values = [*self._devices.items(), *self._serials.items(), *self._uuids.items()]
         for real, placeholder in sorted(values, key=lambda pair: -len(pair[0])):
             if len(real) >= MIN_SEARCHED_LENGTH:
                 text = text.replace(real, placeholder)

@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import tarfile
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -152,13 +154,30 @@ def _json_object(text: str) -> dict[str, object] | None:
 
 
 def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: int) -> None:
-    """Write the files below one directory into a compressed archive."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, "w:gz") as archive:
-        for file, document in files.items():
-            data = serialize(document).encode("utf-8")
-            member = tarfile.TarInfo(f"{name}/{file}")
-            member.size = len(data)
-            member.mode = 0o644
-            member.mtime = mtime
-            archive.addfile(member, io.BytesIO(data))
+    """Write the files below one directory into a compressed archive.
+
+    The archive is written next to its target and renamed into place, so
+    that a symlink or a partial file at the target is never followed or
+    left behind, and it is readable by root only, like the state file: it
+    carries the identifiers of the host until they are reviewed (ADR 0023).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with (
+            os.fdopen(descriptor, "wb") as stream,
+            tarfile.open(fileobj=stream, mode="w:gz") as archive,
+        ):
+            for file, document in files.items():
+                data = serialize(document).encode("utf-8")
+                member = tarfile.TarInfo(f"{name}/{file}")
+                member.size = len(data)
+                member.mode = 0o644
+                member.mtime = mtime
+                archive.addfile(member, io.BytesIO(data))
+        Path(temporary).replace(path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import tarfile
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 import pytest
@@ -166,6 +166,108 @@ def test_a_device_that_cannot_be_read_is_recorded_with_its_messages(
 
     sdz = json.loads(contents(result.archive)["sdz.json"])
     assert sdz["smartctl"]["messages"][0]["string"].startswith("Smartctl open device: /dev/sdz")
+
+
+def _unreadable(name: str) -> dict[str, object]:
+    """Return what smartctl answers for a drive in standby: no serial number."""
+    return {
+        "json_format_version": [1, 0],
+        "smartctl": {
+            "version": [7, 5],
+            "argv": ["smartctl", "--json=c", "--xall", "--device=sat", "--nocheck=standby", name],
+            "messages": [
+                {"string": "Device is in STANDBY mode, exit(2)", "severity": "information"}
+            ],
+            "exit_status": 2,
+        },
+    }
+
+
+def test_a_manual_device_named_by_a_by_id_link_carries_no_serial(
+    host: Host, tmp_path: Path
+) -> None:
+    # A by-id link has the serial number in its name. The drive is behind a
+    # controller and sleeps: neither its output nor lsblk teaches the serial
+    # number, so the name itself may not leak it either (ADR 0023,
+    # ARCHITECTURE.md section 14).
+    serial = REAL_SERIALS[0]
+    host.change_lsblk("sda", serial=None)
+    name = f"/dev/disk/by-id/ata-Samsung_SSD_850_EVO_250GB_{serial}"
+    host.add_file("byid.json", _unreadable(name), device=name, device_type="sat")
+
+    result = dump(host, tmp_path, selected=[name], devices=(ManualDevice(name, "sat"),))
+
+    with tarfile.open(result.archive, "r:gz") as tar:
+        member_names = [member.name for member in tar.getmembers()]
+    files = contents(result.archive)
+    everything = "\n".join([*member_names, *files.values()])
+    assert serial not in everything
+    recording = json.loads(files["recording.json"])
+    (entry,) = [
+        item for item in recording["files"] if item["file"] not in ("scan.json", "lsblk.json")
+    ]
+    assert entry["device"].startswith("/dev/anon")
+    assert entry["file"] == f"{PurePosixPath(entry['device']).name}.json"
+
+
+def test_a_readable_drive_named_by_a_by_id_link_is_recorded(host: Host, tmp_path: Path) -> None:
+    # The serial number of the link is learned from the drive as well; the
+    # recording must replace it in the name like in any other text.
+    serial = REAL_SERIALS[0]
+    name = f"/dev/disk/by-id/ata-Samsung_SSD_850_EVO_250GB_{serial}"
+    drive = host.drive("sda.json")
+    drive["device"] = {
+        "name": name,
+        "info_name": f"{name} [SAT]",
+        "type": "sat",
+        "protocol": "ATA",
+    }
+    smartctl = drive["smartctl"]
+    assert isinstance(smartctl, dict)
+    smartctl["argv"] = [
+        "smartctl",
+        "--json=c",
+        "--xall",
+        "--device=sat",
+        "--nocheck=standby",
+        name,
+    ]
+    host.add_file("byid.json", drive, device=name, device_type="sat")
+
+    result = dump(host, tmp_path, selected=[name], devices=(ManualDevice(name, "sat"),))
+
+    files = contents(result.archive)
+    assert serial not in "\n".join([*files, *files.values()])
+    recording = json.loads(files["recording.json"])
+    (entry,) = [
+        item for item in recording["files"] if item["file"] not in ("scan.json", "lsblk.json")
+    ]
+    recorded = json.loads(files[entry["file"]])
+    assert recorded["serial_number"] == "ANON-SN-0001"
+    assert recorded["device"]["name"] == entry["device"]
+
+
+def test_the_archive_is_readable_by_root_only(host: Host, tmp_path: Path) -> None:
+    # It carries the identifiers of the host until they are reviewed nowhere
+    # else; a file in a shared directory may not be readable by everyone.
+    archive = dump(host, tmp_path).archive
+
+    assert archive.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_symlink_at_the_archive_path_is_replaced(host: Host, tmp_path: Path) -> None:
+    # A predictable name in a directory others can write to may be a symlink
+    # to a file of the administrator: the dump writes its own file instead.
+    out = tmp_path / "out"
+    out.mkdir()
+    victim = tmp_path / "victim"
+    victim.write_text("keep me", encoding="utf-8")
+    (out / f"{NAME}.tar.gz").symlink_to(victim)
+
+    dump(host, tmp_path)
+
+    assert victim.read_text(encoding="utf-8") == "keep me"
+    assert not (out / f"{NAME}.tar.gz").is_symlink()
 
 
 def test_nothing_is_written_when_a_real_value_would_be_left(host: Host, tmp_path: Path) -> None:

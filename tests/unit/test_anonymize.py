@@ -8,6 +8,7 @@ them belongs to a drive.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from typing import Final
 
@@ -20,6 +21,7 @@ from pve_smart_alert.anonymize import (
     Eui64,
     Wwn,
 )
+from pve_smart_alert.recording import Recording, anonymize
 
 SATA: Final[dict[str, object]] = {
     "device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"},
@@ -138,6 +140,43 @@ def test_a_real_value_that_is_left_fails_the_check(leak: dict[str, object]) -> N
     assert message.startswith("lsblk.json still contains a real value: ")
     assert "123456" not in message
     assert "e40a1b2c3" not in message
+
+
+def test_the_free_text_of_the_metadata_is_anonymized() -> None:
+    # `origin`, `collected_with`, `controller` and the source of an import
+    # are free text. A serial number or WWN pasted into them is replaced
+    # like any other text (ADR 0023).
+    recording = Recording(
+        node="pve9",
+        collected=None,
+        collected_with="recorded by hand on /dev/sda, serial S2R5NX0H123456A",
+        scan=None,
+        scan_exit=None,
+        controller="LSI SAS2308, address 0x5002538e40a1b2c3",
+    )
+    recording.drives["sda"] = copy.deepcopy(SATA)
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    text = json.dumps(files["recording.json"])
+    assert "S2R5NX0H123456A" not in text
+    assert "5002538e40a1b2c3" not in text
+
+
+def test_a_serial_number_with_whitespace_is_replaced_in_its_udev_form() -> None:
+    # An ATA serial number may contain spaces; udev writes a space as an
+    # underscore in the by-id link and in the `id` and `id-link` of lsblk
+    # (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["serial_number"] = "S2R5 NX0H 1234A"
+    anonymizer = Anonymizer()
+    anonymizer.learn(drive)
+
+    anonymized = anonymizer.document({"id": "ata-Samsung_SSD_850_EVO_250GB_S2R5_NX0H_1234A"})
+
+    assert anonymized == {"id": "ata-Samsung_SSD_850_EVO_250GB_ANON-SN-0001"}
 
 
 def test_a_short_serial_number_is_replaced_only_in_its_field() -> None:

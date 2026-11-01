@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from pve_smart_alert.anonymize import Anonymizer
 
@@ -66,19 +66,29 @@ def anonymize(
     # After the drives of the scan, so that drives only lsblk shows come last.
     if recording.lsblk is not None:
         anonymizer.learn_lsblk(recording.lsblk)
+    # A device name that is not a kernel name can hold a serial number: it
+    # is replaced before any file name or text is built from it (ADR 0023).
+    filenames = {stem: _file_stem(recording, stem, anonymizer) for stem in order}
 
     files: dict[str, object] = {}
     if recording.scan is not None:
         files["scan.json"] = anonymizer.document(recording.scan)
     for stem in order:
-        files[f"{stem}.json"] = anonymizer.drive(recording.drives[stem])
+        files[f"{filenames[stem]}.json"] = anonymizer.drive(recording.drives[stem])
     if recording.lsblk is not None:
         files["lsblk.json"] = anonymizer.lsblk(recording.lsblk)
-    files["recording.json"] = _metadata(
-        recording, order, origin=origin, license_id=license_id, anonymized_with=anonymized_with
+    metadata = _metadata(
+        recording,
+        order,
+        filenames,
+        origin=origin,
+        license_id=license_id,
+        anonymized_with=anonymized_with,
     )
+    files["recording.json"] = anonymizer.document(metadata)
 
     for name, document in files.items():
+        anonymizer.check_name(name)
         anonymizer.check(document, name=name)
     return files
 
@@ -117,9 +127,31 @@ def drive_class(drive: Mapping[str, object]) -> str:
     return "ssd" if drive.get("rotation_rate") == 0 else "hdd"
 
 
+def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:
+    """Return the file name of a drive output: its device name without the path.
+
+    A device name that is not a kernel name is replaced by the anonymizer
+    first, so that a `by-id` link cannot put a serial number into a file
+    name (ADR 0023).
+    """
+    name = _recorded_name(recording, stem)
+    if isinstance(name, str) and name:
+        return PurePosixPath(anonymizer.learn_device(name)).name
+    return stem
+
+
+def _recorded_name(recording: Recording, stem: str) -> object:
+    """Return the device name a drive output was read through, if it is known."""
+    call = recording.calls.get(stem)
+    if call is not None:
+        return call[0]
+    return _device_name(recording.drives[stem])
+
+
 def _metadata(
     recording: Recording,
     order: Sequence[str],
+    filenames: Mapping[str, str],
     *,
     origin: str,
     license_id: str,
@@ -145,7 +177,7 @@ def _metadata(
         name, device_type = recording.calls.get(stem, (access.get("name"), access.get("type")))
         files.append(
             {
-                "file": f"{stem}.json",
+                "file": f"{filenames[stem]}.json",
                 "device": name,
                 "type": device_type,
                 "protocol": access.get("protocol"),
