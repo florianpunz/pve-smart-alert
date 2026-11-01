@@ -66,7 +66,7 @@ from pve_smart_alert.routing import (
 )
 from pve_smart_alert.run import Environment, LockedError, RunResult, run_check
 from pve_smart_alert.scan_report import render
-from pve_smart_alert.state import read_state
+from pve_smart_alert.state import Access, read_state
 from pve_smart_alert.status_report import render as render_status
 from pve_smart_alert.status_report import render_json as render_status_json
 from pve_smart_alert.transports import TransportOutcome, build_transport
@@ -458,7 +458,10 @@ def _check_dry_run() -> int:
     findings: list[Finding] = []
     if result.discovery is not None:
         evaluations: list[tuple[Found, list[Finding]]] = [
-            (found, result.findings.get(found.candidate.name, []))
+            (
+                found,
+                result.findings.get(Access(found.candidate.name, found.candidate.type).key, []),
+            )
             for found in result.discovery.monitored
         ]
         for line in render_check_report(

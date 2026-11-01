@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `pve-smart-alert config show` names the last good configuration as the origin of the values it yields while the configuration file cannot be used, including the built-in defaults it fills in, and the header names its file, instead of crediting the values to the file that could not be used; without a last good configuration the built-in defaults apply (FR-406, FR-407).
+- `pve-smart-alert check --dry-run` shows the findings of the correct drive when several drives are read through one controller and share a device name, such as two drives behind a MegaRAID controller; the notifications themselves already carried the right finding and device ID (FR-601).
 
 ## [0.5.0] - 2026-10-31
 
