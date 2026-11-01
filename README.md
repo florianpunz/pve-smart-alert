@@ -73,7 +73,7 @@ The installed tool has these commands:
 | `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
 | `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |
 | `pve-smart-alert config check` | Validates the whole configuration file and names the first error, with its key where it has one and its line where it can be found; the exit status is then non-zero (FR-405) |
-| `pve-smart-alert config show` | Prints every key with its effective value and where the value comes from, the file or the built-in default (FR-407); `--defaults` prints the built-in ones |
+| `pve-smart-alert config show` | Prints every key with its effective value and, for the values that carry one, its origin: the file, the built-in default or, while the configuration file cannot be used and one exists, the last good configuration (FR-407); the per-drive overrides are shown as configured; `--defaults` prints the built-in ones |
 | `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs and UUIDs are replaced by placeholders, to attach to an issue (FR-604) |
 | `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
 

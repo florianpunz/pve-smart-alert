@@ -2,7 +2,8 @@
 """The report of `pve-smart-alert config show` (FR-407).
 
 Every key of the effective configuration with its value and the origin of
-that value: the configuration file or the built-in default. The thresholds
+that value: the configuration file, the built-in default, or the last good
+configuration while the file cannot be used. The thresholds
 of the one check that differs per drive class are shown per class, as the
 global configuration leaves them for each class; the per-drive overrides
 are listed as they are configured, because which of them applies is known
@@ -13,7 +14,7 @@ drive; they have no threshold, only their enabled state (FR-408, ADR 0031).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import timedelta
 from typing import Final
 
@@ -29,6 +30,7 @@ from pve_smart_alert.config import (
 #: The words after a value that say where it comes from.
 _FROM_FILE: Final = "file"
 _FROM_DEFAULT: Final = "default"
+_FROM_LAST_GOOD: Final = "last good"
 
 #: The severities of a threshold, in the order they are shown.
 _SEVERITIES: Final = ("notice", "warning", "critical")
@@ -42,29 +44,45 @@ def render(
     raw: Mapping[str, object] | None,
     *,
     error: ConfigError | None = None,
+    last_good: bool = False,
 ) -> list[str]:
     """Return the lines of the report.
 
     `raw` is the configuration document as it lies in the file, or `None`
-    when the report shows the built-in defaults; it decides the origin of
-    each value. `error` names a file that could not be used.
+    when the report shows the built-in defaults or the last good
+    configuration; it decides the origin of each value. `error` names a
+    file that could not be used. `last_good` says that the values come
+    from the last good configuration, not from the file, so every value of
+    the settings and checks is credited to it; the per-drive overrides are
+    shown as configured and carry no origin.
     """
     document = raw if raw is not None else {}
+    origin = _FROM_LAST_GOOD if last_good else None
     lines = ["effective configuration of this host"]
     source = config.source
-    lines.append(
-        f"file:      {source if source is not None else 'none, the built-in defaults apply'}"
-    )
+    if last_good:
+        assert source is not None, "the last good configuration has a source"
+        lines.append(
+            f"file:      {source}"
+            " (the last good configuration; the configuration file could not be used)"
+        )
+    else:
+        lines.append(
+            f"file:      {source if source is not None else 'none, the built-in defaults apply'}"
+        )
     if error is not None:
         lines.append(f"warning:   {error}")
-    lines.extend(_settings(config, document))
-    lines.extend(_checks(config, document))
+    lines.extend(_settings(config, document, origin=origin))
+    lines.extend(_checks(config, document, origin=origin))
     lines.extend(_drives(config))
     return lines
 
 
-def _settings(config: Config, document: Mapping[str, object]) -> list[str]:
+def _settings(
+    config: Config, document: Mapping[str, object], *, origin: str | None = None
+) -> list[str]:
     """Return the lines of `[notify]`, `[smartctl]` and `[discovery]`."""
+    _origin = _origin_for(origin)
     lines = ["", "[notify]"]
     notify = config.notify
     section = _table_of(document.get("notify"))
@@ -113,8 +131,11 @@ def _settings(config: Config, document: Mapping[str, object]) -> list[str]:
     return lines
 
 
-def _checks(config: Config, document: Mapping[str, object]) -> list[str]:
+def _checks(
+    config: Config, document: Mapping[str, object], *, origin: str | None = None
+) -> list[str]:
     """Return the lines of the checks, each with its effective settings."""
+    _origin = _origin_for(origin)
     file_checks = _table_of(document.get("checks"))
     lines = ["", "[checks]"]
     for check in CATALOG.values():
@@ -122,24 +143,27 @@ def _checks(config: Config, document: Mapping[str, object]) -> list[str]:
         item = effective_check(config, check, None)
         parts = [_value("enabled", str(item.enabled).lower(), _origin(raw_check, "enabled"))]
         if check.per_class is not None:
-            parts.extend(_per_class(config, check, raw_check))
+            parts.extend(_per_class(config, check, raw_check, origin=origin))
         else:
-            parts.extend(_single(config, check, raw_check))
+            parts.extend(_single(config, check, raw_check, origin=origin))
         if "confirm_runs" in check.settable:
             parts.append(
                 _value("confirm_runs", str(item.confirm_runs), _origin(raw_check, "confirm_runs"))
             )
         lines.append(f'  "{check.id}"  ' + ", ".join(parts))
-    lines.extend(_tool_checks(config, file_checks))
+    lines.extend(_tool_checks(config, file_checks, origin=origin))
     return lines
 
 
-def _tool_checks(config: Config, file_checks: Mapping[str, object]) -> list[str]:
+def _tool_checks(
+    config: Config, file_checks: Mapping[str, object], *, origin: str | None = None
+) -> list[str]:
     """Return the lines of the conditions of the tool (FR-408, ADR 0031).
 
     A condition of the tool has a fixed severity and takes no threshold, so
     one line per condition, with its enabled state.
     """
+    _origin = _origin_for(origin)
     enabled = tool_conditions_enabled(config)
     lines: list[str] = []
     for name in sorted(TOOL_CHECK_IDS):
@@ -149,8 +173,11 @@ def _tool_checks(config: Config, file_checks: Mapping[str, object]) -> list[str]
     return lines
 
 
-def _per_class(config: Config, check: Check, raw_check: Mapping[str, object]) -> list[str]:
+def _per_class(
+    config: Config, check: Check, raw_check: Mapping[str, object], *, origin: str | None = None
+) -> list[str]:
     """Return the thresholds of the one check that differs per drive class."""
+    _origin = _origin_for(origin)
     items = {
         drive_class: effective_check(config, check, drive_class) for drive_class in check.classes
     }
@@ -167,8 +194,11 @@ def _per_class(config: Config, check: Check, raw_check: Mapping[str, object]) ->
     return parts
 
 
-def _single(config: Config, check: Check, raw_check: Mapping[str, object]) -> list[str]:
+def _single(
+    config: Config, check: Check, raw_check: Mapping[str, object], *, origin: str | None = None
+) -> list[str]:
     """Return the thresholds of a check with one value for every class."""
+    _origin = _origin_for(origin)
     if not check.slots - {"enabled"}:
         # A flag check has no thresholds.
         return []
@@ -237,8 +267,20 @@ def _interval(value: timedelta | None) -> str:
     return "never" if value is None else _duration(value.total_seconds())
 
 
-def _origin(section: Mapping[str, object], key: str) -> str:
-    return _FROM_FILE if key in section else _FROM_DEFAULT
+def _origin_for(origin: str | None) -> Callable[[Mapping[str, object], str], str]:
+    """Return the function that names where a value comes from.
+
+    With `origin`, every value that carries an origin is credited to it,
+    which is how the report shows the last good configuration: no such
+    value comes from the file.
+    """
+
+    def origin_of(section: Mapping[str, object], key: str) -> str:
+        if origin is not None:
+            return origin
+        return _FROM_FILE if key in section else _FROM_DEFAULT
+
+    return origin_of
 
 
 def _table_of(value: object) -> Mapping[str, object]:

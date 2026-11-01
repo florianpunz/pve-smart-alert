@@ -137,7 +137,13 @@ A file that passes is saved as the last good configuration.
 .TP
 .B config show
 Print every key with its effective value and where the value comes from, the
-file or the built\-in default.
+file, the built\-in default or the last good configuration.
+While the configuration file cannot be used and a last good configuration
+exists, each value that carries an origin is marked as the last good
+configuration and the header names its file. Without a last good
+configuration the built\-in defaults apply. While the last good
+configuration is in use, it is the source of the whole report, including
+the built\-in defaults it fills in.
 With
 .BR \-\-defaults ,
 print the built\-in defaults.
