@@ -820,6 +820,46 @@ def test_the_last_good_configuration_survives_a_round_trip(tmp_path: Path) -> No
     assert loaded == replace(config, source=last_good)
 
 
+def test_the_last_good_configuration_is_readable_by_root_only(tmp_path: Path) -> None:
+    # It holds the selectors of the drives, with their real serial numbers
+    # and WWNs, and the whole notification policy (ADR 0007, ADR 0011).
+    last_good = tmp_path / "state" / "last-good-config.json"
+
+    save_last_good(Config(), last_good)
+
+    assert last_good.stat().st_mode & 0o777 == 0o600
+    assert last_good.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_a_lax_last_good_configuration_is_corrected(tmp_path: Path) -> None:
+    # An earlier build, or a run before the timer, could have created the
+    # file and its directory with the mode of the umask.
+    directory = tmp_path / "state"
+    directory.mkdir(mode=0o755)
+    directory.chmod(0o755)
+    last_good = directory / "last-good-config.json"
+    last_good.write_text("{}\n", encoding="utf-8")
+    last_good.chmod(0o644)
+
+    save_last_good(Config(), last_good)
+
+    assert last_good.stat().st_mode & 0o777 == 0o600
+    assert directory.stat().st_mode & 0o777 == 0o700
+
+
+def test_a_symlink_at_the_last_good_configuration_is_replaced(tmp_path: Path) -> None:
+    directory = tmp_path / "state"
+    directory.mkdir()
+    victim = tmp_path / "victim"
+    victim.write_text("keep me", encoding="utf-8")
+    (directory / "last-good-config.json").symlink_to(victim)
+
+    save_last_good(Config(), directory / "last-good-config.json")
+
+    assert victim.read_text(encoding="utf-8") == "keep me"
+    assert not (directory / "last-good-config.json").is_symlink()
+
+
 def test_without_a_last_good_configuration_there_are_the_defaults(
     tmp_path: Path,
 ) -> None:

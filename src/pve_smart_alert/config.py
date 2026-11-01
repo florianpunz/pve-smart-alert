@@ -46,6 +46,7 @@ from pve_smart_alert.checks import (
 )
 from pve_smart_alert.model import DriveClass, DriveIdentity
 from pve_smart_alert.paths import CONFIG_PATH, LAST_GOOD_CONFIG_PATH, SMARTCTL_PATH
+from pve_smart_alert.state import write_private
 
 
 class TransportName(StrEnum):
@@ -384,8 +385,9 @@ def save_last_good(config: Config, path: Path | None = LAST_GOOD_CONFIG_PATH) ->
     decides what a failed save means.
     """
     assert path is not None
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_to_json(config), indent=2) + "\n", encoding="utf-8")
+    # It holds the selectors of the drives and the whole policy: it is
+    # written like the state file, readable by root only (ADR 0007).
+    write_private(path, json.dumps(_to_json(config), indent=2) + "\n")
 
 
 def load_last_good(path: Path | None = LAST_GOOD_CONFIG_PATH) -> Config | None:

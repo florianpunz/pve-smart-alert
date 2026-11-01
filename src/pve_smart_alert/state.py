@@ -288,15 +288,24 @@ def read_state(
 
 
 def save_state(state: State, path: Path) -> None:
-    """Replace the state file atomically (ADR 0007, NFR-11).
-
-    The temporary file is created next to the target with mode 0600, written,
-    flushed to disk and renamed over the target; the directory is flushed as
-    well, so that the rename survives a power loss. A failure leaves the old
-    file as it was and removes the temporary one. Raises `OSError`.
-    """
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    """Replace the state file atomically (ADR 0007, NFR-11)."""
     text = _escaped(json.dumps(state_to_json(state), indent=2, ensure_ascii=False)) + "\n"
+    write_private(path, text)
+
+
+def write_private(path: Path, text: str) -> None:
+    """Replace a file of the tool atomically, readable by root only (ADR 0007).
+
+    The file holds serial numbers, so neither it nor the directory it lies in
+    may be readable by others. The directory is created with mode 0700, and
+    one that an earlier build or a run by hand created with the mode of the
+    umask is corrected. The temporary file is created next to the target with
+    mode 0600, written, flushed to disk and renamed over the target; the
+    directory is flushed as well, so that the rename survives a power loss. A
+    failure leaves the old file as it was and removes the temporary one.
+    Raises `OSError`.
+    """
+    _private_directory(path.parent)
     descriptor, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
     )
@@ -311,6 +320,13 @@ def save_state(state: State, path: Path) -> None:
             Path(temporary).unlink()
         raise
     _sync_directory(path.parent)
+
+
+def _private_directory(directory: Path) -> None:
+    """Create the directory of a file of the tool, and keep it readable by root only."""
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if directory.stat().st_mode & 0o777 != 0o700:
+        directory.chmod(0o700)
 
 
 def format_time(value: datetime) -> str:
