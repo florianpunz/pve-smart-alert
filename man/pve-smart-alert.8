@@ -294,7 +294,10 @@ The failure reporter, started through
 when a run of
 .B \%pve\-smart\-alert.service
 fails; it mails the last 30 lines of the run to root, at most once a day
-and once more after a reboot.
+and once more after a reboot. When the failed invocation wrote no journal
+line, as with a failing
+.BR ExecStartPre ,
+the mail says that the last lines are not available.
 .TP
 .I \%/usr/lib/systemd/system/pve\-smart\-alert.timer
 .TQ
