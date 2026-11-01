@@ -37,7 +37,7 @@ As stated by the maintainer on 2026-10-03:
 - SATA SSDs and NVMe drives, some of them used for LVM-thin.
 - No hardware RAID controller.
 
-Additionally, since 2026-10-08, a standalone Proxmox VE 9.2.3 host `pve1` that is not part of the cluster and may be changed freely: one Intenso SATA SSD, one USB device (virtual drive of a KVM-over-IP device), no NVMe drive ([Research 07](docs/research/07-standalone-host-pve1.md)). It is used for tests that change the notification matchers or break the bridge. It does not replace the cluster for the acceptance steps.
+Additionally, since 2026-10-08, a standalone Proxmox VE 9.2.3 host `pve1` that is not part of the cluster and may be changed freely: one Intenso SATA SSD, one USB device (virtual drive of a KVM-over-IP device), no NVMe drive ([Research 07](docs/research/07-standalone-host-pve1.md)). It is used for tests that change the notification matchers or break the bridge. Since the maintainer's decision of 2026-10-31 it is also one of the two M5 acceptance hosts: the cluster-specific steps run on the cluster node `pve5`, and steps 4 and 5 were accepted on `pve1`.
 - No disks or controllers passed through to guests, no drives attached through USB, no hard disks that spin down.
 
 Recorded on 2026-10-05 ([Research 06](docs/research/06-test-cluster-recordings.md)): the nodes `pve5`, `pve6` and `pve7` with Proxmox VE 9.2.21 and smartmontools 7.5; three SATA SSDs from Samsung and Fanxiang and three NVMe drives from Samsung and Western Digital, all with LVM-thin, no ZFS. The USB device on `pve5` is the virtual drive of a KVM-over-IP device for mounting ISO images; it is not a monitored drive and plays no part in the acceptance steps.
