@@ -387,7 +387,7 @@ and
 .BR hostname .
 A webhook target that writes a field of the notification into a JSON body
 has to use the helper
-.BR "{{json serial}}" ,
+.BR "{{json fields.serial}}" ,
 or
 .BR escape ,
 because the notification system renders a webhook body without escaping;
