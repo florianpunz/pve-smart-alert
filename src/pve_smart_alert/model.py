@@ -170,7 +170,9 @@ def printed(value: str, *, limit: int) -> str:
     the mark says that there is more, and the selector line of `scan` names
     the exact value (ADR 0036).
     """
-    collapsed = " ".join(without_controls(value).split())
+    # `printable` cleans and collapses; its own limit cannot cut here,
+    # because the cleaned value is never longer than the value itself.
+    collapsed = printable(value, limit=len(value))
     if len(collapsed) <= limit:
         return collapsed
     return collapsed[:limit] + "…"
