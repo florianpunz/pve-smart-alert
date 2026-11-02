@@ -98,7 +98,7 @@ def full_state() -> State:
             notifications_sent=1,
         ),
         drives={identity_key(identity): record},
-        skipped={"/dev/sda|scsi": SkippedRecord(reason="excluded", since=earlier)},
+        skipped={Access("/dev/sda", "scsi").key: SkippedRecord(reason="excluded", since=earlier)},
     )
 
 
@@ -313,23 +313,19 @@ def test_a_state_of_schema_1_is_migrated_to_the_new_keys() -> None:
     assert list(migrated.drives) == [key]
 
 
-def test_an_identity_less_record_of_schema_1_is_migrated_to_its_new_key() -> None:
-    # A device that never answered has no identity; its record is keyed by
-    # the device it was read through. Both parts can contain `|`, so that
-    # key is a JSON array too and the migration has to rewrite it (ADR 0037).
-    document = state_to_json(full_state())
-    document["schema"] = 1
-    drives = document["drives"]
-    assert isinstance(drives, dict)
-    ((_, record),) = drives.items()
-    assert isinstance(record, dict)
-    record["identity"] = None
-    record["last_access"] = {"name": "/dev/a|b", "type": "c"}
-    document["drives"] = {"device:/dev/a|b|c": record}
+def test_an_identity_less_record_of_a_real_0_5_0_state_is_found() -> None:
+    # The fixture was written by the code of 0.5.0 (SOURCES.md). It keys the
+    # device that never answered the old way; after loading, the record is
+    # found under the key a run computes (ADR 0038).
+    path = Path(__file__).parents[1] / "fixtures" / "state" / "dev5-unreadable-device.json"
 
-    migrated = parse_state(json.dumps(document), now=NOW)
+    loaded = parse_state(path.read_text(encoding="utf-8"), now=NOW)
 
-    assert list(migrated.drives) == ['device:["/dev/a|b", "c"]']
+    access = Access("/dev/sdz", "sat")
+    record = loaded.drives[f"device:{access.key}"]
+    assert record.identity is None
+    assert record.last_access == access
+    assert record.unreadable_runs == 2
 
 
 def test_a_timestamp_in_the_future_is_read_as_now(tmp_path: Path) -> None:
@@ -372,7 +368,7 @@ def test_two_accesses_that_differ_do_not_share_a_key() -> None:
     # The name and the type of a device of the scan need not be valid, and
     # both can contain the character a key was joined with. A record of a
     # device that never answered is keyed by them, so that key is a JSON
-    # array as well (ADR 0037).
+    # array as well (ADR 0038).
     assert Access("/dev/a|b", "c").key != Access("/dev/a", "b|c").key
 
 

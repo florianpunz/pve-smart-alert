@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "host": "pve1",
+  "initialized": "2026-10-12T10:00:00Z",
+  "last_run": null,
+  "drives": {
+    "Samsung SSD 870 EVO 1TB|ANON-SN-0001": {
+      "identity": {
+        "model": "Samsung SSD 870 EVO 1TB",
+        "serial": "ANON-SN-0001",
+        "wwn": null
+      },
+      "class": "ssd",
+      "last_access": {
+        "name": "/dev/sdb",
+        "type": "sat"
+      },
+      "first_seen": "2026-10-12T10:00:00Z",
+      "last_seen": "2026-10-12T12:00:00Z",
+      "missing_runs": 0,
+      "unreadable_runs": 0,
+      "missing_notified": false,
+      "exempt_from_missing": false,
+      "last_notified": null,
+      "baselines": {},
+      "event_notified": {},
+      "conditions": {},
+      "pending": {},
+      "details": {
+        "firmware": null,
+        "capacity_bytes": null,
+        "location": null,
+        "used_by": null,
+        "transport": null,
+        "removable": null
+      }
+    },
+    "device:/dev/sdz|sat": {
+      "identity": null,
+      "class": null,
+      "last_access": {
+        "name": "/dev/sdz",
+        "type": "sat"
+      },
+      "first_seen": "2026-10-12T10:00:00Z",
+      "last_seen": "2026-10-12T12:00:00Z",
+      "missing_runs": 0,
+      "unreadable_runs": 2,
+      "missing_notified": false,
+      "exempt_from_missing": false,
+      "last_notified": null,
+      "baselines": {},
+      "event_notified": {},
+      "conditions": {},
+      "pending": {},
+      "details": {
+        "firmware": null,
+        "capacity_bytes": null,
+        "location": null,
+        "used_by": null,
+        "transport": null,
+        "removable": null
+      }
+    }
+  },
+  "skipped": {
+    "/dev/sda|scsi": {
+      "reason": "logical-volume",
+      "since": "2026-10-12T10:00:00Z"
+    }
+  },
+  "tool": {
+    "conditions": {},
+    "last_notified": null
+  }
+}
