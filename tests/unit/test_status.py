@@ -19,7 +19,7 @@ def status_of(state: State) -> list[str]:
 
 def test_a_skipped_device_is_named_from_its_key() -> None:
     # The key of a skipped device is the device name and the type as a JSON
-    # array, like every other key (ADR 0037).
+    # array, like every other key (ADR 0038).
     state = State()
     state.skipped['["/dev/sda", "sat"]'] = SkippedRecord(reason="excluded", since=NOW)
 

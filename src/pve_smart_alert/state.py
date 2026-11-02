@@ -73,7 +73,7 @@ Migration = Callable[[dict[str, object]], dict[str, object]]
 
 
 def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
-    """Re-key the drives of a schema-1 document (ADR 0037).
+    """Re-key the drives of a schema-1 document (ADR 0037, ADR 0038).
 
     Schema 1 joined the parts of the key with `|`, so a model with a `|` and
     a serial number could meet another drive's key, and the same held for a
@@ -123,7 +123,7 @@ def _migrated_key(entry: Mapping[str, object]) -> str | None:
 
 
 #: The migrations, by the version they start from. Version 1 joined the parts
-#: of a drive key with `|`; version 2 writes them as a JSON array (ADR 0037).
+#: of a drive key with `|`; version 2 writes them as a JSON array (ADR 0037, ADR 0038).
 MIGRATIONS: Final[Mapping[int, Migration]] = {1: _migrate_keys}
 
 
@@ -172,7 +172,7 @@ class Access:
 
     @property
     def key(self) -> str:
-        """Return the key of a record of a device without an identity (ADR 0037).
+        """Return the key of a record of a device without an identity (ADR 0038).
 
         The parts are written as a JSON array, because a device name and a
         smartctl type of the scan need not be valid and can contain the
@@ -287,7 +287,7 @@ def identity_key(identity: DriveIdentity, access: Access | None = None) -> str:
     number. A drive without either has no stable identity and is keyed by
     the path it was read through as well, because two such drives may well
     be two drives. The parts are written as a JSON array, so that no part
-    can be split at a character that another part contains (ADR 0037).
+    can be split at a character that another part contains (ADR 0037, ADR 0038).
     """
     parts = [identity.model]
     if identity.serial is not None:

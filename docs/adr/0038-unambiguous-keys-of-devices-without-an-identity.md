@@ -20,7 +20,7 @@ Option: the access key becomes a JSON array as well.
 - The access key is the JSON array of name and type, `["<name>", "<type>"]`.
 - A record of a device without an identity is stored under `device:` followed by that array, such as `device:["/dev/sda", "sat"]`.
 - A drive without a serial number and a WWN is keyed `["<model>", "device", "<name>", "<type>"]`.
-- The schema-2 migration re-keys a schema-1 record without an identity from its last access as well. Only a record without a usable last access keeps its old key.
+- The schema-2 migration re-keys a schema-1 record without an identity from its last access as well. A record without a usable last access is rejected by the validation after the migration, so the whole file is set aside as [ADR 0007](0007-state-storage.md) describes; the migration's fallback is not reached end to end.
 - `status` reads the old `name|type` key of a skipped device in a state that 0.5.0 wrote, until the next run rewrites the entry.
 
 ## Consequences

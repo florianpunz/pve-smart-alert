@@ -24,7 +24,7 @@ _CHECK: Final = 26
 
 
 def _access_of(key: str) -> tuple[str, str]:
-    """Return the name and the type of a skipped device from its key (ADR 0037).
+    """Return the name and the type of a skipped device from its key (ADR 0038).
 
     The key is the name and the type as a JSON array. A state written by
     0.5.0 keeps its old `name|type` key until the next run rewrites the
