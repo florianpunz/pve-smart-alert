@@ -76,9 +76,11 @@ def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
     """Re-key the drives of a schema-1 document (ADR 0037).
 
     Schema 1 joined the parts of the key with `|`, so a model with a `|` and
-    a serial number could meet another drive's key. The record of each drive
-    carries its identity and its last access, from which the unambiguous key
-    follows; a record that carries neither keeps its old key.
+    a serial number could meet another drive's key, and the same held for a
+    record of a device that never answered, which is keyed by its name and
+    type. Each record carries its identity and its last access, from which
+    the unambiguous key follows; only a record without a usable last access
+    keeps its old key.
     """
     drives = document.get("drives")
     if not isinstance(drives, dict):
@@ -95,14 +97,22 @@ def _migrated_key(entry: Mapping[str, object]) -> str | None:
     """Return the schema-2 key of one drive record of schema 1, if it can be computed."""
     identity_node = entry.get("identity")
     access_node = entry.get("last_access")
-    if not isinstance(identity_node, dict) or not isinstance(access_node, dict):
+    if not isinstance(access_node, dict):
+        return None
+    name = access_node.get("name")
+    device_type = access_node.get("type")
+    if not isinstance(name, str) or not isinstance(device_type, str):
+        return None
+    if identity_node is None:
+        # A device that never answered has no identity: its record is keyed
+        # by the device it was read through.
+        return f"device:{Access(name, device_type).key}"
+    if not isinstance(identity_node, dict):
         return None
     model = identity_node.get("model")
     serial = identity_node.get("serial")
     wwn = identity_node.get("wwn")
-    name = access_node.get("name")
-    device_type = access_node.get("type")
-    if not isinstance(model, str) or not isinstance(name, str) or not isinstance(device_type, str):
+    if not isinstance(model, str):
         return None
     identity = DriveIdentity.of(
         model,
@@ -162,7 +172,13 @@ class Access:
 
     @property
     def key(self) -> str:
-        return f"{self.name}|{self.type}"
+        """Return the key of a record of a device without an identity (ADR 0037).
+
+        The parts are written as a JSON array, because a device name and a
+        smartctl type of the scan need not be valid and can contain the
+        character they used to be joined with.
+        """
+        return json.dumps([self.name, self.type])
 
 
 @dataclass
@@ -279,7 +295,7 @@ def identity_key(identity: DriveIdentity, access: Access | None = None) -> str:
     elif identity.wwn is not None:
         parts += ["wwn", identity.wwn]
     elif access is not None:
-        parts += ["device", access.key]
+        parts += ["device", access.name, access.type]
     return json.dumps(parts)
 
 

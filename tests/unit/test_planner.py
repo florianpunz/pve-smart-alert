@@ -577,7 +577,7 @@ def test_a_drive_that_is_excluded_now_is_forgotten() -> None:
 
     assert excluded == []
     assert host.state.drives == {}
-    assert host.state.skipped["/dev/sda|sat"].reason == "excluded"
+    assert host.state.skipped['["/dev/sda", "sat"]'].reason == "excluded"
 
 
 @pytest.mark.parametrize("reason", ["logical-volume", "not-a-disk"])

@@ -1,6 +1,6 @@
 # ADR 0037: Unambiguous keys in the state file
 
-- Status: Accepted
+- Status: Superseded by [0038](0038-unambiguous-keys-of-devices-without-an-identity.md) for the access key of a device without an identity only; every other part of the record governs as before
 - Date: 2026-11-01
 - Decides: the key of a drive record in the state file and its migration
 

@@ -313,6 +313,25 @@ def test_a_state_of_schema_1_is_migrated_to_the_new_keys() -> None:
     assert list(migrated.drives) == [key]
 
 
+def test_an_identity_less_record_of_schema_1_is_migrated_to_its_new_key() -> None:
+    # A device that never answered has no identity; its record is keyed by
+    # the device it was read through. Both parts can contain `|`, so that
+    # key is a JSON array too and the migration has to rewrite it (ADR 0037).
+    document = state_to_json(full_state())
+    document["schema"] = 1
+    drives = document["drives"]
+    assert isinstance(drives, dict)
+    ((_, record),) = drives.items()
+    assert isinstance(record, dict)
+    record["identity"] = None
+    record["last_access"] = {"name": "/dev/a|b", "type": "c"}
+    document["drives"] = {"device:/dev/a|b|c": record}
+
+    migrated = parse_state(json.dumps(document), now=NOW)
+
+    assert list(migrated.drives) == ['device:["/dev/a|b", "c"]']
+
+
 def test_a_timestamp_in_the_future_is_read_as_now(tmp_path: Path) -> None:
     # ADR 0007: a clock jump must not suppress reminders forever.
     path = tmp_path / "state.json"
@@ -345,8 +364,16 @@ def test_the_key_of_a_drive() -> None:
     assert identity_key(DriveIdentity.of("M", serial="S")) == '["M", "serial", "S"]'
     assert identity_key(DriveIdentity.of("M", wwn="0x5000AB")) == '["M", "wwn", "5000ab"]'
     assert identity_key(DriveIdentity.of("M"), Access("/dev/sda", "sat")) == (
-        '["M", "device", "/dev/sda|sat"]'
+        '["M", "device", "/dev/sda", "sat"]'
     )
+
+
+def test_two_accesses_that_differ_do_not_share_a_key() -> None:
+    # The name and the type of a device of the scan need not be valid, and
+    # both can contain the character a key was joined with. A record of a
+    # device that never answered is keyed by them, so that key is a JSON
+    # array as well (ADR 0037).
+    assert Access("/dev/a|b", "c").key != Access("/dev/a", "b|c").key
 
 
 def test_two_drives_cannot_share_a_key() -> None:
