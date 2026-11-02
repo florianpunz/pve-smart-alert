@@ -325,6 +325,10 @@ def write_private(path: Path, text: str) -> None:
 def _private_directory(directory: Path) -> None:
     """Create the directory of a file of the tool, and keep it readable by root only."""
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if not directory.is_absolute():
+        # A relative path names a directory of the caller, such as `.`; the
+        # tool corrects only a directory it names itself (ADR 0012).
+        return
     if directory.stat().st_mode & 0o777 != 0o700:
         directory.chmod(0o700)
 
