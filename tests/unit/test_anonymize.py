@@ -176,6 +176,53 @@ def test_two_drives_read_through_one_device_keep_each_output() -> None:
         assert drive["model_name"] == entry["model"]
 
 
+def test_a_kernel_name_with_a_path_is_kept() -> None:
+    # A kernel or controller node names no drive: the path, the letters and
+    # the digits are kept, whether or not the name has a second slash
+    # (ADR 0023, ADR 0039).
+    anonymizer = Anonymizer()
+
+    for name in ("/dev/sda", "/dev/nvme0n1", "/dev/bus/6", "/dev/bsg/sssraid0", "/dev/dm-0"):
+        assert anonymizer.learn_device(name) == name
+
+
+def test_a_link_name_under_dev_disk_is_replaced() -> None:
+    # A link under /dev/disk/ can hold the serial number of the drive in its
+    # name, so the name is replaced like the value it holds (ADR 0039).
+    anonymizer = Anonymizer()
+
+    assert anonymizer.learn_device("/dev/disk/by-id/ata-Samsung_SSD_1234") == "/dev/anon1"
+
+
+def test_a_drive_named_scan_does_not_overwrite_the_scan() -> None:
+    # `scan`, `lsblk` and `recording` are the names of the other files of a
+    # fixture. A drive whose device name is one of them gets a numbered file
+    # name instead of overwriting that file (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["device"] = {"name": "/dev/scan", "type": "sat", "protocol": "ATA"}
+    recording = Recording(
+        node="pve9",
+        collected=None,
+        collected_with="test",
+        scan={"devices": [{"name": "/dev/scan", "type": "sat"}]},
+        scan_exit=0,
+    )
+    recording.drives["scan"] = drive
+    recording.calls["scan"] = ("/dev/scan", "sat")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    scan = files["scan.json"]
+    assert isinstance(scan, dict)
+    assert "model_name" not in scan
+    assert isinstance(scan.get("devices"), list)
+    drive_file = files["scan-2.json"]
+    assert isinstance(drive_file, dict)
+    assert drive_file["model_name"] == SATA["model_name"]
+
+
 def test_the_free_text_of_the_metadata_is_anonymized() -> None:
     # `origin`, `collected_with`, `controller` and the source of an import
     # are free text. A serial number or WWN pasted into them is replaced

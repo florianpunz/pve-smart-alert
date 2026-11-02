@@ -67,11 +67,13 @@ _NAA6_VENDOR_DIGITS: Final = 7
 # (ADR 0023).
 MIN_SEARCHED_LENGTH: Final = 4
 
-# A device the scan names by its kernel name, such as /dev/sda or /dev/dm-0.
-# A manual entry can instead name a link such as
-# /dev/disk/by-id/ata-<model>_<serial>, whose name holds the serial number
-# of the drive: such a name is replaced like the value it holds (ADR 0023).
-_PLAIN_DEVICE: Final = re.compile(r"/dev/[a-z]+(?:[0-9]+|-[0-9]+)?")
+# A device the scan names by its node, such as /dev/sda, /dev/nvme0n1,
+# /dev/bus/6 or /dev/bsg/sssraid0. A manual entry can instead name a link
+# under /dev/disk/, such as /dev/disk/by-id/ata-<model>_<serial>, whose name
+# holds the serial number of the drive: such a name is replaced like the
+# value it holds (ADR 0023, ADR 0039). Every other name is kept; a real
+# value it holds still stops the archive through the check.
+_LINK_DEVICE: Final = re.compile(r"/dev/disk/.*", re.DOTALL)
 DEVICE_PLACEHOLDER: Final = "/dev/anon{}"
 
 
@@ -129,13 +131,13 @@ class Anonymizer:
     def learn_device(self, name: str) -> str:
         """Return the name to record a device under (ADR 0023).
 
-        A kernel name such as `/dev/sda` is kept: it holds no identifier. A
-        name that is not one, such as a `by-id` link, can hold the serial
-        number of the drive, so it is replaced by a placeholder of this
-        archive, in the file name, the metadata and every text of the
-        recording alike.
+        A node such as `/dev/sda`, `/dev/nvme0n1` or `/dev/bus/6` is kept: it
+        names no drive. A link under `/dev/disk/`, such as a `by-id` link,
+        can hold the serial number of the drive in its name, so it is
+        replaced by a placeholder of this archive, in the file name, the
+        metadata and every text of the recording alike.
         """
-        if _PLAIN_DEVICE.fullmatch(name):
+        if not _LINK_DEVICE.fullmatch(name):
             return name
         if name not in self._devices:
             self._devices[name] = DEVICE_PLACEHOLDER.format(len(self._devices) + 1)

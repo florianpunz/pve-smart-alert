@@ -138,8 +138,9 @@ def _file_names(
     different smartctl type: the second and every later one gets a number, so
     that one output never overwrites another (ADR 0023).
     """
+    # The other files of a fixture: a drive must not take one of their names.
     names: dict[str, str] = {}
-    used: set[str] = set()
+    used: set[str] = {"scan", "lsblk", "recording"}
     for stem in order:
         base = _file_stem(recording, stem, anonymizer)
         name = base
@@ -155,8 +156,8 @@ def _file_names(
 def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:
     """Return the file name of a drive output: its device name without the path.
 
-    A device name that is not a kernel name is replaced by the anonymizer
-    first, so that a `by-id` link cannot put a serial number into a file
+    A link under `/dev/disk/` is replaced by the anonymizer first, so that a
+    `by-id` link cannot put a serial number into a file
     name (ADR 0023).
     """
     name = _recorded_name(recording, stem)
