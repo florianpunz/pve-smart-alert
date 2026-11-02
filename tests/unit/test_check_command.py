@@ -9,6 +9,7 @@ last good configuration is written and read there.
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -403,6 +404,22 @@ def test_config_show_writes_a_selector_as_a_string_that_can_be_copied_back(
     out = capsys.readouterr().out
     assert 'model = "ACME \\"X\\""' in out
     assert 'comment = "back\\\\slash"' in out
+
+
+def test_config_show_writes_a_selector_as_the_configured_value(
+    capsys: pytest.CaptureFixture[str], paths: tuple[Path, Path]
+) -> None:
+    # A selector compares the stored value, control characters included. A
+    # value shown cleaned or cut selects no drive, or another one, so the
+    # line has to carry the exact value as TOML (ADR 0036).
+    config_path, _ = paths
+    config_path.write_text('[[drive]]\nserial = "ACME\\u0001X"\nexclude = true\n', encoding="utf-8")
+
+    assert cli.main(["config", "show"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    line = next(line for line in out.splitlines() if "serial = " in line)
+    assert tomllib.loads(line.strip())["serial"] == "ACME\x01X"
 
 
 def test_config_show_lists_the_conditions_of_the_tool(
