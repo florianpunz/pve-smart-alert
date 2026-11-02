@@ -35,7 +35,7 @@ from pve_smart_alert.discovery.enrichment import (
 )
 from pve_smart_alert.discovery.sources import Candidate, manual_candidates, parse_scan, scan_command
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
-from pve_smart_alert.recording import Recording, anonymize, serialize
+from pve_smart_alert.recording import Recording, anonymize, serialize_bytes
 
 # The license under which a recording comes into the project, like every
 # contribution (CONTRIBUTING.md, ADR 0015).
@@ -171,7 +171,7 @@ def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: in
             tarfile.open(fileobj=stream, mode="w:gz") as archive,
         ):
             for file, document in files.items():
-                data = serialize(document).encode("utf-8")
+                data = serialize_bytes(document)
                 member = tarfile.TarInfo(f"{name}/{file}")
                 member.size = len(data)
                 member.mode = 0o644

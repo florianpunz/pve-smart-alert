@@ -21,7 +21,7 @@ from pve_smart_alert.anonymize import (
     Eui64,
     Wwn,
 )
-from pve_smart_alert.recording import Recording, anonymize
+from pve_smart_alert.recording import Recording, anonymize, serialize_bytes
 
 SATA: Final[dict[str, object]] = {
     "device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"},
@@ -240,6 +240,46 @@ def test_a_drive_named_scan_does_not_overwrite_the_scan() -> None:
     drive_file = files["scan-2.json"]
     assert isinstance(drive_file, dict)
     assert drive_file["model_name"] == SATA["model_name"]
+
+
+def test_the_file_name_keeps_the_stem_of_the_recording() -> None:
+    # A recording imported from another project names its drive files
+    # itself. The device is a node, which holds no identifier, so the stem
+    # stays and a regenerated fixture keeps its file names (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["device"] = {"name": "/dev/bus/6", "type": "sat", "protocol": "ATA"}
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["bus6-megaraid14"] = drive
+    recording.calls["bus6-megaraid14"] = ("/dev/bus/6", "sat")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    assert "bus6-megaraid14.json" in files
+
+
+def test_a_recording_with_a_lone_surrogate_is_written() -> None:
+    # A string of a drive can hold a lone surrogate, which UTF-8 cannot
+    # encode: the file is written with the escape instead, so that the
+    # archive is not lost (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["model_name"] = "EVIL\ud800X 8TB"
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["sda"] = drive
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+    document = files["sda.json"]
+
+    assert json.loads(serialize_bytes(document).decode("utf-8"))["model_name"] == (
+        "EVIL\ud800X 8TB"
+    )
 
 
 def test_a_serial_and_the_underscore_form_of_another_keep_their_placeholders() -> None:

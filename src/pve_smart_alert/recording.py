@@ -98,11 +98,25 @@ def serialize(document: object) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
+def serialize_bytes(document: object) -> bytes:
+    """Return a file of a fixture as bytes (ADR 0023).
+
+    A string of a drive can hold a lone surrogate, which UTF-8 cannot
+    encode. Such a document is written with its JSON escapes instead, so
+    that the archive is not lost.
+    """
+    text = serialize(document)
+    try:
+        return text.encode("utf-8")
+    except UnicodeEncodeError:
+        return (json.dumps(document, indent=2, ensure_ascii=True) + "\n").encode("ascii")
+
+
 def write_directory(directory: Path, files: Mapping[str, object]) -> None:
     """Write the files of one fixture into a directory."""
     directory.mkdir(parents=True, exist_ok=True)
     for name, document in files.items():
-        (directory / name).write_text(serialize(document), encoding="utf-8")
+        (directory / name).write_bytes(serialize_bytes(document))
 
 
 def scan_order(recording: Recording) -> list[str]:
@@ -154,15 +168,18 @@ def _file_names(
 
 
 def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:
-    """Return the file name of a drive output: its device name without the path.
+    """Return the file name of a drive output: the stem of the recording.
 
-    A link under `/dev/disk/` is replaced by the anonymizer first, so that a
-    `by-id` link cannot put a serial number into a file
-    name (ADR 0023).
+    A device name that the anonymizer replaces, such as a `by-id` link, can
+    hold the serial number of the drive: then the anonymized name gives the
+    file name instead of the stem. Every other stem is kept, so that a
+    fixture keeps the file names its source gave it (ADR 0023, ADR 0039).
     """
     name = _recorded_name(recording, stem)
     if isinstance(name, str) and name:
-        return PurePosixPath(anonymizer.learn_device(name)).name
+        anonymized = anonymizer.learn_device(name)
+        if anonymized != name:
+            return PurePosixPath(anonymized).name
     return stem
 
 
