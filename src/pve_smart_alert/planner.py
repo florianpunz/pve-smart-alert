@@ -672,7 +672,7 @@ class _Planner:
                 # A state written by 0.5.0 keys a skipped device as
                 # `name|type`; the time it was skipped first is kept until
                 # the entry is rewritten (ADR 0038).
-                before = previous.get(f"{skipped.access.name}|{skipped.access.type}")
+                before = previous.get(skipped.access.legacy_key)
             since = (
                 before.since if before is not None and before.reason == skipped.reason else self.now
             )

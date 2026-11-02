@@ -21,13 +21,13 @@ Option: the access key becomes a JSON array as well.
 - A record of a device without an identity is stored under `device:` followed by that array, such as `device:["/dev/sda", "sat"]`.
 - A drive without a serial number and a WWN is keyed `["<model>", "device", "<name>", "<type>"]`.
 - The schema-2 migration re-keys a schema-1 record without an identity from its last access as well. A record without a usable last access is rejected by the validation after the migration, so the whole file is set aside as [ADR 0007](0007-state-storage.md) describes; the migration's fallback is not reached end to end.
-- `status` reads the old `name|type` key of a skipped device in a state that 0.5.0 wrote, until the next run rewrites the entry.
+- `status` reads the old `name|type` key of a skipped device in a state that 0.5.0 wrote, and the planner looks it up the same way, so the first run after the upgrade keeps the `since` of the device. The next run writes the entry under the new key.
 
 ## Consequences
 
 - No two records of the state file can share a key, whatever the device scan reported.
 - A state of schema 1 is migrated for every record, whether the device answered with an identity or not.
-- The skipped devices of a state written by 0.5.0 keep the old key until the next run; `status` shows both forms.
+- The skipped devices of a state written by 0.5.0 keep the old key until the next run; `status` reads both forms, and a state holds one at a time.
 
 ## Revisit when
 

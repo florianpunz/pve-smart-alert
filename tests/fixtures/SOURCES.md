@@ -77,7 +77,7 @@ State files that earlier builds wrote, so that a test reads them with the curren
 | File | Origin |
 | --- | --- |
 | `dev2-megaraid-id-change.json` | Written on 2026-10-16 by the code of 0.5.0~dev2 (commit `299acc2`) in the test frame, after the steps `01-first` to `04-moved` of the scenario `megaraid-id-change`, with the clock of the frame. Schema 1. The drives are those of the scenario, with its placeholder serial numbers and WWNs; written indented with sorted keys, nothing else changed |
-| `dev5-unreadable-device.json` | Written on 2026-11-02 by the code of 0.5.0 (tag `v0.5.0`, commit `e2ff2c4`) in a worktree, with a `State` built by hand and passed to `save_state`. Schema 1. It holds one healthy drive with the placeholder serial `ANON-SN-0001`, one device that never answered, keyed `device:/dev/sdz|sat` with its identity `null`, and one skipped device keyed `/dev/sda|scsi`; written indented with sorted keys, nothing else changed |
+| `dev5-unreadable-device.json` | Written on 2026-11-02 by the code of 0.5.0 (tag `v0.5.0`, commit `e2ff2c4`) in a worktree, with a `State` built by hand and passed to `save_state`. Schema 1. It holds one healthy drive with the placeholder serial `ANON-SN-0001`, one device that never answered, keyed `device:/dev/sdz|sat` with its identity `null`, and one skipped device keyed `/dev/sda|scsi`; written indented by that build's serializer, nothing else changed |
 
 ## Notification configuration: `pvesh/`
 

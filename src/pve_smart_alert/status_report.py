@@ -5,8 +5,9 @@ Everything comes from the stored state; nothing is read from a drive. The
 last run with its time and result, the conditions of the tool, every drive
 with its active conditions, the conditions that wait for their
 confirmation, the drives that are missing or unreadable, and the skipped
-devices. With `--json` the state is printed as it is stored, which is the
-machine-readable form (ARCHITECTURE.md section 9).
+devices. With `--json` the state is printed as the tool loaded it, which is
+the machine-readable form (ARCHITECTURE.md section 9): a file of an older
+schema is migrated in memory, so its keys can differ from the file.
 """
 
 from __future__ import annotations
@@ -27,8 +28,8 @@ def _access_of(key: str) -> tuple[str, str]:
     """Return the name and the type of a skipped device from its key (ADR 0038).
 
     The key is the name and the type as a JSON array. A state written by
-    0.5.0 keeps its old `name|type` key until the next run rewrites the
-    entry, so that form is read as well.
+    0.5.0 keeps the form that `Access.legacy_key` writes until the next run
+    rewrites the entry, so that form is read as well.
     """
     try:
         parts = json.loads(key)
