@@ -100,8 +100,14 @@ that is longer than 200 characters, is shown cleaned and cut, with
 .B …
 for a cut value; the line
 .B Selector:
-then carries the value as a TOML string, exactly as it is written into
+then carries the value as a TOML string, as it is written into
 .BR [[drive]] .
+A value longer than 200 characters is cut in that line as well and carries
+.BR … ;
+such a drive is selected with a model pattern.
+A value with a lone surrogate, which TOML cannot write, gets the line
+.B Cannot select:
+with the model pattern instead.
 A controller whose drives smartctl cannot read is named above the devices.
 The output holds the real serial numbers and WWNs.
 .TP
