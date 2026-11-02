@@ -102,14 +102,35 @@ def _selector_lines(identity: DriveIdentity) -> Iterator[str]:
     A model or serial number that holds a character cleaning replaces, or that
     is longer than a printed value, is printed cleaned or cut. The line
     `Selector:` carries the value as a TOML string, exactly as it is written
-    into the configuration. A value longer than the printed limit is cut as
-    well and carries the mark; such a drive is selected with a model wildcard.
+    into the configuration. A value longer than the printed limit cannot be
+    written whole: it is cut and carries the mark before it is escaped, so
+    that the line stays a TOML string, and such a drive is selected with a
+    model wildcard.
     """
     if printable(identity.model, limit=MAX_PRINTED) != identity.model:
-        yield _labelled("Selector", f"model = {exact_string(identity.model)}")
+        yield _selector_line("model", identity.model)
     serial = identity.serial
     if serial is not None and printable(serial, limit=MAX_PRINTED) != serial:
-        yield _labelled("Selector", f"serial = {exact_string(serial)}")
+        yield _selector_line("serial", serial)
+
+
+def _selector_line(kind: str, value: str) -> str:
+    """Return a `Selector:` line that does not cut the TOML string itself (ADR 0036)."""
+    return f"  {'Selector:':<10} {kind} = {_selector_value(value)}"
+
+
+def _selector_value(value: str) -> str:
+    """Return the value of a `Selector:` line as a TOML string (ADR 0036).
+
+    A value up to the printed limit is written as it is, so that a copy of
+    the line selects the drive. A longer value is cut with the mark before
+    it is escaped: cut after the escape, the line would end inside the
+    string and could not be read as TOML at all.
+    """
+    collapsed = " ".join(without_controls(value).split())
+    if len(collapsed) > MAX_PRINTED:
+        return exact_string(printed(value, limit=MAX_PRINTED))
+    return exact_string(value)
 
 
 def _outcome(found: Found) -> str:

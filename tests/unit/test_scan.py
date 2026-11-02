@@ -291,3 +291,25 @@ def test_a_drive_whose_model_holds_an_unprinted_character_gets_a_selector(
         if found.snapshot is not None and found.candidate.name == entry["device"]
     )
     assert DriveSelector(SelectorKind.MODEL, selector["model"]).matches(identity)
+
+
+def test_a_long_value_gets_a_selector_line_that_is_still_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A value longer than the printed limit cannot be printed whole. The
+    # selector line cuts it and carries the mark, but stays a TOML string:
+    # cutting the escaped line itself left half a string that nobody can
+    # paste (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "ACME-" + "X" * 300
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    (line,) = [line for line in report(host.discover()).splitlines() if "Selector:" in line]
+    selector = tomllib.loads(line.split("Selector:", 1)[1].strip())
+
+    assert selector["model"].endswith("…")
+    assert len(selector["model"]) == 201
