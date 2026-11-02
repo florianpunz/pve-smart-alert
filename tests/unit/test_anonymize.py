@@ -176,39 +176,58 @@ def test_two_drives_read_through_one_device_keep_each_output() -> None:
         assert drive["model_name"] == entry["model"]
 
 
-def test_a_kernel_name_with_a_path_is_kept() -> None:
-    # A kernel or controller node names no drive: the path, the letters and
-    # the digits are kept, whether or not the name has a second slash
-    # (ADR 0023, ADR 0039).
-    anonymizer = Anonymizer()
+@pytest.mark.parametrize(
+    "name",
+    [
+        "/dev/sda",
+        "/dev/sda1",
+        "/dev/nvme0",
+        "/dev/nvme0n1",
+        "/dev/sg0",
+        "/dev/bsg/sssraid0",
+        "/dev/bus/6",
+        "/dev/dm-0",
+        "/dev/cciss/c0d0",
+        "/dev/md0",
+        "/dev/twa0",
+    ],
+)
+def test_a_node_name_is_kept(name: str) -> None:
+    # A kernel or controller node names no drive, so it is kept (ADR 0039).
+    assert Anonymizer().learn_device(name) == name
 
-    for name in ("/dev/sda", "/dev/nvme0n1", "/dev/bus/6", "/dev/bsg/sssraid0", "/dev/dm-0"):
-        assert anonymizer.learn_device(name) == name
 
-
-def test_a_link_name_under_dev_disk_is_replaced() -> None:
-    # A link under /dev/disk/ can hold the serial number of the drive in its
-    # name, so the name is replaced like the value it holds (ADR 0039).
-    anonymizer = Anonymizer()
-
-    assert anonymizer.learn_device("/dev/disk/by-id/ata-Samsung_SSD_1234") == "/dev/anon1"
+@pytest.mark.parametrize(
+    "name",
+    [
+        "/dev/disk/by-id/ata-Samsung_SSD_1234",
+        "/dev/disk/by-path/pci-0000:00:17.0-ata-2",
+        "/dev/mapper/3600508b400105e210000900000490000",
+        "/dev/serial/by-id/usb-KVM-over-IP_1234",
+        "/dev/md/myarray",
+    ],
+)
+def test_a_name_that_is_not_a_node_is_replaced(name: str) -> None:
+    # Anything else can hold an identifier: a by-id link holds the serial
+    # number, a mapper name the WWID when user_friendly_names is off
+    # (ADR 0039).
+    assert Anonymizer().learn_device(name) == "/dev/anon1"
 
 
 def test_a_drive_named_scan_does_not_overwrite_the_scan() -> None:
     # `scan`, `lsblk` and `recording` are the names of the other files of a
-    # fixture. A drive whose device name is one of them gets a numbered file
+    # fixture. A drive whose file name would be one of them gets a numbered
     # name instead of overwriting that file (ADR 0023).
     drive = copy.deepcopy(SATA)
-    drive["device"] = {"name": "/dev/scan", "type": "sat", "protocol": "ATA"}
     recording = Recording(
         node="pve9",
         collected=None,
         collected_with="test",
-        scan={"devices": [{"name": "/dev/scan", "type": "sat"}]},
+        scan={"devices": [{"name": "/dev/sda", "type": "sat"}]},
         scan_exit=0,
     )
     recording.drives["scan"] = drive
-    recording.calls["scan"] = ("/dev/scan", "sat")
+    recording.calls["scan"] = ("/dev/sda", "sat")
 
     files = anonymize(
         recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
@@ -221,6 +240,24 @@ def test_a_drive_named_scan_does_not_overwrite_the_scan() -> None:
     drive_file = files["scan-2.json"]
     assert isinstance(drive_file, dict)
     assert drive_file["model_name"] == SATA["model_name"]
+
+
+def test_a_serial_and_the_underscore_form_of_another_keep_their_placeholders() -> None:
+    # udev writes a space of a serial number as an underscore. That form is
+    # numbered with the serial number, but it must not take the place of
+    # another real serial number that is written with an underscore
+    # (ADR 0023).
+    spaced = copy.deepcopy(SATA)
+    spaced["serial_number"] = "AB CD"
+    underscored = copy.deepcopy(NVME)
+    underscored["serial_number"] = "AB_CD"
+    anonymizer = Anonymizer()
+    anonymizer.learn(spaced)
+    anonymizer.learn(underscored)
+
+    assert (
+        anonymizer.drive(spaced)["serial_number"] != anonymizer.drive(underscored)["serial_number"]
+    )
 
 
 def test_the_free_text_of_the_metadata_is_anonymized() -> None:

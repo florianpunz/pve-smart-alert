@@ -27,7 +27,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0020](0020-routing-check.md) | Check the routing of the notifications through the public API | Accepted | How the tool detects that no matcher matches |
 | [0021](0021-wear-value-source.md) | Take the wear value from the vendor-neutral sources first | Accepted | Which source the wear value of an SSD comes from |
 | [0022](0022-fallback-routing-check.md) | Check the route of the fallback, mail to root, as well | Accepted | How the tool detects that its fallback mail would be dropped |
-| [0023](0023-anonymization-of-recordings.md) | Anonymize recordings with counters per archive | Superseded by [0039](0039-device-names-under-dev-disk-are-identifying.md) for device names only; every other part governs as before | Which values of a recording identify a drive and what replaces them |
+| [0023](0023-anonymization-of-recordings.md) | Anonymize recordings with counters per archive | Superseded by [0039](0039-only-node-names-of-devices-are-kept.md) for device names only; every other part governs as before | Which values of a recording identify a drive and what replaces them |
 | [0024](0024-drive-selectors.md) | Select drives by model pattern, serial number and WWN | Accepted | What the selectors of exclude rules and per-drive overrides mean |
 | [0025](0025-sandboxing-of-the-check-service.md) | Sandboxing options of the check service | Accepted | Which systemd options restrict the check without breaking drives, mail or notification targets |
 | [0026](0026-recordings-of-scsi-drives-and-of-other-projects.md) | Anonymize the names of SCSI drives, and import the test data of other projects | Accepted | How logical unit ids and SAS addresses are anonymized, and which recordings of other projects become fixtures |
@@ -39,7 +39,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0032](0032-hpe-smart-array-probe.md) | Probe the drives behind an HPE Smart Array controller | Accepted | The scope of the `cciss,N` probe, the node it reads, when it stops, the key that switches it off, its `device-id` and its standby check |
 | [0034](0034-manual-entries-of-other-pass-through-types.md) | Drives behind the other RAID controllers | Accepted | That a drive behind Areca, 3ware, Adaptec, HighPoint or SSSRAID takes nothing lsblk shows for its node and is not woken in standby, that the JMicron types never reach smartctl, and that these types have no `device-id` in version 1 |
 | [0035](0035-purge-removes-the-package-directory.md) | Purge removes the directory of the Python package | Accepted | That a purge removes `/usr/share/pve-smart-alert/` with everything in it, and why a foreign file in the tool's directory goes too |
-| [0039](0039-device-names-under-dev-disk-are-identifying.md) | A device name under /dev/disk is identifying | Accepted | Which device names a recording replaces and which it keeps, and that a drive never takes the file name of another file of a fixture |
+| [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 
 ## Confirmed by the maintainer
 

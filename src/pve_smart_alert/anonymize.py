@@ -67,13 +67,23 @@ _NAA6_VENDOR_DIGITS: Final = 7
 # (ADR 0023).
 MIN_SEARCHED_LENGTH: Final = 4
 
-# A device the scan names by its node, such as /dev/sda, /dev/nvme0n1,
-# /dev/bus/6 or /dev/bsg/sssraid0. A manual entry can instead name a link
-# under /dev/disk/, such as /dev/disk/by-id/ata-<model>_<serial>, whose name
-# holds the serial number of the drive: such a name is replaced like the
-# value it holds (ADR 0023, ADR 0039). Every other name is kept; a real
-# value it holds still stops the archive through the check.
-_LINK_DEVICE: Final = re.compile(r"/dev/disk/.*", re.DOTALL)
+# A device the scan names by its node. Only these shapes name no drive: every
+# other name, such as a /dev/disk/by-id link, a mapper name (which is the
+# WWID when user_friendly_names is off) or a serial link, can hold an
+# identifier and is replaced like the value it holds (ADR 0023, ADR 0039).
+_NODE_DEVICE: Final = re.compile(
+    r"/dev/(?:"
+    r"sd[a-z]+[0-9]*"
+    r"|nvme[0-9]+(?:n[0-9]+(?:p[0-9]+)?)?"
+    r"|sg[0-9]+"
+    r"|bsg/[a-z]+[0-9]+"
+    r"|bus/[0-9]+"
+    r"|dm-[0-9]+"
+    r"|cciss/c[0-9]+d[0-9]+"
+    r"|md[0-9]+"
+    r"|tw[a-z]+[0-9]+"
+    r")"
+)
 DEVICE_PLACEHOLDER: Final = "/dev/anon{}"
 
 
@@ -116,6 +126,10 @@ class Anonymizer:
 
     def __init__(self) -> None:
         self._serials: dict[str, str] = {}
+        # The form in which udev writes a serial number with underscores,
+        # kept apart from the real serial numbers so that it cannot take the
+        # place of another one.
+        self._udev_serials: dict[str, str] = {}
         self._wwns: dict[Wwn, Wwn] = {}
         self._euis: dict[Eui64, Eui64] = {}
         self._uuids: dict[str, str] = {}
@@ -132,12 +146,12 @@ class Anonymizer:
         """Return the name to record a device under (ADR 0023).
 
         A node such as `/dev/sda`, `/dev/nvme0n1` or `/dev/bus/6` is kept: it
-        names no drive. A link under `/dev/disk/`, such as a `by-id` link,
-        can hold the serial number of the drive in its name, so it is
+        names no drive. Every other name, such as a `by-id` link or a mapper
+        name, can hold the serial number or the WWID of the drive, so it is
         replaced by a placeholder of this archive, in the file name, the
         metadata and every text of the recording alike.
         """
-        if not _LINK_DEVICE.fullmatch(name):
+        if _NODE_DEVICE.fullmatch(name):
             return name
         if name not in self._devices:
             self._devices[name] = DEVICE_PLACEHOLDER.format(len(self._devices) + 1)
@@ -249,8 +263,8 @@ class Anonymizer:
             placeholder = SERIAL_PLACEHOLDER.format(_next(set(self._serials.values())))
             self._serials[serial] = placeholder
             udev_form = serial.replace(" ", "_")
-            if udev_form != serial:
-                self._serials[udev_form] = placeholder
+            if udev_form != serial and udev_form not in self._serials:
+                self._udev_serials[udev_form] = placeholder
         return self._serials[serial]
 
     def _learn_wwn(self, digits: str) -> Wwn:
@@ -343,6 +357,8 @@ class Anonymizer:
         """Return every learned real value, in every form it is written in."""
         for serial in self._serials:
             yield "serial number", serial
+        for serial in self._udev_serials:
+            yield "serial number", serial
         for wwn in self._wwns:
             yield "WWN", wwn.hex
         for eui in self._euis:
@@ -405,7 +421,12 @@ class Anonymizer:
     def _replace_in(self, text: str) -> str:
         # The longest values first, so that one that contains another is
         # replaced as a whole.
-        values = [*self._devices.items(), *self._serials.items(), *self._uuids.items()]
+        values = [
+            *self._devices.items(),
+            *self._serials.items(),
+            *self._udev_serials.items(),
+            *self._uuids.items(),
+        ]
         for real, placeholder in sorted(values, key=lambda pair: -len(pair[0])):
             if len(real) >= MIN_SEARCHED_LENGTH:
                 text = text.replace(real, placeholder)

@@ -1,6 +1,6 @@
 # ADR 0023: Anonymize recordings with counters per archive
 
-- Status: Superseded by [0039](0039-device-names-under-dev-disk-are-identifying.md) for device names only; every other part of the record governs as before
+- Status: Superseded by [0039](0039-only-node-names-of-devices-are-kept.md) for device names only; every other part of the record governs as before
 - Date: 2026-10-07
 - Decided by: the maintainer, for the form of the placeholders
 
