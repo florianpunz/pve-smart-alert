@@ -23,6 +23,7 @@ from pve_smart_alert.config import Config
 from pve_smart_alert.discovery import Discovery, Found, HostPaths, Outcome, discover
 from pve_smart_alert.discovery.sources import Candidate, Source
 from pve_smart_alert.model import (
+    MAX_PRINTED,
     Collection,
     DeviceAccess,
     DriveClass,
@@ -53,6 +54,35 @@ def test_a_long_string_of_a_finding_is_cut_in_the_dry_run() -> None:
     )
 
     assert all(len(line) <= 300 for line in lines)
+
+
+def test_a_long_name_of_a_scan_device_is_cut_in_the_dry_run() -> None:
+    # The name and the type of a device of the scan need not be valid and
+    # can be arbitrarily long. The dry run names them on the line of the
+    # drive, so both are cut like every other printed string, and the mark
+    # says that there is more (ARCHITECTURE.md section 14, ADR 0036).
+    identity = DriveIdentity.of("SEAGATE ST600MP0036", serial="ANON-SN-0002")
+    snapshot = Snapshot(
+        identity=identity,
+        access=DeviceAccess("/dev/sdb", "scsi", "SCSI"),
+        drive_class=DriveClass.HDD,
+        collection=Collection(smartctl_version=(7, 5), exit_status=0),
+        health_passed=False,
+    )
+    found = Found(
+        Candidate("/dev/" + "s" * 500, "scsi" + "x" * 100, Source.SCAN),
+        Outcome.MONITORED,
+        snapshot=snapshot,
+    )
+    discovery = Discovery(devices=(found,), smartctl_version=(7, 5))
+
+    lines = check_report.render(
+        discovery, [(found, evaluate(snapshot))], smartctl_path=Path("/usr/sbin/smartctl")
+    )
+
+    (line,) = [line for line in lines if line.startswith("/dev/")]
+    assert len(line) <= 2 * MAX_PRINTED + 60
+    assert "…" in line
 
 
 def fake_smartctl_config(content: str = "") -> str:

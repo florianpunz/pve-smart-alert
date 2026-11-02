@@ -55,13 +55,17 @@ def _smartctl_line(discovery: Discovery, path: Path) -> str:
 
 def _drive_line(found: Found) -> str:
     candidate = found.candidate
+    # The name and the type of a device of the scan need not be valid and
+    # can be arbitrarily long (ARCHITECTURE.md section 14).
+    name = printed(candidate.name, limit=MAX_PRINTED)
+    kind = printed(candidate.type, limit=MAX_PRINTED)
     snapshot = found.snapshot
     if snapshot is None:
-        return f"{candidate.name} [{candidate.type}]"
+        return f"{name} [{kind}]"
     identity = snapshot.identity
     model = printed(identity.model, limit=MAX_PRINTED)
     serial = printed(identity.serial or "no serial number reported", limit=MAX_PRINTED)
-    return f"{candidate.name} [{candidate.type}] {model}, serial {serial}"
+    return f"{name} [{kind}] {model}, serial {serial}"
 
 
 def _finding_line(finding: Finding) -> str:
