@@ -148,7 +148,8 @@ def test_the_last_lines_of_the_run_carry_no_control_character(tmp_path: Path) ->
     host = Host(tmp_path)
     host.journalctl.write_text(
         "#!/bin/sh\n"
-        'echo "2026-10-15T10:00:00+0000 pve1 pve-smart-alert[1234]: reading /dev/sdz\x1b[2J"\n',
+        'echo "2026-10-15T10:00:00+0000 pve1 pve-smart-alert[1234]: reading /dev/sdz\x1b[2J'
+        ' \x9b[2J \u202e reversed \u2028 \u2029"\n',
         encoding="utf-8",
     )
 
@@ -156,7 +157,15 @@ def test_the_last_lines_of_the_run_carry_no_control_character(tmp_path: Path) ->
 
     [mail] = host.sent()
     assert "\x1b" not in mail
+    assert "\x9b" not in mail
+    assert "\u202e" not in mail
+    # The line and paragraph separators, which a mail client can show as a
+    # break, as the tool's own cleaning removes them (ARCHITECTURE.md
+    # section 14).
+    assert "\u2028" not in mail
+    assert "\u2029" not in mail
     assert "[2J" in mail
+    assert "reversed" in mail
 
 
 def test_a_second_failure_on_the_same_day_sends_nothing(tmp_path: Path) -> None:
