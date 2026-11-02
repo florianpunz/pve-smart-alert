@@ -143,21 +143,23 @@ def test_a_real_value_that_is_left_fails_the_check(leak: dict[str, object]) -> N
 
 
 def test_two_drives_read_through_one_device_keep_each_output() -> None:
-    # Every drive behind a MegaRAID controller is read through the same
-    # device with a different smartctl type. The fixture names each file
-    # after the device, so without a difference the second output overwrote
-    # the first and the fixture lost a drive (ADR 0023).
+    # Two drives can be read through one link with a different smartctl
+    # type, such as a by-id link of a RAID controller. The anonymizer
+    # replaces the link by one placeholder, so both file names would be the
+    # same: without the number the second output overwrote the first and the
+    # fixture lost a drive (ADR 0023).
     first = copy.deepcopy(SATA)
     second = copy.deepcopy(NVME)
-    first["device"] = {"name": "/dev/sda", "type": "megaraid,8", "protocol": "ATA"}
-    second["device"] = {"name": "/dev/sda", "type": "megaraid,14", "protocol": "ATA"}
+    link = "/dev/disk/by-id/ata-Samsung_SSD_1234"
+    first["device"] = {"name": link, "type": "megaraid,8", "protocol": "ATA"}
+    second["device"] = {"name": link, "type": "megaraid,14", "protocol": "ATA"}
     recording = Recording(
         node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
     )
-    recording.drives["sda-8"] = first
-    recording.drives["sda-14"] = second
-    recording.calls["sda-8"] = ("/dev/sda", "megaraid,8")
-    recording.calls["sda-14"] = ("/dev/sda", "megaraid,14")
+    recording.drives["link-8"] = first
+    recording.drives["link-14"] = second
+    recording.calls["link-8"] = (link, "megaraid,8")
+    recording.calls["link-14"] = (link, "megaraid,14")
 
     files = anonymize(
         recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
@@ -169,7 +171,8 @@ def test_two_drives_read_through_one_device_keep_each_output() -> None:
     assert isinstance(listed, list)
     entries = [entry for entry in listed if isinstance(entry, dict) and entry.get("type")]
     assert len(entries) == 2
-    assert len({entry["file"] for entry in entries}) == 2
+    # The link becomes one placeholder for both, and the second gets a number.
+    assert {entry["file"] for entry in entries} == {"anon1.json", "anon1-2.json"}
     for entry in entries:
         drive = files[entry["file"]]
         assert isinstance(drive, dict)
