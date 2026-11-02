@@ -328,6 +328,21 @@ def test_an_identity_less_record_of_a_real_0_5_0_state_is_found() -> None:
     assert record.unreadable_runs == 2
 
 
+def test_a_deeply_nested_document_is_set_aside(tmp_path: Path) -> None:
+    # A state file that the tool did not write can hold a deeply nested
+    # value: json.loads recurses until RecursionError, which has to end like
+    # invalid JSON instead of a traceback (ADR 0007).
+    path = tmp_path / "state.json"
+    path.write_text(
+        '{"schema": 2, "drives": ' + "[" * 50_000 + "]" * 50_000 + "}", encoding="utf-8"
+    )
+
+    loaded = load_state(path, now=NOW)
+
+    assert loaded.reset is not None
+    assert loaded.set_aside is not None
+
+
 def test_a_timestamp_in_the_future_is_read_as_now(tmp_path: Path) -> None:
     # ADR 0007: a clock jump must not suppress reminders forever.
     path = tmp_path / "state.json"

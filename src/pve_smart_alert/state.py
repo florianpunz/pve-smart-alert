@@ -180,6 +180,15 @@ class Access:
         """
         return json.dumps([self.name, self.type])
 
+    @property
+    def legacy_key(self) -> str:
+        """Return the key a state written by 0.5.0 used for this device.
+
+        `status` parses the same form, so that a skipped device keeps its
+        `since` until the next run rewrites the entry (ADR 0038).
+        """
+        return f"{self.name}|{self.type}"
+
 
 @dataclass
 class DriveDetails:
@@ -415,7 +424,9 @@ def parse_state(
     """
     try:
         document = json.loads(text)
-    except json.JSONDecodeError as error:
+    except (json.JSONDecodeError, RecursionError) as error:
+        # A deeply nested document makes the decoder recurse without end;
+        # it is as unusable as invalid JSON (ADR 0007).
         raise StateError(f"the state file is not valid JSON: {error}") from error
     if not isinstance(document, dict):
         raise StateError("the state file does not hold a JSON object")
