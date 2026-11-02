@@ -68,7 +68,7 @@ def anonymize(
         anonymizer.learn_lsblk(recording.lsblk)
     # A device name that is not a kernel name can hold a serial number: it
     # is replaced before any file name or text is built from it (ADR 0023).
-    filenames = {stem: _file_stem(recording, stem, anonymizer) for stem in order}
+    filenames = _file_names(recording, order, anonymizer)
 
     files: dict[str, object] = {}
     if recording.scan is not None:
@@ -125,6 +125,31 @@ def drive_class(drive: Mapping[str, object]) -> str:
         return "nvme"
     # An unknown rotation rate counts as a hard disk (docs/check-catalog.md).
     return "ssd" if drive.get("rotation_rate") == 0 else "hdd"
+
+
+def _file_names(
+    recording: Recording, order: Sequence[str], anonymizer: Anonymizer
+) -> dict[str, str]:
+    """Return the file name of each drive output, one name per drive.
+
+    The name comes from the anonymized device a drive was read through.
+    Several drives can share that device, such as the drives behind a
+    MegaRAID controller, which are all read through one device with a
+    different smartctl type: the second and every later one gets a number, so
+    that one output never overwrites another (ADR 0023).
+    """
+    names: dict[str, str] = {}
+    used: set[str] = set()
+    for stem in order:
+        base = _file_stem(recording, stem, anonymizer)
+        name = base
+        number = 2
+        while name in used:
+            name = f"{base}-{number}"
+            number += 1
+        used.add(name)
+        names[stem] = name
+    return names
 
 
 def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:

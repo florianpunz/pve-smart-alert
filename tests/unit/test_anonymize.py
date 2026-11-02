@@ -142,6 +142,40 @@ def test_a_real_value_that_is_left_fails_the_check(leak: dict[str, object]) -> N
     assert "e40a1b2c3" not in message
 
 
+def test_two_drives_read_through_one_device_keep_each_output() -> None:
+    # Every drive behind a MegaRAID controller is read through the same
+    # device with a different smartctl type. The fixture names each file
+    # after the device, so without a difference the second output overwrote
+    # the first and the fixture lost a drive (ADR 0023).
+    first = copy.deepcopy(SATA)
+    second = copy.deepcopy(NVME)
+    first["device"] = {"name": "/dev/sda", "type": "megaraid,8", "protocol": "ATA"}
+    second["device"] = {"name": "/dev/sda", "type": "megaraid,14", "protocol": "ATA"}
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["sda-8"] = first
+    recording.drives["sda-14"] = second
+    recording.calls["sda-8"] = ("/dev/sda", "megaraid,8")
+    recording.calls["sda-14"] = ("/dev/sda", "megaraid,14")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    metadata = files["recording.json"]
+    assert isinstance(metadata, dict)
+    listed = metadata["files"]
+    assert isinstance(listed, list)
+    entries = [entry for entry in listed if isinstance(entry, dict) and entry.get("type")]
+    assert len(entries) == 2
+    assert len({entry["file"] for entry in entries}) == 2
+    for entry in entries:
+        drive = files[entry["file"]]
+        assert isinstance(drive, dict)
+        assert drive["model_name"] == entry["model"]
+
+
 def test_the_free_text_of_the_metadata_is_anonymized() -> None:
     # `origin`, `collected_with`, `controller` and the source of an import
     # are free text. A serial number or WWN pasted into them is replaced
