@@ -266,7 +266,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "host": "pve1",
   "initialized": "2026-10-03T12:04:11Z",
   "last_run": {
@@ -280,7 +280,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
     "notifications_failed": 0
   },
   "drives": {
-    "Samsung SSD 870 EVO 1TB|S5Y1NX0R000001A": {
+    "[\"Samsung SSD 870 EVO 1TB\", \"serial\", \"S5Y1NX0R000001A\"]": {
       "identity": {
         "model": "Samsung SSD 870 EVO 1TB",
         "serial": "S5Y1NX0R000001A",
@@ -322,7 +322,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
     }
   },
   "skipped": {
-    "/dev/sda|scsi": { "reason": "logical-volume", "since": "2026-10-03T12:04:11Z" }
+    "[\"/dev/sda\", \"scsi\"]": { "reason": "logical-volume", "since": "2026-10-03T12:04:11Z" }
   },
   "tool": { "conditions": {}, "last_notified": null }
 }

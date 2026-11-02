@@ -32,7 +32,9 @@ def _access_of(key: str) -> tuple[str, str]:
     """
     try:
         parts = json.loads(key)
-    except ValueError:
+    except (ValueError, RecursionError):
+        # A legacy key is a string the device scan reported: deeply nested
+        # brackets make the decoder recurse without end.
         parts = None
     if isinstance(parts, list) and len(parts) == 2 and all(isinstance(part, str) for part in parts):
         return parts[0], parts[1]

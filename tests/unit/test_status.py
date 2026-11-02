@@ -28,6 +28,18 @@ def test_a_skipped_device_is_named_from_its_key() -> None:
     assert line == "  /dev/sda [sat]: excluded, since 2026-10-12T12:00:00Z"
 
 
+def test_a_deeply_nested_legacy_key_does_not_crash_status() -> None:
+    # A skipped key of a state written by 0.5.0 is a string a device scan
+    # reported. Many brackets made `json.loads` fail with RecursionError,
+    # which ended `status` with a traceback (ADR 0038).
+    state = State()
+    state.skipped["[" * 50_000 + "|sat"] = SkippedRecord(reason="excluded", since=NOW)
+
+    (line,) = [line for line in status_of(state) if "excluded" in line]
+
+    assert line.endswith(" [sat]: excluded, since 2026-10-12T12:00:00Z")
+
+
 def test_a_skipped_device_of_a_state_written_before_the_new_keys_is_named() -> None:
     # A state written by 0.5.0 keeps the old key until the next run rewrites
     # the entry, so `status` has to read both forms.
