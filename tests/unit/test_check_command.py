@@ -71,7 +71,7 @@ def test_a_long_name_of_a_scan_device_is_cut_in_the_dry_run() -> None:
         health_passed=False,
     )
     found = Found(
-        Candidate("/dev/" + "s" * 500, "scsi" + "x" * 100, Source.SCAN),
+        Candidate("/dev/" + "s" * 500, "scsi" + "x" * 500, Source.SCAN),
         Outcome.MONITORED,
         snapshot=snapshot,
     )
@@ -83,7 +83,10 @@ def test_a_long_name_of_a_scan_device_is_cut_in_the_dry_run() -> None:
 
     (line,) = [line for line in lines if line.startswith("/dev/")]
     assert len(line) <= 2 * MAX_PRINTED + 60
-    assert "…" in line
+    # Both fields are cut, each with its own mark: a test that finds one mark
+    # would not notice a field that is printed whole again.
+    assert "/dev/" + "s" * (MAX_PRINTED - len("/dev/")) + "…" in line
+    assert "[scsi" + "x" * (MAX_PRINTED - 4) + "…]" in line
 
 
 def fake_smartctl_config(content: str = "") -> str:
