@@ -69,6 +69,7 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0012](0012-read-only-and-coexistence-with-smartd.md) | Extended by [0035](0035-purge-removes-the-package-directory.md): a purge removes the directory of the tool with everything in it, including a file that no package owns |
 | [0013](0013-packaging-and-installation.md) | Superseded by [0035](0035-purge-removes-the-package-directory.md) for the paths that a purge removes only; every other part of the record governs as before |
 | [0020](0020-routing-check.md) | The example "without quorum" for `skip` does not hold: on `pve5` on 2026-10-31, with `corosync` stopped, the node had lost quorum but pmxcfs stayed readable, so `doctor` reported `routing` and `fallback` as `ok` ([ROADMAP.md](../../ROADMAP.md) M5, step 8; [Research 01](../research/01-notification-integration.md), addition of 2026-10-31). `skip` applies when the matchers cannot be read, as when pmxcfs is not running (`pve1`, 2026-10-18) |
+| [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) | "A value longer than the limit is selected with a model wildcard" covers a model only: a serial number is compared exactly ([0024](0024-drive-selectors.md)), so a serial longer than the printed limit cannot be selected at all. For a value with a lone surrogate, which TOML cannot write, the tool prints a line that names the pattern instead of a `Selector:` line |
 
 ## Adding a record
 

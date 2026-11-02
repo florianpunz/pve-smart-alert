@@ -313,3 +313,24 @@ def test_a_long_value_gets_a_selector_line_that_is_still_toml(
 
     assert selector["model"].endswith("…")
     assert len(selector["model"]) == 201
+
+
+def test_a_selector_with_a_lone_surrogate_is_not_written_as_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TOML has no value for a lone surrogate, so a selector line with one
+    # could not be read back. `scan` says which pattern selects the drive
+    # instead of printing a line that no TOML reader accepts (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "EVIL\ud800X 8TB"
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    lines = report(host.discover()).splitlines()
+
+    assert not [line for line in lines if "Selector:" in line]
+    assert any("lone surrogate" in line and "model" in line for line in lines)
+    assert any("model pattern" in line for line in lines)

@@ -105,13 +105,27 @@ def _selector_lines(identity: DriveIdentity) -> Iterator[str]:
     into the configuration. A value longer than the printed limit cannot be
     written whole: it is cut and carries the mark before it is escaped, so
     that the line stays a TOML string, and such a drive is selected with a
-    model wildcard.
+    model wildcard. A value that holds a lone surrogate gets no `Selector:`
+    line at all, because TOML has no value for it; a line says how the drive
+    is selected then.
     """
-    if printable(identity.model, limit=MAX_PRINTED) != identity.model:
-        yield _selector_line("model", identity.model)
-    serial = identity.serial
-    if serial is not None and printable(serial, limit=MAX_PRINTED) != serial:
-        yield _selector_line("serial", serial)
+    for kind, value in (("model", identity.model), ("serial", identity.serial)):
+        if value is None or printable(value, limit=MAX_PRINTED) == value:
+            continue
+        if _has_lone_surrogate(value):
+            # TOML has no value for a lone surrogate: a line with one could
+            # not be read back, so the line names the way that works.
+            yield (
+                f"  {'Cannot select:':<10} the {kind} holds a lone surrogate,"
+                " which TOML cannot write; select the drive with a model pattern"
+            )
+            continue
+        yield _selector_line(kind, value)
+
+
+def _has_lone_surrogate(value: str) -> bool:
+    """Whether `value` holds a surrogate, which TOML cannot write (ADR 0036)."""
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
 
 def _selector_line(kind: str, value: str) -> str:
