@@ -166,18 +166,34 @@ def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: in
         dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
     )
     try:
-        with (
-            os.fdopen(descriptor, "wb") as stream,
-            tarfile.open(fileobj=stream, mode="w:gz") as archive,
-        ):
-            for file, document in files.items():
-                data = serialize_bytes(document)
-                member = tarfile.TarInfo(f"{name}/{file}")
-                member.size = len(data)
-                member.mode = 0o644
-                member.mtime = mtime
-                archive.addfile(member, io.BytesIO(data))
+        with os.fdopen(descriptor, "wb") as stream:
+            with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+                for file, document in files.items():
+                    data = serialize_bytes(document)
+                    member = tarfile.TarInfo(f"{name}/{file}")
+                    member.size = len(data)
+                    member.mode = 0o644
+                    member.mtime = mtime
+                    archive.addfile(member, io.BytesIO(data))
+            # Flushed to disk before the rename, and the directory after it,
+            # so that a power loss leaves either the old archive or the whole
+            # new one, as for the state file (ADR 0007, ADR 0023).
+            stream.flush()
+            os.fsync(stream.fileno())
         Path(temporary).replace(path)
+        _sync_directory(path.parent)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
+
+
+def _sync_directory(directory: Path) -> None:
+    """Flush a directory, so that a rename in it survives a power loss."""
+    try:
+        descriptor = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
