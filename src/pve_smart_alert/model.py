@@ -182,21 +182,48 @@ def exact_string(value: str) -> str:
     Control and format characters are written as `\\uXXXX` escapes, a quote
     and a backslash are escaped, and a character outside the basic
     multilingual plane as `\\UXXXXXXXX`. A lone surrogate is written as an
-    escape as well, although TOML has no value for it; `scan` prints the line
-    of such a drive all the same (ADR 0036).
+    escape as well, although TOML has no value for it: a caller that writes
+    this into a file to be read as TOML has to decide what to do instead, as
+    `scan` does for its selector line (ADR 0036).
     """
+    return f'"{"".join(_escaped(character) for character in value)}"'
+
+
+def _escaped(character: str) -> str:
+    """Return one character as it is written inside a TOML basic string."""
+    if character == "\\":
+        return "\\\\"
+    if character == '"':
+        return '\\"'
+    if unicodedata.category(character) in NOT_PRINTED:
+        code = ord(character)
+        return f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}"
+    return character
+
+
+def escaped_within(value: str, *, limit: int) -> str:
+    """Return `value` as an escaped TOML string that fits `limit` characters.
+
+    The escaped form of a value of control characters is about six times as
+    long as the value. It cannot always be written whole within the limit of
+    a notification field, and a cut inside a `\\uXXXX` escape is no value at
+    all: the value is cut at a character boundary instead and carries the
+    mark (ADR 0036).
+    """
+    escaped = exact_string(value)
+    if len(escaped) <= limit:
+        return escaped
+    mark = "…"
+    room = limit - len('""') - len(mark)
     parts: list[str] = []
+    used = 0
     for character in value:
-        if character == "\\":
-            parts.append("\\\\")
-        elif character == '"':
-            parts.append('\\"')
-        elif unicodedata.category(character) in NOT_PRINTED:
-            code = ord(character)
-            parts.append(f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}")
-        else:
-            parts.append(character)
-    return f'"{"".join(parts)}"'
+        part = _escaped(character)
+        if used + len(part) > room:
+            break
+        parts.append(part)
+        used += len(part)
+    return f'"{"".join(parts)}{mark}"'
 
 
 def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
@@ -213,7 +240,7 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     cleaned = printable(value.replace(",", ";"), limit=limit)
     if cleaned or not value.strip():
         return cleaned
-    return exact_string(value)[:limit]
+    return escaped_within(value, limit=limit)
 
 
 def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:

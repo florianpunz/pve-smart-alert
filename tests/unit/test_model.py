@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -109,6 +110,16 @@ def test_a_field_value_of_control_characters_only_is_escaped() -> None:
     # Cleaning would leave nothing, and a field that is left out cannot be
     # matched at all (ADR 0036).
     assert sanitize_field_value("\x01") == '"\\u0001"'
+
+
+def test_a_long_field_value_of_control_characters_is_cut_at_a_boundary() -> None:
+    # The escaped form of such a value is longer than the field limit. A cut
+    # inside a \uXXXX escape is no value at all, so the value is cut at a
+    # character boundary, and the mark says that there is more (ADR 0036).
+    field = sanitize_field_value("\x01" * 100)
+
+    assert len(field) <= MAX_FIELD_VALUE
+    assert tomllib.loads(f"value = {field}")["value"].endswith("…")
 
 
 def test_sanitize_keeps_characters_that_are_not_ascii() -> None:
