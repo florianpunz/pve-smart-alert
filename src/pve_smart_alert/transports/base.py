@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Final, Protocol
 
 from pve_smart_alert.config import TransportName
-from pve_smart_alert.model import MAX_PRINTED, Notification, printable
+from pve_smart_alert.model import MAX_PRINTED, Notification, printed
 
 # How long one transport may take. The delivery to SMTP, Gotify or webhook
 # targets happens inside the call, and a slow target must not hold the run
@@ -106,6 +106,6 @@ def _with_fallback_note(
     # (ARCHITECTURE.md section 14).
     note = (
         f"The primary transport ({primary}) failed, so this message was sent as {fallback}.\n"
-        f"Reason: {printable(reason, limit=MAX_PRINTED)}"
+        f"Reason: {printed(reason, limit=MAX_PRINTED)}"
     )
     return replace(notification, body=f"{notification.body.rstrip()}\n\n{note}\n")
