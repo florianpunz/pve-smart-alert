@@ -151,10 +151,10 @@ def _outcome(found: Found) -> str:
     if found.outcome is Outcome.SKIPPED:
         reason = found.reason.value if found.reason is not None else "skipped"
         # The detail can quote the inquiry data of a logical volume from lsblk.
-        detail = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        detail = printed(found.detail, limit=MAX_PRINTED) if found.detail else ""
         return f"skipped, {reason}" + (f" ({detail})" if detail else "")
     if found.outcome is Outcome.STANDBY:
-        mode = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        mode = printed(found.detail, limit=MAX_PRINTED) if found.detail else ""
         return f"in standby ({mode}), not woken" if mode else "in standby"
     return found.outcome.value
 

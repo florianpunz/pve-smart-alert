@@ -17,7 +17,9 @@ from hosts import Host
 
 from pve_smart_alert import cli
 from pve_smart_alert.config import Config, ConfigError, DriveSelector, ManualDevice, SelectorKind
-from pve_smart_alert.discovery import Discovery, discover
+from pve_smart_alert.discovery import Discovery, Found, Outcome, SkipReason, discover
+from pve_smart_alert.discovery.sources import Candidate, Source
+from pve_smart_alert.model import MAX_PRINTED
 from pve_smart_alert.scan_report import render
 from scenarios import SCENARIOS, build
 
@@ -259,6 +261,27 @@ def test_drives_behind_megaraid_show_controller_and_device_id(
     assert blocks[-1] == "2 monitored, 0 in standby, 0 unreadable, 1 skipped\n"
 
 
+def test_a_long_detail_of_a_skipped_device_carries_the_mark() -> None:
+    # The detail can quote the inquiry data of a logical volume and can be
+    # arbitrarily long. A cut value carries the mark, in `scan` as in
+    # `status` and in a message (ADR 0036).
+    found = Found(
+        Candidate("/dev/sda", "scsi", Source.SCAN),
+        Outcome.SKIPPED,
+        reason=SkipReason.LOGICAL_VOLUME,
+        detail="X" * 300,
+    )
+    discovery = Discovery(devices=(found,), smartctl_version=(7, 5))
+
+    (line,) = [
+        line
+        for line in render(discovery, smartctl_path=SMARTCTL)
+        if line.startswith("/dev/") and "skipped" in line
+    ]
+
+    assert "X" * MAX_PRINTED + "…" in line
+
+
 def test_a_drive_without_a_controller_has_no_location_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -327,10 +350,18 @@ def test_a_selector_with_a_lone_surrogate_is_not_written_as_toml(
     path = host.recording / entry["file"]
     drive = json.loads(path.read_text(encoding="utf-8"))
     drive["model_name"] = "EVIL\ud800X 8TB"
+    drive["serial_number"] = "SN\x01A"
     path.write_text(json.dumps(drive), encoding="utf-8")
 
     lines = report(host.discover()).splitlines()
 
-    assert not [line for line in lines if "Selector:" in line]
-    assert any("lone surrogate" in line and "model" in line for line in lines)
-    assert any("model pattern" in line for line in lines)
+    # The model gets no TOML line, the serial next to it still gets its line.
+    assert not [line for line in lines if "Selector:" in line and "model =" in line]
+    (serial_line,) = [line for line in lines if "Selector:" in line]
+    assert tomllib.loads(serial_line.split("Selector:", 1)[1].strip())["serial"] == "SN\x01A"
+    assert any(
+        "Cannot select:" in line
+        and "the model holds a lone surrogate" in line
+        and "select the drive with a model pattern" in line
+        for line in lines
+    )

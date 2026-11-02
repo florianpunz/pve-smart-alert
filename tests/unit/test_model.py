@@ -119,7 +119,11 @@ def test_a_long_field_value_of_control_characters_is_cut_at_a_boundary() -> None
     field = sanitize_field_value("\x01" * 100)
 
     assert len(field) <= MAX_FIELD_VALUE
-    assert tomllib.loads(f"value = {field}")["value"].endswith("…")
+    # The whole escapes that fit, then the mark: a field of just the mark
+    # would pass a weaker test and lose the value for every matcher.
+    assert tomllib.loads(f"value = {field}")["value"] == (
+        "\x01" * ((MAX_FIELD_VALUE - len('""') - len("…")) // len("\\u0001")) + "…"
+    )
 
 
 def test_sanitize_keeps_characters_that_are_not_ascii() -> None:
