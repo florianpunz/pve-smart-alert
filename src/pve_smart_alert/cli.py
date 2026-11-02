@@ -602,9 +602,11 @@ def _dump_fixture(arguments: argparse.Namespace) -> int:
 
     print(_labelled("Written", str(dump.archive)))
     print(_labelled("Devices", ", ".join(dump.devices) or "none"))
-    print("Serial numbers, WWNs and UUIDs are replaced by placeholders. Model names, firmware")
-    print("versions, the node name and the labels of pools and volume groups are kept;")
-    print("look at the archive before you share it.")
+    print("Serial numbers, WWNs, EUI-64s, UUIDs, NGUIDs and SAS addresses are replaced by")
+    print("placeholders, and so is a device name that is not a node. The archive is readable")
+    print("by root only. Model names, firmware versions, the node name, node names such as")
+    print("/dev/sda and the labels of pools and volume groups are kept; look at the archive")
+    print("before you share it.")
     return EXIT_OK
 
 

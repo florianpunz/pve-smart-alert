@@ -382,7 +382,8 @@ def test_the_command_writes_the_archive(
     out = capsys.readouterr().out
     assert out.startswith(f"Written:   {tmp_path / 'out'}/pve-smart-alert-fixture-pve9-")
     assert "Devices:   /dev/sda, /dev/nvme0\n" in out
-    assert "look at the archive before you share it" in out
+    assert "look at the archive" in out
+    assert "before you share it" in out
     archives = list((tmp_path / "out").glob("*.tar.gz"))
     assert len(archives) == 1
     with tarfile.open(archives[0], "r:gz") as tar:
