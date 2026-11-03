@@ -26,6 +26,7 @@ from pve_smart_alert.config import (
     effective_check,
     tool_conditions_enabled,
 )
+from pve_smart_alert.model import toml_string
 
 #: The words after a value that say where it comes from.
 _FROM_FILE: Final = "file"
@@ -223,7 +224,7 @@ def _drives(config: Config) -> list[str]:
         lines.append(f"[[drive]] {number}")
         lines.append(f"  {drive.selector.describe()}")
         if drive.comment is not None:
-            lines.append(f'  comment = "{drive.comment}"')
+            lines.append(f"  comment = {toml_string(drive.comment)}")
         lines.append(f"  exclude = {'true' if drive.exclude else 'false'}")
         if drive.detail is not None:
             lines.append(f'  detail = "{drive.detail.value}"')

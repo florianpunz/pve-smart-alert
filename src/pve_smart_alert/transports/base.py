@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Final, Protocol
 
 from pve_smart_alert.config import TransportName
-from pve_smart_alert.model import Notification
+from pve_smart_alert.model import MAX_PRINTED, Notification, printable
 
 # How long one transport may take. The delivery to SMTP, Gotify or webhook
 # targets happens inside the call, and a slow target must not hold the run
@@ -101,8 +101,11 @@ def _with_fallback_note(
     The recipient of the fallback message has to see that the usual route is
     broken, and why (ADR 0008).
     """
+    # The reason is the answer of an external program, so it is cleaned and
+    # cut like a string of a drive before it is written into a mail
+    # (ARCHITECTURE.md section 14).
     note = (
         f"The primary transport ({primary}) failed, so this message was sent as {fallback}.\n"
-        f"Reason: {reason}"
+        f"Reason: {printable(reason, limit=MAX_PRINTED)}"
     )
     return replace(notification, body=f"{notification.body.rstrip()}\n\n{note}\n")

@@ -140,6 +140,60 @@ def test_the_report_carries_the_last_lines_of_the_failed_run(tmp_path: Path) -> 
     assert "_SYSTEMD_INVOCATION_ID=0123456789abcdef0123456789abcdef" in arguments
 
 
+def test_the_last_lines_of_the_run_carry_no_control_character(tmp_path: Path) -> None:
+    # The tool cleans what it writes to the journal, but a traceback, or a
+    # line of a later build, may carry an escape sequence of a drive; the
+    # reporter does not rely on the lines it reads being clean
+    # (ARCHITECTURE.md section 14).
+    host = Host(tmp_path)
+    host.journalctl.write_text(
+        "#!/bin/sh\n"
+        "printf '2026-10-15T10:00:00+0000 pve1 pve-smart-alert[1234]: reading /dev/sdz"
+        "\\033[2J \\302\\233[2J \\342\\200\\256 reversed \\342\\200\\250 \\342\\200\\251"
+        " \\355\\240\\200"
+        "\\tkept tab\\n2026-10-15T10:00:01+0000 pve1 pve-smart-alert[1234]: second line\\n'\n",
+        encoding="utf-8",
+    )
+
+    host.report()
+
+    [mail] = host.sent()
+    assert "\x1b" not in mail
+    assert "\x9b" not in mail
+    assert "\u202e" not in mail
+    # The line and paragraph separators, which a mail client can show as a
+    # break, as the tool's own cleaning removes them (ARCHITECTURE.md
+    # section 14).
+    assert "\u2028" not in mail
+    assert "\u2029" not in mail
+    assert "\ud800" not in mail
+    assert "[2J" in mail
+    assert "reversed" in mail
+    # A tab and the following lines stay: the excerpt is readable.
+    assert "\tkept tab" in mail
+    assert "second line" in mail
+
+
+def test_a_journal_line_that_is_not_utf8_does_not_drop_the_lines_after_it(
+    tmp_path: Path,
+) -> None:
+    # The journal can hold arbitrary bytes. A filter that aborts on them
+    # loses the newest lines, which are the ones that show the failure.
+    host = Host(tmp_path)
+    host.journalctl.write_text(
+        "#!/bin/sh\nprintf 'first line\\nbad \\377\\376 bytes\\nOSError: broken on purpose\\n'\n",
+        encoding="utf-8",
+    )
+
+    host.report()
+
+    [mail] = host.sent()
+    assert "first line" in mail
+    assert "bad" in mail
+    assert "bytes" in mail
+    assert "OSError: broken on purpose" in mail
+
+
 def test_a_second_failure_on_the_same_day_sends_nothing(tmp_path: Path) -> None:
     host = Host(tmp_path)
 

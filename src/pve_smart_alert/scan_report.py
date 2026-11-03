@@ -70,7 +70,10 @@ def _smartctl_line(discovery: Discovery, path: Path) -> str:
 
 def _device(found: Found) -> Iterator[str]:
     candidate = found.candidate
-    yield f"{candidate.name} [{candidate.type}], {_SOURCES[candidate.source]}: {_outcome(found)}"
+    # A name of the scan need not be valid, and can be arbitrarily long.
+    name = printable(candidate.name, limit=MAX_PRINTED)
+    kind = printable(candidate.type, limit=MAX_PRINTED)
+    yield f"{name} [{kind}], {_SOURCES[candidate.source]}: {_outcome(found)}"
     snapshot = found.snapshot
     if snapshot is not None:
         yield from _drive(snapshot)

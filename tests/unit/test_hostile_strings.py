@@ -309,6 +309,27 @@ def test_a_device_name_of_the_scan_that_is_not_one_reaches_no_output_raw(
         assert "\n" not in value
 
 
+def test_a_long_device_name_of_the_scan_is_cut(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A device name of the scan can be arbitrarily long and is not
+    # validated before it is shown; every string of it is length-limited
+    # before `scan` prints it (ARCHITECTURE.md section 14).
+    host = ScenarioHost(tmp_path, monkeypatch, "pending-sectors")
+    for step in host.steps.values():
+        path = step / "scan.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["devices"].append({"name": "/dev/" + "x" * 1000, "type": "sat", "protocol": "ATA"})
+        path.write_text(json.dumps(document), encoding="utf-8")
+    host.install()
+    capsys.readouterr()
+
+    cli.main(["scan"])
+    out = capsys.readouterr().out
+
+    assert all(len(line) < 300 for line in out.splitlines())
+
+
 @pytest.mark.parametrize(
     "value", ["EVIL\x9bX", "EVIL\x85X", "EVIL\u202eX", "EVIL\u200bX", "EVIL\ud800X"]
 )

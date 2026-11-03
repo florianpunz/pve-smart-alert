@@ -38,8 +38,22 @@ host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo unknown)
 # named the run.
 last_lines() {
 	if [ -n "${MONITOR_INVOCATION_ID:-}" ] && command -v "$journalctl" >/dev/null 2>&1; then
+		# No control or format character of a journal line reaches the mail,
+		# and neither do the line and paragraph separators: the tool cleans
+		# what it writes, but a traceback need not (ARCHITECTURE.md
+		# section 14). Tabs and line breaks stay. Perl is part of Proxmox VE,
+		# so the report does not depend on the Python whose run may have
+		# failed.
 		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
-			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null
+			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null |
+			# The bytes are decoded here, not by the IO layer, so that a
+			# malformed sequence becomes a replacement character instead of
+			# ending the excerpt at that line.
+			perl -MEncode -pe '
+				$_ = Encode::decode("UTF-8", $_, Encode::FB_DEFAULT);
+				s/(?![\t\n])[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/ /g;
+				$_ = Encode::encode("UTF-8", $_);
+			' 2>/dev/null
 	fi
 }
 

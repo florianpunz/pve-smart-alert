@@ -181,6 +181,21 @@ def test_a_drive_read_directly_carries_no_device_id(device_type: str) -> None:
     assert FIELD_DEVICE_ID not in fields
 
 
+def test_the_wwn_of_the_template_data_carries_no_control_character() -> None:
+    # `data` is handed to templates an administrator can override; every
+    # other string in it is cleaned (ARCHITECTURE.md section 14). The state
+    # keeps a WWN as it was written, and not every writer validates it.
+    drive = replace(SSD, wwn="5000000000000001\x1b[2J")
+
+    notification = render(drive_message(REALLOCATED, drive=drive), CONTEXT)
+
+    drives = notification.data["drives"]
+    assert isinstance(drives, list)
+    (drive_data,) = drives
+    assert isinstance(drive_data, dict)
+    assert "\x1b" not in drive_data["wwn"]
+
+
 def test_a_drive_behind_an_hpe_controller_names_controller_and_device_id() -> None:
     # FR-507, ADR 0032: a drive read as `cciss,0` on the controller's node.
     drive = replace(

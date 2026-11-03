@@ -35,12 +35,14 @@ from pve_smart_alert.discovery.enrichment import HOST
 from pve_smart_alert.doctor import CheckResult, Status, run_doctor
 from pve_smart_alert.dump import DumpError, dump_fixture
 from pve_smart_alert.model import (
+    MAX_PRINTED,
     PVE_SEVERITY,
     SEVERITY_FOR_PVE,
     Finding,
     Notification,
     PveSeverity,
     node_name,
+    printable,
     without_controls,
 )
 from pve_smart_alert.paths import (
@@ -390,7 +392,8 @@ def _reading(candidate: Candidate) -> None:
     journal, not one line per drive (FR-606).
     """
     if sys.stderr.isatty():
-        name, kind = without_controls(candidate.name), without_controls(candidate.type)
+        name = printable(candidate.name, limit=MAX_PRINTED)
+        kind = printable(candidate.type, limit=MAX_PRINTED)
         print(f"reading {name} [{kind}] ...", file=sys.stderr)
 
 

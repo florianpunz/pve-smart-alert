@@ -172,6 +172,19 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     return printable(value.replace(",", ";"), limit=limit)
 
 
+def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:
+    """Return a value as a TOML basic string that is safe to print and to copy back.
+
+    Quotes and backslashes are escaped, and control and format characters are
+    replaced like everywhere else (ARCHITECTURE.md section 14), so that a
+    selector printed by `config show` reads as the line that is written in the
+    configuration file.
+    """
+    cleaned = printable(value, limit=limit)
+    escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 @dataclass(frozen=True)
 class Notification:
     """One message that is ready to be handed to a transport.
