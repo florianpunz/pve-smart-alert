@@ -5,8 +5,9 @@ Everything comes from the stored state; nothing is read from a drive. The
 last run with its time and result, the conditions of the tool, every drive
 with its active conditions, the conditions that wait for their
 confirmation, the drives that are missing or unreadable, and the skipped
-devices. With `--json` the state is printed as it is stored, which is the
-machine-readable form (ARCHITECTURE.md section 9).
+devices. With `--json` the state is printed as the tool loaded it, which is
+the machine-readable form (ARCHITECTURE.md section 9): a file of an older
+schema is migrated in memory, so its keys can differ from the file.
 """
 
 from __future__ import annotations
@@ -21,6 +22,25 @@ from pve_smart_alert.state import ConditionRecord, DriveRecord, State, format_ti
 
 _SEVERITY: Final = 10
 _CHECK: Final = 26
+
+
+def _access_of(key: str) -> tuple[str, str]:
+    """Return the name and the type of a skipped device from its key (ADR 0038).
+
+    The key is the name and the type as a JSON array. A state written by
+    0.5.0 keeps the form that `Access.legacy_key` writes until the next run
+    rewrites the entry, so that form is read as well.
+    """
+    try:
+        parts = json.loads(key)
+    except (ValueError, RecursionError):
+        # A legacy key is a string the device scan reported: deeply nested
+        # brackets make the decoder recurse without end.
+        parts = None
+    if isinstance(parts, list) and len(parts) == 2 and all(isinstance(part, str) for part in parts):
+        return parts[0], parts[1]
+    name, _, device_type = key.partition("|")
+    return name, device_type
 
 
 def render(state: State, *, path: Path) -> list[str]:
@@ -59,7 +79,7 @@ def render(state: State, *, path: Path) -> list[str]:
     if state.skipped:
         lines += ["", "Skipped devices:"]
         for key, skipped in sorted(state.skipped.items()):
-            name, _, device_type = key.partition("|")
+            name, device_type = _access_of(key)
             name = printed(name, limit=MAX_PRINTED)
             device_type = printed(device_type, limit=MAX_PRINTED)
             cleaned = printed(skipped.detail, limit=MAX_PRINTED) if skipped.detail else ""

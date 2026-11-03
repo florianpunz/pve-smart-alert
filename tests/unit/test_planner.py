@@ -9,7 +9,7 @@ are applied only when the test says it was handed over (FR-517).
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from frame import RUN_INTERVAL, Clock
@@ -45,7 +45,7 @@ from pve_smart_alert.planner import (
     SkippedSeen,
     plan,
 )
-from pve_smart_alert.state import Access, State, identity_key
+from pve_smart_alert.state import Access, SkippedRecord, State, identity_key
 
 PENDING = "ata.pending_sectors"
 REALLOCATED = "ata.reallocated_sectors"
@@ -577,7 +577,20 @@ def test_a_drive_that_is_excluded_now_is_forgotten() -> None:
 
     assert excluded == []
     assert host.state.drives == {}
-    assert host.state.skipped["/dev/sda|sat"].reason == "excluded"
+    assert host.state.skipped['["/dev/sda", "sat"]'].reason == "excluded"
+
+
+def test_the_since_of_a_skipped_device_survives_the_upgrade() -> None:
+    # A state written by 0.5.0 keys a skipped device as `name|type`; the
+    # next run writes the JSON key. The time the device was skipped first is
+    # not the time of the upgrade (ADR 0038).
+    since = datetime(2026, 8, 1, 12, 0, 0, tzinfo=UTC)
+    host = Host()
+    host.state.skipped["/dev/sda|sat"] = SkippedRecord(reason="excluded", since=since)
+
+    host.run(skipped=(SkippedSeen(Access("/dev/sda", "sat"), "excluded"),))
+
+    assert host.state.skipped['["/dev/sda", "sat"]'].since == since
 
 
 @pytest.mark.parametrize("reason", ["logical-volume", "not-a-disk"])

@@ -266,7 +266,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "host": "pve1",
   "initialized": "2026-10-03T12:04:11Z",
   "last_run": {
@@ -280,7 +280,7 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
     "notifications_failed": 0
   },
   "drives": {
-    "Samsung SSD 870 EVO 1TB|S5Y1NX0R000001A": {
+    "[\"Samsung SSD 870 EVO 1TB\", \"serial\", \"S5Y1NX0R000001A\"]": {
       "identity": {
         "model": "Samsung SSD 870 EVO 1TB",
         "serial": "S5Y1NX0R000001A",
@@ -322,13 +322,13 @@ File: `/var/lib/pve-smart-alert/state.json` ([ADR 0007](docs/adr/0007-state-stor
     }
   },
   "skipped": {
-    "/dev/sda|scsi": { "reason": "logical-volume", "since": "2026-10-03T12:04:11Z" }
+    "[\"/dev/sda\", \"scsi\"]": { "reason": "logical-volume", "since": "2026-10-03T12:04:11Z" }
   },
   "tool": { "conditions": {}, "last_notified": null }
 }
 ```
 
-- The key of a drive is model and serial number, model and `wwn:` with the WWN when there is no serial number, and for a drive without either the model with `device:` and the path it was read through, because two such drives may be two drives ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)). A device that never answered with an identity is kept as `device:<name>|<type>` with `identity` set to `null`, and only ever holds the condition `drive.unreadable`.
+- The key of a drive is model and serial number, model and the WWN when there is no serial number, and for a drive without either the model with the path it was read through, because two such drives may be two drives ([ADR 0005](docs/adr/0005-drive-discovery-and-identity.md)). The parts are written as a JSON array, so that no part can be split at a character another part contains ([ADR 0037](docs/adr/0037-unambiguous-state-keys.md)); a state of schema 1 is migrated to the new keys when it is loaded. A device that never answered with an identity is kept as `device:` followed by the JSON array of its name and type, such as `device:["/dev/sda", "sat"]`, with `identity` set to `null`, and only ever holds the condition `drive.unreadable` ([ADR 0038](docs/adr/0038-unambiguous-keys-of-devices-without-an-identity.md)).
 - `initialized` is `null` until a first run has been completed; a state without it is a first run.
 - A condition with `last_notified` set to `null` is active but was not notified yet, because its notification was not handed over; the next run plans it again. `pending` holds conditions that were seen but still wait for their confirmation count. `last_notified` of the drive is the time of the last notification about it, for the worsening cool-down; `event_notified` holds the same per event check, for the event cool-down.
 - `details` keeps what a notification about the drive shows while it cannot be read, for example when it is missing.

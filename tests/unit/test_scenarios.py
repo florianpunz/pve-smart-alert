@@ -272,6 +272,11 @@ def test_the_megaraid_jbod_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert host.run("02-again") == []
 
 
+# The keys of the two drives in the state, schema 2 (ADR 0037).
+SATA_KEY = '["ST6000NM0115-1YZ110", "serial", "ANON-SN-0001"]'
+SAS_KEY = '["SEAGATE ST600MP0036", "serial", "ANON-SN-0002"]'
+
+
 def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A drive whose device ID changes keeps its identity and its state: no
     # new problem, no missing drive (ADR 0005, FR-105).
@@ -293,13 +298,13 @@ def test_the_megaraid_id_change_scenario(tmp_path: Path, monkeypatch: pytest.Mon
         set(drives)
         == keys
         == {
-            "ST6000NM0115-1YZ110|ANON-SN-0001",
-            "SEAGATE ST600MP0036|ANON-SN-0002",
+            SATA_KEY,
+            SAS_KEY,
         }
     )
     sata, sas = (
-        drives["ST6000NM0115-1YZ110|ANON-SN-0001"],
-        drives["SEAGATE ST600MP0036|ANON-SN-0002"],
+        drives[SATA_KEY],
+        drives[SAS_KEY],
     )
     assert sata["last_access"] == {"name": "/dev/bus/6", "type": "sat+megaraid,15"}
     assert sata["details"]["location"] == "/dev/bus/6 (megaraid_sas), device 15"
@@ -327,9 +332,10 @@ DEV2_STATE = Path(__file__).parents[1] / "fixtures" / "state" / "dev2-megaraid-i
 def test_a_state_of_an_earlier_build_is_read_and_continued(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The schema is still 1, so nothing is migrated (ADR 0007). The device
-    # type of the last read was kept since the first schema, so a drive that
-    # goes missing from that state carries the device ID dev2 read (ADR 0029).
+    # The state is schema 1 and is migrated to the new keys (ADR 0007,
+    # ADR 0037), so no drive looks missing. The device type of the last read
+    # was kept since the first schema, so a drive that goes missing from that
+    # state carries the device ID dev2 read (ADR 0029).
     host = installed(tmp_path, monkeypatch, "megaraid-id-change")
     host.state_dir.mkdir()
     shutil.copy(DEV2_STATE, host.state_path)
@@ -346,8 +352,8 @@ def test_a_state_of_an_earlier_build_is_read_and_continued(
     assert fields[FIELD_DEVICE_ID] == "9"
     assert fields[FIELD_SERIAL] == "ANON-SN-0002"
     state = json.loads(host.state_path.read_text(encoding="utf-8"))
-    assert state["schema"] == 1
-    sata = state["drives"]["ST6000NM0115-1YZ110|ANON-SN-0001"]
+    assert state["schema"] == 2
+    sata = state["drives"][SATA_KEY]
     assert sata["conditions"]["ata.pending_sectors"]["first_detected"] == "2026-10-12T09:00:00Z"
 
 

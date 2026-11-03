@@ -42,6 +42,8 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0035](0035-purge-removes-the-package-directory.md) | Purge removes the directory of the Python package | Accepted | That a purge removes `/usr/share/pve-smart-alert/` with everything in it, and why a foreign file in the tool's directory goes too |
 | [0031](0031-switching-tool-conditions-off.md) | Its limit of 128 characters for the text of a condition is superseded by the limit of 200 characters for a printed value and a notification field in [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) |
 | [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) | Select a drive by the value the tool prints | Accepted | Printed identity, selector line, length limits of a printed value and a notification field |
+| [0037](0037-unambiguous-state-keys.md) | Unambiguous keys in the state file | Superseded by [0038](0038-unambiguous-keys-of-devices-without-an-identity.md) for the access key only; every other part governs as before | How a drive record is keyed, and the migration to schema 2 |
+| [0038](0038-unambiguous-keys-of-devices-without-an-identity.md) | Records of a device without an identity are keyed unambiguously too | Accepted | The key of a record of a device that never answered, and its migration |
 | [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 
 ## Confirmed by the maintainer
@@ -71,6 +73,7 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0013](0013-packaging-and-installation.md) | Superseded by [0035](0035-purge-removes-the-package-directory.md) for the paths that a purge removes only; every other part of the record governs as before |
 | [0020](0020-routing-check.md) | The example "without quorum" for `skip` does not hold: on `pve5` on 2026-10-31, with `corosync` stopped, the node had lost quorum but pmxcfs stayed readable, so `doctor` reported `routing` and `fallback` as `ok` ([ROADMAP.md](../../ROADMAP.md) M5, step 8; [Research 01](../research/01-notification-integration.md), addition of 2026-10-31). `skip` applies when the matchers cannot be read, as when pmxcfs is not running (`pve1`, 2026-10-18) |
 | [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) | "A value longer than the limit is selected with a model wildcard" covers a model only: a serial number is compared exactly ([0024](0024-drive-selectors.md)), so a serial longer than the printed limit cannot be selected at all. For a value with a lone surrogate, which TOML cannot write, the tool prints a line that names the pattern instead of a `Selector:` line |
+| [0037](0037-unambiguous-state-keys.md) | "A record that carries neither keeps its old key, so a damaged record is not lost by the migration" does not hold end to end: a record without a usable last access is rejected by the validation after the migration, so the whole file is set aside ([0007](0007-state-storage.md)). The migrated keys themselves are unaffected |
 
 ## Adding a record
 
