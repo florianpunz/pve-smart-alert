@@ -1,8 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # The failure reporter of pve-smart-alert-failure.service (ADR 0006, ADR 0009):
-# it uses nothing of the tool and sends at most one plain mail to root per day. The
-# PVE_SMART_ALERT_* variables exist for the tests; the unit sets none of them.
+# it uses nothing of the tool and sends at most one mail to root per day, and
+# once more after a reboot; the PVE_SMART_ALERT_* variables are for the tests.
 set -u
 
 run_dir=${PVE_SMART_ALERT_RUN_DIR:-/run/pve-smart-alert}

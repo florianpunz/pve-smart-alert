@@ -25,7 +25,7 @@ DEFAULT_LICENSE: Final = "AGPL-3.0-or-later"
 COLLECTED_WITH: Final = "scripts/collect-node-data.sh"
 # The command scripts/collect-node-data.sh records the block devices with.
 LSBLK_COMMAND: Final = "lsblk -J -O"
-# No controller sits between the drives and the host (Research 06).
+# The default of --controller: the drives are directly attached (Research 06).
 CONTROLLER: Final = "none, directly attached"
 ANONYMIZED_WITH: Final = "scripts/make_fixtures.py (ADR 0023)"
 IMPORTED_WITH: Final = "scripts/make_fixtures.py import (ADR 0023, ADR 0026)"

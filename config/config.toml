@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Configuration of PVE SMART Alert.
-#
 # Every setting has a default built into the program, so this file only needs
-# the entries that differ from it. An unknown key, a wrong type and an unknown
-# value are errors, and the run reports them (ADR 0011).
-#
-# Every key, with its default and what it does, is written down in
-# /usr/share/doc/pve-smart-alert/config.reference.toml.
+# the entries that differ. An unknown key, a wrong type and an unknown value
+# are errors, and the run reports them (ADR 0011). Every key, with its default
+# and what it does, is in /usr/share/doc/pve-smart-alert/config.reference.toml.

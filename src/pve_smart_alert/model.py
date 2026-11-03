@@ -200,8 +200,8 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
     A comma becomes a semicolon, because Proxmox VE splits an exact matcher
-    on commas. A value of control characters only is carried as its escaped
-    form, so that a matcher can still select the drive (ADR 0036).
+    on commas. A value of non-whitespace control characters only is carried as
+    its escaped form, so that a matcher can still select the drive (ADR 0036).
     """
     cleaned = printable(value.replace(",", ";"), limit=limit)
     if cleaned or not value.strip():

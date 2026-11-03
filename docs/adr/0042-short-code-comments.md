@@ -12,7 +12,7 @@ The maintenance rules in [CLAUDE.md](../../CLAUDE.md) already say that each fact
 
 ## Decision
 
-A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to the shipped code in this repository, in every language: `src/`, `libexec/`, `systemd/`, `scripts/` and `debian/`. Test code, the CI workflows and `config/config.reference.toml` are out of scope: a test uses hosts, dates and question IDs as data, and the reference configuration is user documentation (ADR 0011).
+A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to the shipped code in this repository, in every language: `src/`, `libexec/`, `systemd/`, `scripts/`, `debian/` and `config/config.toml`. Test code, the CI workflows and `config/config.reference.toml` are out of scope: a test uses hosts, dates and question IDs as data, and the reference configuration is user documentation (ADR 0011).
 
 1. A comment says **why** or **warns**. It never restates what the code says.
 2. Inline and block comments are one or two lines, with a hard limit of three.

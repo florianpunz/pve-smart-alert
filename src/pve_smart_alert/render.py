@@ -335,8 +335,8 @@ def _drive(planned: Planned, context: RenderContext) -> Notification:
         lines += ["", *closing]
     lines += ["", _signature(context)]
     # The fields are built from the values as the state keeps them: `fields_for`
-    # sanitizes them, and a value of control characters only is carried escaped
-    # instead (ADR 0036).
+    # sanitizes them, and a value of non-whitespace control characters only is
+    # carried escaped instead (ADR 0036).
     fields = {
         FIELD_EVENT: message.event.value,
         FIELD_DEVICE: drive.name,

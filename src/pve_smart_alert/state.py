@@ -63,7 +63,8 @@ def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
 
     Schema 1 joined the key parts with `|`, which two records could collide
     on. The identity and last access give the unambiguous key; a record without
-    a usable last access or identity keeps its old key.
+    a usable last access, or whose identity is not an object with a model, keeps
+    its old key.
     """
     drives = document.get("drives")
     if not isinstance(drives, dict):
