@@ -278,6 +278,20 @@ def test_a_missing_migration_is_an_error() -> None:
         parse_state(json.dumps(document), now=NOW, migrations={}, schema=2)
 
 
+def test_a_relative_path_does_not_change_the_mode_of_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `save_state` accepts any path. A bare file name makes the directory `.`;
+    # the tool does not change a directory it does not own (ADR 0012).
+    tmp_path.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+
+    save_state(State(), Path("state.json"))
+
+    assert (tmp_path / "state.json").exists()
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o755
+
+
 def test_a_timestamp_in_the_future_is_read_as_now(tmp_path: Path) -> None:
     # ADR 0007: a clock jump must not suppress reminders forever.
     path = tmp_path / "state.json"
