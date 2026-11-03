@@ -69,6 +69,6 @@ On the host, as root, with the tool installed:
 4. Add the drivers of the SCSI hosts, which the archive does not contain: the output of `grep . /sys/class/scsi_host/host*/proc_name`, and the model of the controller from `lspci -nn`.
 5. Attach the archive and that output to an issue, with the controller model, its mode (RAID, JBOD or HBA) and the version of smartmontools.
 
-By contributing a recording you agree that it becomes part of the project under its license, AGPL-3.0-or-later ([ADR 0015](adr/0015-license.md)), as `dump-fixture` writes into the archive. Whether the issue tracker is open to everyone depends on whether the repository is public yet ([ROADMAP.md](../ROADMAP.md), M0).
+By contributing a recording you agree that it becomes part of the project under its license, AGPL-3.0-or-later ([ADR 0015](adr/0015-license.md)), as `dump-fixture` writes into the archive. The repository is public since 2026-11-03, so the issue tracker is open to everyone ([ROADMAP.md](../ROADMAP.md), M0).
 
 Nothing in this procedure writes to a drive or changes a setting of a drive. On the host it adds the entries to the configuration of the tool and writes the archive; the runs of the timer keep their state as always, and smartctl itself creates the device nodes it needs for some controllers, such as `/dev/aacH` for Adaptec and the nodes of a 3ware controller (Research 04, addition of 2026-10-17).

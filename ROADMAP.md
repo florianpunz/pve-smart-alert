@@ -7,7 +7,7 @@ Scope: [ADR 0017](docs/adr/0017-scope-of-version-1.md). Requirements: [REQUIREME
 
 | Milestone | State |
 | --- | --- |
-| M0: Repository bootstrap | Done, except that the repository is still private |
+| M0: Repository bootstrap | Done |
 | M1: Walking skeleton with notifications | Done |
 | M2: Discovery and collection for SATA and NVMe | Done |
 | M3: Evaluation and configuration | Done |
@@ -67,7 +67,7 @@ Result you can test:
 
 Inputs, all settled: the name `pve-smart-alert` ([ADR 0018](docs/adr/0018-project-name.md)), the repository location ([ADR 0019](docs/adr/0019-repository-hosting.md)), the copyright holder Florian Punz, and the license AGPL-3.0-or-later ([ADR 0015](docs/adr/0015-license.md)).
 
-State: done on 2026-10-04, except that the repository is still private. The reporting channel of [SECURITY.md](SECURITY.md), a private security advisory on GitHub, works only once the repository is public: GitHub offers private vulnerability reporting for public repositories only, and it has to be enabled in the settings of the repository.
+State: done on 2026-10-04; the repository is public since 2026-11-03. The reporting channel of [SECURITY.md](SECURITY.md), a private security advisory on GitHub, needs private vulnerability reporting switched on in the settings of the repository.
 
 ## M1: Walking skeleton with notifications (M)
 

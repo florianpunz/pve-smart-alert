@@ -4,7 +4,7 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`, and `0.5.1` is released; the release is not public yet, because the repository is still private.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`, and `0.5.1` is released.
 >
 > <details>
 > <summary>Next: M6 and M7</summary>
@@ -31,9 +31,7 @@
 
 ## Installation
 
-There is no public release yet: the repository is still private, and the download URLs below work once it is public. Until then, `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper; copy it to each node and install it there as root with `apt install ./pve-smart-alert_*_all.deb`.
-
-Once a release is published, either command installs the newest one on a node, as root ([ADR 0013](docs/adr/0013-packaging-and-installation.md)); on a cluster, run it on each node:
+Either command installs the newest release on a node, as root ([ADR 0013](docs/adr/0013-packaging-and-installation.md)); on a cluster, run it on each node. To build from source instead, `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper; copy it to each node and install it there as root with `apt install ./pve-smart-alert_*_all.deb`.
 
 ```sh
 # Download the package and install it with apt
