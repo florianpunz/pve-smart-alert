@@ -7,7 +7,10 @@ the archive must contain none of them.
 
 from __future__ import annotations
 
+import errno
 import json
+import os
+import stat
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -253,6 +256,72 @@ def test_the_archive_is_readable_by_root_only(host: Host, tmp_path: Path) -> Non
     archive = dump(host, tmp_path).archive
 
     assert archive.stat().st_mode & 0o777 == 0o600
+
+
+def test_the_archive_is_flushed_before_the_rename(
+    host: Host, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A power loss between the write and the rename must not leave a partial
+    # archive: the file is flushed, then renamed, then the directory is
+    # flushed (ADR 0007, ADR 0023).
+    events: list[str] = []
+    real_fsync = os.fsync
+    real_replace = Path.replace
+
+    def fsync(descriptor: int) -> None:
+        events.append("directory" if stat.S_ISDIR(os.fstat(descriptor).st_mode) else "file")
+        real_fsync(descriptor)
+
+    def replace(self: Path, target: Path) -> Path:
+        events.append("rename")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(Path, "replace", replace)
+
+    dump(host, tmp_path)
+
+    assert events == ["file", "rename", "directory"]
+
+
+def test_a_directory_that_cannot_be_flushed_does_not_fail_the_dump(
+    host: Host, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Some filesystems do not flush a directory. The archive is already in
+    # place then, and the run must not claim that nothing was written.
+    real_fsync = os.fsync
+
+    def fsync(descriptor: int) -> None:
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError(errno.EINVAL, "the filesystem cannot flush a directory")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+
+    result = dump(host, tmp_path)
+
+    assert result.archive.exists()
+
+
+def test_a_failed_flush_leaves_the_old_archive_and_no_temporary(
+    host: Host, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    old = out / f"{NAME}.tar.gz"
+    old.write_bytes(b"old archive")
+
+    def fsync(descriptor: int) -> None:
+        del descriptor
+        raise OSError(errno.ENOSPC, "no space left")
+
+    monkeypatch.setattr(os, "fsync", fsync)
+
+    with pytest.raises(OSError, match="no space left"):
+        dump(host, tmp_path)
+
+    assert old.read_bytes() == b"old archive"
+    assert not [path for path in out.iterdir() if path.name.endswith(".tmp")]
 
 
 def test_a_symlink_at_the_archive_path_is_replaced(host: Host, tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ a real value is left in any file, nothing is written (NFR-14).
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
@@ -181,19 +182,28 @@ def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: in
             stream.flush()
             os.fsync(stream.fileno())
         Path(temporary).replace(path)
-        _sync_directory(path.parent)
     except BaseException:
-        Path(temporary).unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            Path(temporary).unlink(missing_ok=True)
         raise
+    # After the rename, and best effort: some filesystems cannot flush a
+    # directory, and the archive is in place by then (ADR 0007).
+    _sync_directory(path.parent)
 
 
 def _sync_directory(directory: Path) -> None:
-    """Flush a directory, so that a rename in it survives a power loss."""
+    """Flush a directory, so that a rename in it survives a power loss.
+
+    A directory that cannot be flushed is not an error, as for the state
+    file: not every filesystem supports it, and the archive is already in
+    place (ADR 0007).
+    """
     try:
         descriptor = os.open(directory, os.O_RDONLY)
     except OSError:
         return
     try:
-        os.fsync(descriptor)
+        with contextlib.suppress(OSError):
+            os.fsync(descriptor)
     finally:
         os.close(descriptor)
