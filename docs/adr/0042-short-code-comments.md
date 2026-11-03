@@ -17,7 +17,7 @@ A comment describes what the code does now. It never describes a planned fix, a 
 1. A comment says **why** or **warns**. It never restates what the code says.
 2. Inline and block comments are one or two lines, with a hard limit of three.
 3. A docstring has one summary line. Its body carries only contract details that are not obvious, such as a return value, a raised exception or a side effect, in at most four lines. A module docstring states the purpose in at most five lines, then one line of references.
-4. The file header of a shell, Perl or systemd file is at most five lines.
+4. The file header of a shell, Perl, systemd or TOML file is at most five lines.
 5. Longer reasoning lives in an ADR or a document and is referenced by identifier: `ADR 0010`, `FR-302`, `NFR-08`, `Q-T1`, `Research 03`, `ARCHITECTURE.md section 10`. Code carries no Markdown link.
 6. A warning starts with "Do not ..." or "Keep in sync with ..." and gives the reason in a few words.
 7. Units and limits are named: °C, %, s, min, attribute IDs, exit bits.

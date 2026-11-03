@@ -62,9 +62,9 @@ def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
     """Re-key the drives of a schema-1 document (ADR 0037, ADR 0038).
 
     Schema 1 joined the key parts with `|`, which two records could collide
-    on. The identity and last access give the unambiguous key; a record without
-    a usable last access, or whose identity is not an object with a model, keeps
-    its old key.
+    on. The identity and last access give the unambiguous key; a record with
+    no identity is keyed by its device, and one whose last access or model
+    cannot be read keeps its old key.
     """
     drives = document.get("drives")
     if not isinstance(drives, dict):
