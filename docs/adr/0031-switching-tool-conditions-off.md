@@ -1,6 +1,6 @@
 # ADR 0031: Switch a condition of the tool off, and name the monitored drives in the notice about an unsupported controller
 
-- Status: Accepted
+- Status: Superseded by [0040](0040-switch-off-line-as-a-dotted-key.md) for the wording of the switch-off line only; every other part of the record governs as before
 - Date: 2026-10-16
 - Extends: [ADR 0009](0009-notification-policy.md), [ADR 0011](0011-configuration.md), [ADR 0030](0030-controllers-whose-drives-cannot-be-queried.md)
 

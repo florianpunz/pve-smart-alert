@@ -76,7 +76,6 @@ Where an accepted record has become outdated in a way that matters, without a ch
 | [0003](0003-implementation-language.md) | Perl has a second use outside the bridge: the failure reporter cleans the journal lines with it, and the package depends on `perl` |
 | [0031](0031-switching-tool-conditions-off.md) | The limit of 128 characters for a notification field is raised to 200 by [0036](0036-selecting-a-drive-by-the-value-the-tool-prints.md) |
 | [0023](0023-anonymization-of-recordings.md) | The archive that `dump-fixture` writes is readable by root only (0600); the record does not name the mode |
-| [0031](0031-switching-tool-conditions-off.md) | The switch-off line of the notice `tool.unsupported_controller` is the dotted key `checks."tool.unsupported_controller".enabled = false`, because the line that the record prescribes is not TOML ([0040](0040-switch-off-line-as-a-dotted-key.md)) |
 
 ## Adding a record
 

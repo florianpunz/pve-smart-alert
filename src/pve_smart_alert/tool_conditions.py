@@ -9,7 +9,8 @@ planner mentions in the summary after the reset. `tool.unsupported_controller`
 is read from the SCSI hosts that discovery found in sysfs (ADR 0030).
 
 Every one of them can be switched off in the configuration like a check of a
-drive, with `[checks."<id>"] enabled = false` (FR-408, ADR 0031). The notice
+drive, with `enabled = false` in the table `[checks."<id>"]` (FR-408, ADR
+0031). The notice
 about a controller whose drives cannot be read names how many drives the run
 monitors on the host and how that notice is switched off for a controller in
 HBA mode, whose drives all appear in the scan.

@@ -98,7 +98,8 @@ _DYNAMIC_SECTIONS: Final = ("checks", "drive")
 _CHECK_KEYS: Final = ("enabled", "notice", "warning", "critical")
 
 #: The conditions of the tool itself, which the configuration may switch off
-#: with `[checks."<id>"] enabled = false` (FR-408, ADR 0031). Their severity is
+#: with `enabled = false` in the table `[checks."<id>"]` (FR-408, ADR 0031).
+#: Their severity is
 #: fixed and they have no thresholds, no confirmation count and no per-class
 #: values, so `enabled` is the only key they take. The list is repeated here
 #: because `tool_conditions.py` imports this module and the import of it would
@@ -668,10 +669,10 @@ def tool_conditions_enabled(config: Config) -> frozenset[str]:
     """Return the conditions of the tool that the configuration leaves on (FR-408, ADR 0031).
 
     The conditions of the tool are not checks of a drive, but their `enabled`
-    state is set the same way: only `[checks."<id>"] enabled = false` switches
-    one off. A switched-off condition is not raised, and one that is active in
-    the state is dropped without a recovery, like a check of a drive that is
-    switched off (ADR 0009).
+    state is set the same way: only `enabled = false` in the table
+    `[checks."<id>"]` switches one off. A switched-off condition is not
+    raised, and one that is active in the state is dropped without a
+    recovery, like a check of a drive that is switched off (ADR 0009).
     """
     return TOOL_CHECK_IDS - frozenset(
         name for name, override in config.checks.items() if override.enabled is False
