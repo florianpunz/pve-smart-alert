@@ -345,6 +345,11 @@ State: started on 2026-10-17. The hostile-string tests, the traceability table a
 - Done, merged in pull request #23: [docs/troubleshooting.md](docs/troubleshooting.md) and the source of the manual page, `man/pve-smart-alert.8`, which the package installs since the fix of `0.5.0~dev5`; with them the package installs the reference configuration uncompressed, at the path the tool names.
 - Done, merged in pull request #45: the notice `tool.unsupported_controller` names the setting that switches it off as `checks."tool.unsupported_controller".enabled = false`, a line that is valid TOML and can be pasted into the configuration as it is ([ADR 0040](docs/adr/0040-switch-off-line-as-a-dotted-key.md)).
 - Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own.
+- Still open from the comment revision ([ADR 0042](docs/adr/0042-short-code-comments.md)): attribute 188 also arrives as a raw16 value such as `0 0 0`, and the tool uses the packed number as the timeout count. The parts of a raw16 value have to be decoded (Q-T1).
+- Still open from the comment revision: the second wait in `process.py` after a timeout has no bound, so a process stuck in disk I/O (D state) can hold the run. It needs a bounded wait or a documented limit.
+- Still open from the comment revision: `_spare` repeats the default warning threshold of `nvme.spare` as `15`. Derive it from `CATALOG`, so that the two cannot drift.
+- Still open from the comment revision: `ATA_CLASSES` also covers SAS and parallel SCSI drives, and `ProcessResult.lines` holds only the standard error. Both names are misleading and should be renamed, with any identifier they expose checked first.
+- Still open from the comment revision: a hygiene check for `Q-` identifiers that no longer exist in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md), and for relative links that do not resolve, so that an answered question cannot leave a dangling reference behind.
 
 ## After 1.0
 
