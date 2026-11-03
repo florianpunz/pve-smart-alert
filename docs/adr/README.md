@@ -45,6 +45,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 | [0040](0040-switch-off-line-as-a-dotted-key.md) | The switch-off line of the unsupported-controller notice is valid TOML | Accepted | The dotted key the notice names, so that its line can be pasted into the configuration |
 | [0041](0041-normal-versions-for-test-builds.md) | Normal versions for test builds | Accepted | The version a build for a test host carries, and that the accepted build is the release |
+| [0042](0042-short-code-comments.md) | Short code comments | Accepted | The shape of a comment and a docstring, where longer reasoning lives, and how it is referenced |
 
 ## Confirmed by the maintainer
 
