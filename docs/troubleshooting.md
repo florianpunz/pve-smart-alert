@@ -28,12 +28,13 @@ The commands are described in the [README](../README.md#commands) and in the man
 - A device that is listed as `skipped` names its reason: `excluded`, `remote`, `not-a-disk`, `logical-volume`, `no-smart` or `duplicate`. A drive reached through two paths is kept once, and the other path is shown as a duplicate.
 - A drive shown as "in standby (<mode>), not woken" was not read in that run and keeps its previous state; it is read when it is awake.
 - Drives behind a controller that the scan does not cover are added by hand: a `[[discovery.device]]` entry with the device name and the smartctl type, such as `name = "/dev/sg3"` and `type = "areca,2"`. Which type each controller takes, and how each was verified, is in [docs/hardware-support.md](hardware-support.md).
-- A controller whose drives smartctl cannot read, such as one with the driver `mpi3mr`, is named above the devices of `scan`, in the line `controllers` of `doctor`, and as the notice `tool.unsupported_controller`. If the controller runs in HBA mode and all its drives appear in `scan`, switch the notice off in the configuration. The notice names the table and the key on one line; in the file they go on two lines:
+- A controller whose drives smartctl cannot read, such as one with the driver `mpi3mr`, is named above the devices of `scan`, in the line `controllers` of `doctor`, and as the notice `tool.unsupported_controller`. If the controller runs in HBA mode and all its drives appear in `scan`, switch the notice off in the configuration. The notice names the setting as a line that can be pasted into `config.toml` as it is:
 
   ```toml
-  [checks."tool.unsupported_controller"]
-  enabled = false
+  checks."tool.unsupported_controller".enabled = false
   ```
+
+  The same setting written as a table is `[checks."tool.unsupported_controller"]` with `enabled = false` beneath it ([ADR 0040](adr/0040-switch-off-line-as-a-dotted-key.md)).
 
 - For HPE Smart Array, the line `probe` of `doctor` says whether the probe would reach the controller, and the line `HPE Smart Array:` of `scan` whether the drives were probed, and if not, why.
 - If the line `smartctl` of `doctor` fails, smartctl is missing, cannot be run or is older than 7.0. A run then reports `tool.smartctl_missing` and reads no drive, or `tool.smartctl_too_old`; a scan of smartctl that fails or takes too long is reported as `tool.scan_failed`. smartctl comes with the package `smartmontools`, which the package of the tool depends on.

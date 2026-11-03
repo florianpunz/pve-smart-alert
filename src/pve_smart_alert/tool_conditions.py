@@ -70,10 +70,12 @@ UNSUPPORTED_CONTROLLER: Final = "tool.unsupported_controller"
 
 # What the notice about such a controller says about switching it off (ADR
 # 0031): a controller in HBA mode, whose drives the scan lists, needs no
-# notice, and the configuration of the tool switches it off like a check.
+# notice, and the configuration of the tool switches it off like a check. The
+# setting is a dotted key, so that the line is valid TOML and can be pasted
+# into the configuration as it is (ADR 0040).
 _SWITCH_OFF: Final = (
     "; if the controller runs in HBA mode and its drives all appear in scan,"
-    ' switch this notice off with [checks."tool.unsupported_controller"] enabled = false'
+    ' switch this notice off with checks."tool.unsupported_controller".enabled = false'
 )
 
 #: Every condition of the tool, by its stable identifier.

@@ -25,7 +25,7 @@ from hosts import (
 )
 
 from pve_smart_alert import cli
-from pve_smart_alert.config import Config
+from pve_smart_alert.config import Config, load_config
 from pve_smart_alert.discovery import Discovery, discover
 from pve_smart_alert.discovery.controllers import (
     UNSUPPORTED_DRIVERS,
@@ -230,8 +230,23 @@ def test_the_condition_says_how_it_is_switched_off() -> None:
 
     assert finding is not None
     # The key the message names is the key the configuration accepts (ADR 0031).
-    assert '[checks."tool.unsupported_controller"] enabled = false' in finding.text
+    assert 'checks."tool.unsupported_controller".enabled = false' in finding.text
     assert "HBA mode" in finding.text
+
+
+def test_the_line_that_switches_the_condition_off_is_valid_toml(tmp_path: Path) -> None:
+    # The notice names the setting as a line a reader can paste into the
+    # configuration as it is (ADR 0040).
+    finding = unsupported_controller((ScsiHost(2, "mpi3mr"),), 3)
+
+    assert finding is not None
+    line = finding.text.rsplit("off with ", 1)[1]
+    path = tmp_path / "config.toml"
+    path.write_text(line + "\n", encoding="utf-8")
+
+    config = load_config(path)
+
+    assert config.checks["tool.unsupported_controller"].enabled is False
 
 
 # Discovery and scan

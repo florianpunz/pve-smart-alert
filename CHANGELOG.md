@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The notice `tool.unsupported_controller` names the setting that switches it off as `checks."tool.unsupported_controller".enabled = false`, a line that is valid TOML and can be pasted into the configuration as it is; before, the notice put a table header and a key on one line, which the configuration rejected as a syntax error ([ADR 0040](docs/adr/0040-switch-off-line-as-a-dotted-key.md)).
+
 ## [0.5.1] - 2026-11-03
 
 ### Fixed
