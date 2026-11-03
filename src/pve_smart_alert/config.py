@@ -144,8 +144,8 @@ _DRIVE_KEYS: Final = ("model", "serial", "wwn", "comment", "exclude", "detail", 
 _DEVICE_KEYS: Final = ("name", "type")
 
 # How long one call of smartctl may take (ADR 0004, FR-202). Less than a
-# second is no time to answer, and more than the limit of a whole run
-# (NFR-08) could never be waited for.
+# second is no time to answer, and more than 15 min would outlast the run.
+# Keep the upper limit in sync with TimeoutStartSec in the service unit (NFR-08).
 DEFAULT_SMARTCTL_TIMEOUT: Final = 30.0
 _TIMEOUT_RANGE: Final = (1.0, 15 * 60.0)
 

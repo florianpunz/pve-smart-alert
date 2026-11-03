@@ -92,6 +92,7 @@ def parse(
     wear = scsi_wear(document)
     metrics: dict[str, int] = {}
     put(metrics, WEAR_METRIC, wear.percent_used)
+    # The temperature is in °C on every protocol.
     put(metrics, "temperature.current", integer(section(document, "temperature"), "current"))
     put(metrics, "scsi.grown_defects", integer(document, "scsi_grown_defect_list"))
     put(metrics, "scsi.uncorrected_errors", _uncorrected_errors(document))

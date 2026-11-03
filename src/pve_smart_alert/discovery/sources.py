@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Where discovery finds devices: the device scan of smartctl and the manual entries.
+"""Where discovery finds devices: the device scan of smartctl and manual entries.
 
-The scan is `smartctl --scan-open --json=c`. For every device it writes the
-name, the type and the protocol, and for a device it could not open also
-`open_error`, in 7.4 and 7.5 alike (Research 03). Name and type are always
-kept together (ADR 0005). The probes for controllers the scan cannot see
-build their devices in `probes.py` (ADR 0032).
+The scan is `smartctl --scan-open --json=c`, and for every device it writes
+the name, the type, the protocol and, where it could not open the device,
+`open_error`, in 7.4 and 7.5 alike (Research 03). One device that hangs times
+out the whole scan. Name and type are kept together (ADR 0005).
 """
 
 from __future__ import annotations
@@ -74,6 +73,7 @@ class Scan:
 
 
 def scan_command(settings: SmartctlSettings) -> list[str]:
+    # Whether --scan-open wakes a sleeping drive is open (Q-S5).
     return [str(settings.path), "--scan-open", "--json=c"]
 
 

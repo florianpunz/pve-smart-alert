@@ -19,6 +19,8 @@ OnFailure=pve-smart-alert-failure.service
 
 [Service]
 Type=oneshot
+# Runs as root: raw device access needs it (ADR 0025). Retest with ADR 0025
+# before adding User=, PrivateDevices=, DeviceAllow= or capability limits.
 ExecStart=/usr/sbin/pve-smart-alert check
 SuccessExitStatus=3
 RuntimeDirectory=pve-smart-alert

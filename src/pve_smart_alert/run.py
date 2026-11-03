@@ -247,6 +247,7 @@ def _run(env: Environment, *, dry_run: bool) -> RunResult:
 
     _finish(result, discovery, started=started, finished=env.clock())
     try:
+        # A run killed before this point resends what it already delivered (ADR 0007).
         save_state(result_plan.state, env.state_path)
     except OSError as failure:
         result.save_error = f"the state could not be saved to {env.state_path}: {failure}"

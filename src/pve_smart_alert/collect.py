@@ -1,17 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Running smartctl for one drive (ADR 0004).
 
-One call per drive, with the name and the type that discovery found, as an
-argument list, with a timeout that ends the call and everything it started.
-Only options that read are ever passed: no option enables SMART, changes a
-setting or starts a test (ADR 0012).
-
-The answer is judged the way ADR 0004 lays down. Bits 0 and 1 of the exit
-status mean that no usable data came back; bit 2 alone is tolerated, and the
-higher bits are hints that the checks read from the JSON instead. A drive in
-standby is not read and is skipped for this run (FR-203). Everything else
-that keeps the data from being usable makes the drive unreadable for this
-run, which never stops the run (FR-205).
+One call per drive, with a timeout that ends it and everything it started;
+only options that read are passed (ADR 0012). Bits 0 and 1 of the exit status
+mean that no usable data came back; bit 2 alone is tolerated, because the
+drive may still have answered with usable data. A drive in standby is skipped
+(FR-203), one that cannot be read is unreadable for this run (FR-205).
 """
 
 from __future__ import annotations
@@ -33,12 +27,9 @@ from pve_smart_alert.process import ProcessRunner, run_with_timeout
 NO_DATA_BITS: Final = 0b11
 FAILPOWER: Final = 0b10
 
-# What smartctl writes when `--nocheck=standby` ends the call before the data,
-# in 7.4 and 7.5: an information message that names the power mode and the
-# exit status of FAILPOWER, for ATA (ataprint.cpp) and for SCSI
-# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA. The name
-# of an ATA mode is one word, such as STANDBY; the name of a SCSI power
-# condition has several, such as STANDBY BY TIMER.
+# What smartctl 7.4 and 7.5 write when `--nocheck=standby` ends the call, for
+# ATA and SCSI alike: a message that names the power mode; 7.0 to 7.3 are not
+# verified. An ATA mode is one word, a SCSI condition has several.
 STANDBY_MESSAGE: Final = re.compile(r"Device is in (.+?) mode(?:, exit\(|$)")
 
 # The major version of the JSON format this tool reads (ADR 0004).

@@ -60,9 +60,10 @@ __all__ = [
     "evaluate",
 ]
 
-#: Every drive class (docs/check-catalog.md).
+# Every drive class (docs/check-catalog.md).
 ALL_CLASSES: Final = frozenset(DriveClass)
-#: SATA and SAS drives, which the classes `hdd` and `ssd` cover.
+# The classes `hdd` and `ssd`, which cover SATA, SAS and parallel SCSI drives;
+# the name is narrower than that.
 ATA_CLASSES: Final = frozenset({DriveClass.HDD, DriveClass.SSD})
 
 # The NVMe Critical Warning byte, bit by bit (docs/check-catalog.md).
@@ -173,9 +174,8 @@ class EffectiveCheck:
     confirm_runs: int = 1
 
 
-# The temperature limits per class. A finding needs confirmation in two
-# consecutive runs before the first notification (FR-308), which the
-# notification planner counts.
+# The temperature limits per class, provisional until Q-T4 is answered. A
+# finding needs confirmation in two consecutive runs (FR-308).
 TEMPERATURE_LIMITS: Final[Mapping[DriveClass, Thresholds]] = {
     DriveClass.HDD: Thresholds(warning=50, critical=60),
     DriveClass.SSD: Thresholds(warning=60, critical=70),
@@ -188,7 +188,9 @@ _THREE_SLOTS: Final = frozenset({"enabled", "notice", "warning", "critical"})
 CATALOG: Final[Mapping[str, Check]] = {
     check.id: check
     for check in (
-        # All drives (docs/check-catalog.md, "All drives").
+        # All drives (docs/check-catalog.md, "All drives"). Do not apply
+        # health.failed or smart.disabled to NVMe: its Critical Warning bits are
+        # checked instead (docs/check-catalog.md).
         Check(
             "health.failed",
             ATA_CLASSES,
@@ -250,7 +252,9 @@ CATALOG: Final[Mapping[str, Check]] = {
             "a known drive absent in consecutive runs",
             severity=Severity.WARNING,
         ),
-        # SATA (docs/check-catalog.md, "SATA (ATA attributes)").
+        # SATA (docs/check-catalog.md, "SATA (ATA attributes)"). The counter
+        # checks read raw values: the normalized value is a vendor scale that
+        # falls with wear, while a counter only grows.
         Check(
             "ata.attribute_failing",
             ATA_CLASSES,
@@ -742,6 +746,7 @@ def _spare(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
     # configured 0, not the default (FR-402).
     margin = item.thresholds.warning if item.thresholds is not None else None
     if margin is None:
+        # Keep in sync with the default warning threshold of `nvme.spare` in CATALOG.
         margin = 15
     if spare <= limit + margin:
         return _finding(

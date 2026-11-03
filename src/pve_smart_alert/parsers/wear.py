@@ -33,7 +33,9 @@ from typing import Final
 from pve_smart_alert.model import WearSource
 from pve_smart_alert.parsers.common import entries, flag, integer, section, text
 
-# The list of the web interface, in its order (PVE/Diskmanage.pm).
+# The list of the web interface, in its order (PVE/Diskmanage.pm). A value
+# falls as the drive wears, also under a name with "*_Used": mirror the web
+# interface and do not invert it here.
 WEB_INTERFACE_ATTRIBUTES: Final = (
     "Media_Wearout_Indicator",
     "SSD_Life_Left",
@@ -126,6 +128,7 @@ def vendor_attribute_wear(document: Mapping[str, object]) -> int | None:
                 continue
             value = integer(attribute, "value")
             if value is not None:
+                # The same 100 - value for every name, as the web interface does.
                 return 100 - value
             # Like the web interface: the next name of the list is tried.
             break
