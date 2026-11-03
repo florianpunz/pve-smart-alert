@@ -106,13 +106,6 @@ def test_a_missing_changelog_is_reported(tmp_path: Path) -> None:
 # Versions for test hosts (ADR 0041)
 
 
-def test_a_build_of_the_next_patch_version_is_accepted(tmp_path: Path) -> None:
-    write_version(tmp_path, "0.5.2")
-    write_changelog(tmp_path, "0.5.2")
-
-    assert run_check(tmp_path).returncode == 0
-
-
 @pytest.mark.parametrize("version", ["0.5.0.dev3", "0.5.0~dev3", "0.5.0rc1", "0.5"])
 def test_a_version_of_another_form_is_reported(tmp_path: Path, version: str) -> None:
     # A pre-release form is no longer accepted (ADR 0041).

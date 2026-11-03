@@ -42,7 +42,7 @@ class Release:
         self.fetched = tmp_path / "wget.log"
         self.uid = "0"
         self.dpkg_state = tmp_path / "dpkg-state"
-        self.package_version = "0.5.0~dev5"
+        self.package_version = "0.5.2"
         self._program(
             "wget",
             f'url=""; out=""\nwhile [ $# -gt 0 ]; do case "$1" in -O) out="$2"; shift;; -q) ;;'
@@ -162,7 +162,7 @@ def test_the_newest_package_is_verified_and_installed(release: Release) -> None:
     assert arguments[:2] == ["install", "--yes"]
     assert arguments[2].endswith("/pve-smart-alert.deb")
     assert Path(f"{release.installed}.deb").read_bytes() == b"package"
-    assert "installed 0.5.0~dev5; see: pve-smart-alert status" in result.stdout
+    assert "installed 0.5.2; see: pve-smart-alert status" in result.stdout
 
 
 def test_a_version_can_be_pinned(release: Release) -> None:
@@ -251,60 +251,60 @@ def test_a_first_installation_names_what_dpkg_holds(release: Release) -> None:
     result = release.run()
 
     assert result.returncode == 0, result.stderr
-    assert "installed 0.5.0~dev5; see: pve-smart-alert status" in result.stdout
+    assert "installed 0.5.2; see: pve-smart-alert status" in result.stdout
 
 
 def test_nothing_is_announced_as_installed_when_apt_installed_nothing(
     release: Release,
 ) -> None:
     """apt says "already the newest version" and the script said "installed"."""
-    release.installed_at("installed 0.5.0~dev5")
+    release.installed_at("installed 0.5.2")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()
 
     assert result.returncode == 0, result.stderr
-    assert "0.5.0~dev5 is installed already, nothing changed" in result.stdout
-    assert "installed 0.5.0~dev5" not in result.stdout
+    assert "0.5.2 is installed already, nothing changed" in result.stdout
+    assert "installed 0.5.2" not in result.stdout
     # apt was asked all the same; the script only reports what became of it.
     assert release.installed.exists()
 
 
 def test_a_change_names_both_versions(release: Release) -> None:
     """An upgrade restarts the timer and starts no run (ARCHITECTURE.md, Q-P2)."""
-    release.installed_at("installed 0.5.0~dev4")
+    release.installed_at("installed 0.5.1")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()
 
     assert result.returncode == 0, result.stderr
-    assert "changed from 0.5.0~dev4 to 0.5.0~dev5; see: pve-smart-alert status" in result.stdout
+    assert "changed from 0.5.1 to 0.5.2; see: pve-smart-alert status" in result.stdout
 
 
 def test_a_removed_package_is_installed_again_not_reported_as_unchanged(
     release: Release,
 ) -> None:
     """dpkg names a version for a package that is removed but not purged."""
-    release.installed_at("config-files 0.5.0~dev5")
+    release.installed_at("config-files 0.5.2")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()
 
     assert result.returncode == 0, result.stderr
-    assert "installed 0.5.0~dev5 again; see: pve-smart-alert status" in result.stdout
+    assert "installed 0.5.2 again; see: pve-smart-alert status" in result.stdout
     assert "installed already" not in result.stdout
 
 
 def test_a_removed_package_of_another_version_is_installed_in_place(
     release: Release,
 ) -> None:
-    release.installed_at("config-files 0.5.0~dev4")
+    release.installed_at("config-files 0.5.1")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()
 
     assert result.returncode == 0, result.stderr
-    assert "installed 0.5.0~dev5 in place of 0.5.0~dev4" in result.stdout
+    assert "installed 0.5.2 in place of 0.5.1" in result.stdout
 
 
 def test_a_failing_apt_stops_the_script_with_a_line(release: Release) -> None:
@@ -337,7 +337,7 @@ def test_a_package_in_a_broken_state_after_apt_is_an_error(
 ) -> None:
     """apt can exit 0 and leave the package half-configured."""
     release.publish("pve-smart-alert.deb", b"package")
-    release.apt_succeeds_leaving("half-configured 0.5.0~dev5")
+    release.apt_succeeds_leaving("half-configured 0.5.2")
 
     result = release.run()
 
@@ -371,13 +371,13 @@ def test_a_file_that_is_not_a_debian_package_is_refused(release: Release) -> Non
 def test_a_pinned_version_must_be_the_version_in_the_package(
     release: Release,
 ) -> None:
-    release.package_carries(version="0.5.0~dev5")
+    release.package_carries(version="0.5.2")
     release.publish("pve-smart-alert_0.5.0_all.deb", b"package")
 
     result = release.run(PVE_SMART_ALERT_VERSION="0.5.0")
 
     assert result.returncode == 1
-    assert "carries the version 0.5.0~dev5, not 0.5.0" in result.stderr
+    assert "carries the version 0.5.2, not 0.5.0" in result.stderr
     assert not release.installed.exists()
 
 
@@ -385,7 +385,7 @@ def test_a_failure_over_a_removed_package_does_not_suggest_a_repair(
     release: Release,
 ) -> None:
     """config-files is not broken, it is removed; --fix-broken does not install it."""
-    release.apt_fails_leaving("config-files 0.5.0~dev5")
+    release.apt_fails_leaving("config-files 0.5.2")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()
@@ -400,7 +400,7 @@ def test_a_failure_after_a_partial_install_names_the_state(
     release: Release,
 ) -> None:
     """apt can fail after it unpacked the package; that is not "not installed"."""
-    release.apt_fails_leaving("half-configured 0.5.0~dev5")
+    release.apt_fails_leaving("half-configured 0.5.2")
     release.publish("pve-smart-alert.deb", b"package")
 
     result = release.run()

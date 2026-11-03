@@ -5,7 +5,7 @@
 The version of the program lives in ``src/pve_smart_alert/__init__.py``: it is
 what ``--version`` prints and what the package metadata reads. The version of
 the Debian package lives in the newest entry of ``debian/changelog``. Since the
-package ships the program as it is, both name the same release, and a
+package ships the program as it is, both name the same version, and a
 difference means that one of the two was forgotten (ADR 0013).
 
 A build for a test host carries the next patch version of the current line
