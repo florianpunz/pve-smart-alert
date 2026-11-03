@@ -120,7 +120,10 @@ def reason_for_refusal(result: ProcessResult, *, timeout: float) -> str | None:
 
 
 def _answer_error(stdout: str) -> str | None:
-    """Return the error of a bridge answer that is not `{"ok": true}`."""
+    """Return the error of a bridge answer that is not `{"ok": true}`.
+
+    An answer that is not JSON gives `None`; the exit status decides then.
+    """
     try:
         answer = json.loads(stdout)
     except json.JSONDecodeError:
@@ -135,8 +138,10 @@ def _reason_in_log(stderr: str) -> str | None:
     """Return why no target got the message, or `None` when it was handed over.
 
     Best effort (ADR 0008): only a line the library is known to write counts.
-    Without a recognized line the handover counts as successful, so that a
-    change of wording cannot turn every notification into a retry.
+    `None` also when no matcher matched, which the log does not show; the
+    routing check in `routing.py` answers that (ADR 0020). Without a
+    recognized line the handover counts as successful, so that a change of
+    wording cannot turn every notification into a retry.
     """
     if RENDER_FAILURE.search(stderr):
         return "the notification system could not render the template"

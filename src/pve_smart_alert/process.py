@@ -1,14 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Running an external program with a timeout.
 
-External programs are started with an argument list, never through a shell,
-and in their own process group, so that a timeout ends the program and
-everything it started (ARCHITECTURE.md section 14).
-
-Every component that runs a program uses this module: the transports, the
-self-diagnosis and the routing check. There is no default timeout, because
-how long a program may take depends on what it does: a slow notification
-target is something else than a slow drive.
+Programs are started with an argument list, never through a shell, and in
+their own process group, so that a timeout ends the program and everything it
+started (ARCHITECTURE.md section 14). Every component that runs a program uses
+this module, `collect.py` included. There is no default timeout: how long a
+program may take depends on what it does.
 """
 
 from __future__ import annotations
@@ -39,7 +36,7 @@ class ProcessResult:
 
     @property
     def lines(self) -> tuple[str, ...]:
-        """The standard error of the program, line by line."""
+        """The standard error of the program, line by line; the standard output is not included."""
         return tuple(line for line in self.stderr.splitlines() if line.strip())
 
 
@@ -91,6 +88,7 @@ def run_with_timeout(
         stdout, stderr = process.communicate(input_text, timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_process_group(process)
+        # A process stuck in disk I/O (D state) survives SIGKILL; this wait has no timeout.
         stdout, stderr = process.communicate()
         return ProcessResult(returncode=None, stdout=stdout, stderr=stderr, timed_out=True)
 

@@ -18,8 +18,9 @@ A pipeline of four steps:
    the scan; the other paths are recorded as aliases (FR-106).
 
 Every device found is reported with what became of it, so that
-`pve-smart-alert scan` can show each one (FR-108). Nothing here stops for a
-single device (FR-205). The SCSI hosts of sysfs are read with the same
+`pve-smart-alert scan` can show each one (FR-108). A device that cannot be
+read or parsed becomes an unreadable outcome, not an exception (FR-205). The
+SCSI hosts of sysfs are read with the same
 paths, so that a controller whose drives smartctl cannot read is named
 instead of silently monitoring nothing (FR-109, ADR 0030).
 """

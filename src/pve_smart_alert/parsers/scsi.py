@@ -49,7 +49,7 @@ _SELF_TEST_PASSED: Final = 0
 _SELF_TEST_FAILED: Final = frozenset({3, 4, 5, 6, 7})
 
 # A logical unit id that is a WWN: NAA 5, 16 hexadecimal digits (ADR 0026,
-# Q-R6).
+# ARCHITECTURE.md section 4).
 _WWN_NAME: Final = re.compile(r"0x(5[0-9a-f]{15})", re.IGNORECASE)
 
 
@@ -123,8 +123,8 @@ def identity_of(document: Mapping[str, object]) -> DriveIdentity:
     """Return the identity of a SCSI drive: model, serial number and its WWN.
 
     The WWN is the logical unit id where that is an NAA 5 name, which is the
-    WWN that lsblk shows for the same drive (Q-R6). Raises `ParseError`
-    without a model name.
+    WWN that lsblk shows for the same drive (ARCHITECTURE.md section 4).
+    Raises `ParseError` without a model name.
     """
     model = _first_text(document, "scsi_model_name", "model_name")
     if not model or not model.strip():

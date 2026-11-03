@@ -15,9 +15,9 @@ from typing import Final, Protocol
 from pve_smart_alert.config import TransportName
 from pve_smart_alert.model import MAX_PRINTED, Notification, printed
 
-# How long one transport may take. The delivery to SMTP, Gotify or webhook
-# targets happens inside the call, and a slow target must not hold the run
-# (ADR 0008). The value is the assumption recorded as Q-N4.
+# How long one transport may take. Delivery to SMTP, Gotify or webhook targets
+# happens inside the call, and a slow target must not hold the run (ADR 0008).
+# A dead target costs 5 to 10 s (ARCHITECTURE.md section 10).
 DEFAULT_TIMEOUT_SECONDS: Final = 120.0
 
 

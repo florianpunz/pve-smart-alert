@@ -36,9 +36,8 @@ from pve_smart_alert.parsers.common import (
 from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC, ata_wear
 
 # The raw value of attribute 188 packs several counters on some drives. Where
-# the string form has several parts, smartctl writes them as "N (a/b/c)" and
-# the first number is the total; otherwise the raw number is the value
-# (Q-T1, docs/check-catalog.md).
+# smartctl writes "N (a/b/c)", the first number is the total; a raw16 form
+# such as "0 0 0" is used as the packed raw number (Q-T1, docs/check-catalog.md).
 _TIMEOUT_STRING: Final = re.compile(r"([0-9]+) \([0-9]+/[0-9]+/[0-9]+\)")
 
 # The attribute that carries the command timeouts.
@@ -142,7 +141,11 @@ def _error_log_count(document: Mapping[str, object]) -> int | None:
 
 
 def _command_timeouts(document: Mapping[str, object]) -> int | None:
-    """Return the command timeouts of attribute 188, decoded (Q-T1)."""
+    """Return the command timeouts of attribute 188 (Q-T1).
+
+    The first number of `N (a/b/c)` is the total; a raw16 form such as
+    `a b c` is used as the packed raw value itself.
+    """
     for attribute in entries(document, "ata_smart_attributes", "table"):
         if integer(attribute, "id") != _TIMEOUT_ATTRIBUTE:
             continue

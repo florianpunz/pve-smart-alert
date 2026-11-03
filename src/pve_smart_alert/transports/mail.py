@@ -2,9 +2,9 @@
 """The fallback transport: plain text as mail to the local root (ADR 0008).
 
 The message is handed to the mail command of the host. Proxmox VE forwards
-mail to the local root into its notification system as `system-mail` with
-severity `unknown`, so this route works without any setup but cannot carry a
-severity. That is why the subject starts with it.
+mail to the local root as `system-mail` with severity `unknown`, so this
+route works without setup but carries no severity; `render.py` writes the
+severity into every subject, after the prefix (FR-508).
 """
 
 from __future__ import annotations

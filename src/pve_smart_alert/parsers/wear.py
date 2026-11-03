@@ -7,7 +7,7 @@ The first of these sources that a drive reports is used:
    computes itself, for every protocol. For ATA it is the vendor-neutral
    value only when the device statistics were read: without them
    smartmontools guesses it from a vendor attribute, and the guess counts
-   as the vendor attribute it is ([Research 03](../research/03-smart-indicators.md)).
+   as the vendor attribute it is (Research 03).
 2. ATA: the "Percentage Used Endurance Indicator" of the device statistics.
    NVMe: `percentage_used` of the SMART health log. SCSI: the percentage
    used endurance indicator of the solid state media log page.

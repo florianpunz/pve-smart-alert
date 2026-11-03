@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Translating the JSON of smartctl into snapshots (ADR 0004).
 
-One parser per protocol. They read the keys they know and ignore the others;
-a missing key leaves its value out, which makes the checks that need it not
-applicable (FR-206). Nothing else in the tool reads smartctl JSON.
+One parser per protocol. A missing key leaves its value out, which makes the
+checks that need it not applicable (FR-206). `collect.py`,
+`discovery/sources.py`, `recording.py` and `anonymize.py` read smartctl JSON
+without building a snapshot.
 """
 
 from __future__ import annotations

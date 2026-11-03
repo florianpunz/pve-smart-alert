@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Command-line interface of PVE SMART Alert.
 
-The commands of later milestones are added here as they arrive. A run of
-`check` is put together by `run.py`; this module only builds its environment
-from the paths of the host, so that the tests can replace each of them.
+A run of `check` is put together by `run.py`; this module builds the parser
+and the environment of a run from the paths of the host, so that the tests can
+replace each of them (ADR 0016).
 """
 
 from __future__ import annotations
@@ -234,9 +234,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments = parser.parse_args(argv)
         return _run(arguments, parser)
     except KeyboardInterrupt:
-        # Ctrl+C in a command that runs in a terminal: a traceback says
-        # nothing that the line does not say (seen on `pve1` on 2026-10-18,
-        # where `doctor` was interrupted inside `pvesh`).
+        # Ctrl+C in a terminal command: a traceback says nothing that the
+        # line does not say (Research 07).
         print(f"{PROGRAM}: interrupted", file=sys.stderr)
         return EXIT_INTERRUPTED
 

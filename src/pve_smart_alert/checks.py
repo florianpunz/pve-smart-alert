@@ -184,7 +184,7 @@ TEMPERATURE_LIMITS: Final[Mapping[DriveClass, Thresholds]] = {
 
 _THREE_SLOTS: Final = frozenset({"enabled", "notice", "warning", "critical"})
 
-#: The catalog: every check of milestone M3 and later, by its stable identifier.
+# The catalog, by the stable identifier of each check.
 CATALOG: Final[Mapping[str, Check]] = {
     check.id: check
     for check in (

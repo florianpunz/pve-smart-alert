@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The parser for NVMe drives (ADR 0004).
 
-The values of the SMART health log become metrics named `nvme.*`; the
-Critical Warning byte becomes a flag that the checks read bit by bit
-(docs/check-catalog.md). The drive's own temperature limits are kept as
-`temperature.limit.warning` and `temperature.limit.critical`.
+The values of the SMART health log become metrics named `nvme.*`. The
+Critical Warning byte becomes the integer bitmask `nvme.critical_warning`,
+which the checks read bit by bit (docs/check-catalog.md). The drive's own
+temperature limits are kept but not evaluated (Q-T4).
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ def parse(
     put(metrics, WEB_INTERFACE_METRIC, wear.web_interface)
     for key, metric in HEALTH_METRICS.items():
         put(metrics, metric, integer(health, key))
+    # The temperature is in °C on every protocol.
     put(
         metrics,
         "temperature.current",
@@ -87,7 +88,7 @@ def parse(
 
 
 def _first(value: int | None, fallback: int | None) -> int | None:
-    """Return the value of the health log, or the general one when it is missing."""
+    """Return `value`, or `fallback` when `value` is missing."""
     return value if value is not None else fallback
 
 
