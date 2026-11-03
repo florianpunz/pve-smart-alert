@@ -4,7 +4,7 @@
 
 `pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`, and `0.5.0` is released; the release is not public yet, because the repository is still private.
+> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`, and `0.5.1` is released; the release is not public yet, because the repository is still private.
 >
 > <details>
 > <summary>Next: M6 and M7</summary>
@@ -40,7 +40,7 @@ Once a release is published, either command installs the newest one on a node, a
 wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert/releases/latest/download/pve-smart-alert.deb \
   && apt install -y /tmp/pve-smart-alert.deb
 
-# The same, with the checksum verified; PVE_SMART_ALERT_VERSION=0.5.0 pins a version
+# The same, with the checksum verified; PVE_SMART_ALERT_VERSION=0.5.1 pins a version
 wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
 

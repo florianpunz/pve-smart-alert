@@ -9,7 +9,7 @@
 # against its checksum and installs it with apt. Everything that changes the
 # system is done by the package; this script changes nothing else.
 #
-# PVE_SMART_ALERT_VERSION=0.5.0 installs that version instead of the newest.
+# PVE_SMART_ALERT_VERSION=0.5.1 installs that version instead of the newest.
 # PVE_SMART_ALERT_BASE_URL replaces the download location, for a mirror.
 set -eu
 
