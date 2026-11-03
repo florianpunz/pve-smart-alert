@@ -31,7 +31,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0024](0024-drive-selectors.md) | Select drives by model pattern, serial number and WWN | Accepted | What the selectors of exclude rules and per-drive overrides mean |
 | [0025](0025-sandboxing-of-the-check-service.md) | Sandboxing options of the check service | Accepted | Which systemd options restrict the check without breaking drives, mail or notification targets |
 | [0026](0026-recordings-of-scsi-drives-and-of-other-projects.md) | Anonymize the names of SCSI drives, and import the test data of other projects | Accepted | How logical unit ids and SAS addresses are anonymized, and which recordings of other projects become fixtures |
-| [0027](0027-pre-release-versions-for-test-builds.md) | Pre-release versions for test builds | Accepted | Which version a build for a test host carries until its release |
+| [0027](0027-pre-release-versions-for-test-builds.md) | Pre-release versions for test builds | Superseded by [0041](0041-normal-versions-for-test-builds.md) | Which version a build for a test host carries until its release |
 | [0028](0028-logical-volumes-and-enclosures.md) | Recognize logical volumes and enclosures by structured fields first | Accepted | How discovery tells a RAID logical volume and an enclosure from a drive, and what the location of a drive behind MegaRAID is |
 | [0029](0029-notification-field-device-id.md) | The notification field `device-id` for drives behind a controller | Accepted | Which field lets a matcher select one drive behind a RAID controller, and when it is present |
 | [0030](0030-controllers-whose-drives-cannot-be-queried.md) | Detect controllers whose drives cannot be queried from the driver of the SCSI host | Accepted | Which controllers `scan`, `doctor` and `tool.unsupported_controller` report, and which drivers they never report |
@@ -44,6 +44,7 @@ An accepted record is not rewritten. A changed decision gets a new record that s
 | [0038](0038-unambiguous-keys-of-devices-without-an-identity.md) | Records of a device without an identity are keyed unambiguously too | Accepted | The key of a record of a device that never answered, and its migration |
 | [0039](0039-only-node-names-of-devices-are-kept.md) | Only the node names of devices are kept | Accepted | Which device names a recording keeps and which it replaces, how a drive file is named, and that a drive never takes the file name of another file of a fixture |
 | [0040](0040-switch-off-line-as-a-dotted-key.md) | The switch-off line of the unsupported-controller notice is valid TOML | Accepted | The dotted key the notice names, so that its line can be pasted into the configuration |
+| [0041](0041-normal-versions-for-test-builds.md) | Normal versions for test builds | Accepted | The version a build for a test host carries, and that the accepted build is the release |
 
 ## Confirmed by the maintainer
 

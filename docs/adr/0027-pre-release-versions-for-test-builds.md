@@ -1,6 +1,6 @@
 # ADR 0027: Pre-release versions for test builds
 
-- Status: Accepted
+- Status: Superseded by [0041](0041-normal-versions-for-test-builds.md)
 - Date: 2026-10-16
 - Decided by: the maintainer
 - Extends: [ADR 0013](0013-packaging-and-installation.md)

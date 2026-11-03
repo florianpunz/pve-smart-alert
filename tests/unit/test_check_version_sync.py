@@ -103,35 +103,26 @@ def test_a_missing_changelog_is_reported(tmp_path: Path) -> None:
     assert "could not be read" in result.stdout
 
 
-# Pre-releases for test hosts (ADR 0027)
+# Versions for test hosts (ADR 0041)
 
 
-def test_a_pre_release_has_the_debian_form_in_the_changelog(tmp_path: Path) -> None:
-    write_version(tmp_path, "0.5.0.dev3")
-    write_changelog(tmp_path, "0.5.0~dev3")
-
-    assert run_check(tmp_path).returncode == 0
-
-
-@pytest.mark.parametrize("package", ["0.5.0.dev3", "0.5.0~dev2", "0.5.0"])
-def test_a_pre_release_with_another_package_version_is_reported(
-    tmp_path: Path, package: str
-) -> None:
-    write_version(tmp_path, "0.5.0.dev3")
-    write_changelog(tmp_path, package)
-
-    result = run_check(tmp_path)
-
-    assert result.returncode == 1
-    assert "the package of 0.5.0.dev3 is 0.5.0~dev3" in result.stdout
-
-
-@pytest.mark.parametrize("version", ["0.5.0~dev3", "0.5.0rc1", "0.5", "0.5.0.dev"])
-def test_a_program_version_of_another_form_is_reported(tmp_path: Path, version: str) -> None:
+@pytest.mark.parametrize("version", ["0.5.0.dev3", "0.5.0~dev3", "0.5.0rc1", "0.5"])
+def test_a_version_of_another_form_is_reported(tmp_path: Path, version: str) -> None:
+    # A pre-release form is no longer accepted (ADR 0041).
     write_version(tmp_path, version)
     write_changelog(tmp_path, version)
 
     result = run_check(tmp_path)
 
     assert result.returncode == 1
-    assert "neither a release X.Y.Z nor a pre-release X.Y.Z.devN" in result.stdout
+    assert "is not a version X.Y.Z" in result.stdout
+
+
+def test_a_different_patch_version_is_reported(tmp_path: Path) -> None:
+    write_version(tmp_path, "0.5.2")
+    write_changelog(tmp_path, "0.5.1")
+
+    result = run_check(tmp_path)
+
+    assert result.returncode == 1
+    assert "both must name the same version" in result.stdout
