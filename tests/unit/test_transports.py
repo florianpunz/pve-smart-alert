@@ -433,7 +433,9 @@ def test_a_cut_reason_of_the_fallback_carries_the_mark() -> None:
     AutoTransport(primary=primary, fallback=fallback).send(make_notification())
 
     body = fallback.sent[0].body
-    assert "x" * (MAX_PRINTED - len("refused: ")) + "…" in body
+    # Cut exactly at the limit: one more character would mean another limit.
+    assert body.endswith("Reason: refused: " + "x" * (MAX_PRINTED - len("refused: ")) + "…\n")
+    assert "x" * (MAX_PRINTED - len("refused: ") + 1) + "…" not in body
 
 
 def test_a_failure_without_a_reason_is_still_reported() -> None:
