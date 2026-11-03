@@ -234,7 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run(arguments, parser)
     except KeyboardInterrupt:
         # Ctrl+C in a terminal command: a traceback says nothing that the
-        # line does not say (Research 07).
+        # line does not say.
         print(f"{PROGRAM}: interrupted", file=sys.stderr)
         return EXIT_INTERRUPTED
 

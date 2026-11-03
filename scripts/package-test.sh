@@ -81,8 +81,8 @@ perl -c /usr/libexec/pve-smart-alert/notify-bridge
 
 step "byte code that something else wrote"
 # A Python run by hand against the installed tree leaves a cache that dpkg
-# cannot remove afterwards (Research 07). Purge has to take the directory of
-# the package with it, and the check below says so.
+# cannot remove afterwards (ADR 0035). Purge has to take the directory of the
+# package with it, and the check below says so.
 mkdir -p /usr/share/pve-smart-alert/pve_smart_alert/__pycache__
 printf 'not from the package\n' \
 	>/usr/share/pve-smart-alert/pve_smart_alert/__pycache__/stray.cpython-312.pyc
