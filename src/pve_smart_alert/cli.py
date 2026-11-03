@@ -153,7 +153,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="record the drive data of this host as an anonymized archive",
         description=(
             "Record the device scan, lsblk and the output of smartctl for the drives,"
-            " with serial numbers, WWNs and UUIDs replaced by placeholders, as one archive."
+            " with serial numbers, WWNs, EUI-64s, UUIDs, NGUIDs, SAS addresses and device"
+            " names that are not nodes replaced by placeholders, as one archive readable"
+            " by root only."
         ),
     )
     dump.add_argument(
@@ -602,8 +604,10 @@ def _dump_fixture(arguments: argparse.Namespace) -> int:
 
     print(_labelled("Written", str(dump.archive)))
     print(_labelled("Devices", ", ".join(dump.devices) or "none"))
-    print("Serial numbers, WWNs and UUIDs are replaced by placeholders. Model names, firmware")
-    print("versions, the node name and the labels of pools and volume groups are kept;")
+    print("Serial numbers, WWNs, EUI-64s, UUIDs, NGUIDs and SAS addresses are replaced by")
+    print("placeholders, and so is a device name that is not a node.")
+    print("The archive is readable by root only. Model names, firmware versions, the node name,")
+    print("device node names such as /dev/sda and the labels of pools and volume groups are kept;")
     print("look at the archive before you share it.")
     return EXIT_OK
 

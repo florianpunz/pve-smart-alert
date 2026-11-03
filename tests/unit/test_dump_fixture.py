@@ -382,7 +382,15 @@ def test_the_command_writes_the_archive(
     out = capsys.readouterr().out
     assert out.startswith(f"Written:   {tmp_path / 'out'}/pve-smart-alert-fixture-pve9-")
     assert "Devices:   /dev/sda, /dev/nvme0\n" in out
-    assert "look at the archive before you share it" in out
+    # The message names what the archive replaces and that it is private.
+    assert "EUI-64s" in out
+    assert "NGUIDs" in out
+    assert "SAS addresses" in out
+    assert "device name that is not a node" in out
+    assert "readable by root only" in out
+    assert "device node names" in out
+    assert "look at the archive" in out
+    assert "before you share it" in out
     archives = list((tmp_path / "out").glob("*.tar.gz"))
     assert len(archives) == 1
     with tarfile.open(archives[0], "r:gz") as tar:
