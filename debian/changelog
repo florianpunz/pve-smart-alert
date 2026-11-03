@@ -1,3 +1,21 @@
+pve-smart-alert (0.5.0~dev6) unstable; urgency=medium
+
+  * Pre-release of 0.5.0 for test hosts (ADR 0027), with the fixes of the
+    security review of milestone M7: a device name that is not a node is
+    anonymized, a fixture keeps its file names and survives a lone surrogate,
+    and the archive is flushed before the rename (ADR 0039); the last good
+    configuration and its directory are readable by root only; untrusted
+    strings and the journal lines of the failure reporter are cleaned,
+    including Cc, Cf, Cs, Zl and Zp and invalid UTF-8; `scan` prints a
+    TOML `Selector:` line and a cut value carries `…` everywhere (ADR 0036),
+    `config show` prints a selector exactly as configured, and a field value
+    is cut at a character boundary; the keys of the state file are JSON
+    arrays for every record (ADR 0037, ADR 0038), with a migration that keeps
+    the skip time and sets a deeply nested document aside; and the
+    documentation answers how the notification system renders a message.
+
+ -- Florian Punz <39314759+florianpunz@users.noreply.github.com>  Tue, 03 Nov 2026 17:45:00 +0100
+
 pve-smart-alert (0.5.0) unstable; urgency=medium
 
   * Release 0.5.0, milestone M5: one command installs the tool on a Proxmox
