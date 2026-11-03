@@ -125,7 +125,10 @@ def collect_drive(
     runner: ProcessRunner = run_with_timeout,
     clock: Callable[[], float] = time.monotonic,
 ) -> Collected:
-    """Run smartctl for one drive and judge its answer."""
+    """Run smartctl for one drive and judge its answer.
+
+    Never raises: a failure becomes `Status.UNREADABLE` (FR-205).
+    """
     command = drive_command(name, device_type, settings=settings, protocol=protocol)
     started = clock()
     try:

@@ -835,7 +835,11 @@ class _Planner:
         return outcome
 
     def _due(self, holder: _Holder, check: str, condition: ConditionRecord) -> EventType | None:
-        """Return why an active condition is notified now, or `None`."""
+        """Return why an active condition is notified now, or `None`.
+
+        On a falling severity it is not notified: `condition` takes the lower
+        severity and value as notified, and the caller stores that.
+        """
         if condition.last_notified is None or condition.notified_severity is None:
             return EventType.PROBLEM
         rank, notified = RANK[condition.severity], RANK[condition.notified_severity]

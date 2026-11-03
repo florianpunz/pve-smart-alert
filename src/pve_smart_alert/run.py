@@ -150,7 +150,11 @@ class RunResult:
 
 
 def run_check(environment: Environment | None = None, *, dry_run: bool = False) -> RunResult:
-    """Run one check (FR-601). Raises `LockedError` when another run holds the lock."""
+    """Run one check (FR-601).
+
+    Raises `LockedError` when another run holds the lock, and `OSError` when
+    the lock or the state directory cannot be used.
+    """
     env = environment if environment is not None else Environment()
     if dry_run:
         return _run(env, dry_run=True)

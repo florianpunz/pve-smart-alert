@@ -357,7 +357,10 @@ def read_state(
 
 
 def save_state(state: State, path: Path) -> None:
-    """Replace the state file atomically (ADR 0007, NFR-11)."""
+    """Replace the state file atomically (ADR 0007, NFR-11).
+
+    Raises `OSError` when the directory or the file cannot be written.
+    """
     text = _escaped(json.dumps(state_to_json(state), indent=2, ensure_ascii=False)) + "\n"
     write_private(path, text)
 
@@ -592,7 +595,11 @@ def _condition_to_json(record: ConditionRecord) -> dict[str, object]:
 
 
 class _Reader:
-    """Reads the values of a document strictly; a wrong type raises `TypeError`."""
+    """Read the values of a document strictly (ARCHITECTURE.md section 9).
+
+    Raises `KeyError` for a missing value, `TypeError` for a wrong type and
+    `ValueError` for a timestamp without a time zone.
+    """
 
     def __init__(self, now: datetime) -> None:
         self.now = now
