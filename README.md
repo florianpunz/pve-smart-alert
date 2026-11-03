@@ -2,111 +2,157 @@
 
 <h1 align="center">PVE SMART Alert</h1>
 
-`pve-smart-alert` checks the SMART data of every drive in a Proxmox VE host at regular intervals and reports problems through the Proxmox VE notification system.
+<p align="center">
+  <a href="#installation"><b>Install</b></a> ·
+  <a href="docs/check-catalog.md"><b>Checks</b></a> ·
+  <a href="docs/hardware-support.md"><b>Hardware</b></a> ·
+  <a href="docs/troubleshooting.md"><b>Troubleshooting</b></a> ·
+  <a href="ROADMAP.md"><b>Roadmap</b></a>
+</p>
 
-> **Status: early development.** The tool finds, reads and evaluates the drives of a host, remembers what it reported, and sends a notification when a problem appears, gets worse, needs a reminder or clears. The package brings a systemd timer that runs the check every 30 minutes. M5 is accepted on the standalone host `pve1` and on the cluster node `pve5`, and `0.5.1` is released.
->
-> <details>
-> <summary>Next: M6 and M7</summary>
->
-> - **M0 (done):** development tooling
-> - **M1 (done):** the notification route (two transports and the Perl bridge), the two commands below and the Debian package that ships them
-> - **M2 (done):** discovery and collection for SATA and NVMe drives
-> - **M3 (done):** evaluation and configuration
-> - **M4 (done):** state and notification policy
-> - **M5 (released as 0.5.0):** packaging, timer and installation
-> - **M6 (done, results recorded on pve-test):** SAS and hardware RAID on recorded data; [docs/hardware-support.md](docs/hardware-support.md) says how each controller was verified
-> - **M7 (started):** hardening, documentation and version 1.0, the version meant for regular use
->
-> </details>
+SMART drive alerts for Proxmox VE. `pve-smart-alert` checks every drive of a host
+every 30 minutes and reports problems through the Proxmox VE notification system,
+with real severities and without repeating itself.
 
-## Planned features
+> **Status: pre-1.0.** Release `0.5.1` is tested on a standalone host and a
+> three-node cluster; SAS and hardware RAID are tested on recorded data.
+> Version 1.0, the release meant for regular use, is in progress: [ROADMAP.md](ROADMAP.md).
 
-- **Automatic discovery:** finds all SATA, SAS and NVMe drives, including drives behind MegaRAID controllers and, experimentally, SSSRAID and HPE Smart Array; the drives behind other RAID controllers that smartctl can reach are added by hand ([docs/hardware-support.md](docs/hardware-support.md))
-- **Predictive thresholds:** judges drives by thresholds that predict failure instead of merely confirming it
-- **No repeat alerts:** reports a problem once, and again only when it gets worse or a reminder is due
-- **Real severities:** sends messages through the targets and matchers configured under Datacenter → Notifications
-- **Simple operation:** installs with one command and runs without care afterwards
-- **Read-only:** only reads from drives and changes nothing on the host except its own files; smartctl itself may create the device nodes of some RAID controllers
+## Why
+
+Proxmox VE already has smartd and a SMART view in the web interface. Both leave gaps:
+
+- **smartd mails, but does not judge.** No thresholds on the counters that predict
+  failure, no wear or spare, every mail has severity `unknown`, and it repeats daily.
+- **The web interface shows, but never alerts.** And it shows nothing for drives
+  behind a RAID controller.
+- **Scrutiny, Zabbix, Checkmk & co. work,** but they are a system to operate.
+
+PVE SMART Alert sits in between: nothing to operate, thresholds that mean something,
+memory between runs, and delivery to the targets you already configured.
+
+## What it does
+
+| | |
+|---|---|
+| Drives | SATA, SAS and NVMe, found automatically, including ZFS, md and LVM members |
+| RAID controllers | MegaRAID / PERC automatically, HPE Smart Array experimentally, others by a manual entry ([hardware support](docs/hardware-support.md)) |
+| Checks | Health verdict, defect and error counters, wear, spare, temperature, self-tests, missing and unreadable drives ([check catalog](docs/check-catalog.md)) |
+| Alerts | Once per problem; again on escalation, worsening, reminder and recovery |
+| Delivery | Proxmox VE notification system with severity, mail to root as fallback |
+| Configuration | One TOML file, global and per-drive overrides; defaults need none |
+| Footprint | Python, Perl and smartmontools, all already on the host |
+
+## What it is not
+
+- **Not a pool monitor.** ZFS, mdadm and RAID volume state belong to ZED, mdadm and vendor tools.
+- **Not a test scheduler.** It reads self-test results, it never starts a test.
+- **Not a dashboard.** No web interface, no metrics export, no history.
+- **Not invasive.** It only reads drives and changes nothing on the host except its own
+  files; smartctl may create device nodes for some RAID controllers. It leaves smartd alone.
 
 ## Installation
 
-Either command installs the newest release on a node, as root ([ADR 0013](docs/adr/0013-packaging-and-installation.md)); on a cluster, run it on each node. To build from source instead, `make deb` builds the package into `dist/` on a Debian or Proxmox VE host with build-essential, dpkg-dev and debhelper; copy it to each node and install it there as root with `apt install ./pve-smart-alert_*_all.deb`.
+As root, on every node:
 
 ```sh
-# Download the package and install it with apt
-wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert/releases/latest/download/pve-smart-alert.deb \
-  && apt install -y /tmp/pve-smart-alert.deb
-
-# The same, with the checksum verified; PVE_SMART_ALERT_VERSION=0.5.1 pins a version
 wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
 ```
 
-The package enables a systemd timer that runs the first check right away and then one every 30 minutes; the first check sends one summary.
+The script verifies the checksum and installs the package with apt;
+`PVE_SMART_ALERT_VERSION=0.5.1` pins a version. Without the script:
 
-- On a Proxmox VE 9 host it pulls in no other package. `apt purge pve-smart-alert` removes it together with its configuration and state, and with everything below `/usr/share/pve-smart-alert` ([ADR 0035](docs/adr/0035-purge-removes-the-package-directory.md)).
-- The installation enables and starts `pve-smart-alert.timer`. It starts `pve-smart-alert check` 3 minutes after boot and then 30 minutes after the start of the previous run; on a host that is already up, the first run is expected right after the installation, which sends the first-run summary. `systemctl list-timers pve-smart-alert.timer` shows the next run, `journalctl -u pve-smart-alert.service` the runs.
-- The interval is changed with a drop-in, not in the configuration file of the tool; a drop-in survives upgrades of the package. The timers that a drop-in sets are added to those of the package, and an empty `OnUnitActiveSec=` removes all of them, `OnBootSec=` included ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)). So the drop-in, which `systemctl edit pve-smart-alert.timer` opens, first empties `OnUnitActiveSec=` and then sets both. For a run every hour:
+```sh
+wget -qO /tmp/pve-smart-alert.deb https://github.com/florianpunz/pve-smart-alert/releases/latest/download/pve-smart-alert.deb \
+  && apt install -y /tmp/pve-smart-alert.deb
+```
 
-  ```ini
-  [Timer]
-  OnUnitActiveSec=
-  OnBootSec=3min
-  OnUnitActiveSec=1h
-  ```
+After the installation:
 
-- When a run fails, a short mail to root says so, at most once a day and once more after a reboot. It is sent without the code of the tool, so it also arrives when that code is broken.
-- The configuration is `/etc/pve-smart-alert/config.toml`. `/usr/share/doc/pve-smart-alert/config.reference.toml` lists every key with its default.
-- These keys have an effect so far: `transport` in `[notify]` (`auto`, the default, sends through the notify bridge with mail to root as the fallback, `pve-notify` through the bridge only, `mail` as mail to root only), the settings of the notification policy in `[notify]` and `[notify.reminder]` (grouping limit, recovery and first-run messages, cool-downs, counts of runs, reminder intervals), `[smartctl]` and the manual devices in `[[discovery.device]]`, which `scan` and `dump-fixture` use, the exclude rules of `[discovery]`, `probe_cciss` in `[discovery]`, which switches the experimental probe for the drives behind an HPE Smart Array controller off (it is on by default and runs on hosts with the driver `hpsa`), the enabled state of every check in `[checks."<check-id>"]`, the thresholds that the check has, and the confirmation count of a condition check that has one, the enabled state of every condition of the tool itself in the same table, such as `enabled = false` in the table `[checks."tool.unsupported_controller"]` for a controller in HBA mode whose drives all appear in `scan`, and the per-drive overrides in `[[drive]]`, which can exclude a drive, set its smartctl detail level and override any check for it. A file that does not validate never stops a run: the last configuration that passed is used and the problem is reported.
+- The first check runs at once and sends one summary; then a timer runs it every 30 minutes.
+- On Proxmox VE 9 no other package is pulled in. `apt purge pve-smart-alert` removes
+  everything, configuration and state included.
+- If a run fails, root gets a short mail, at most once a day and once more after a reboot.
+- To build the package yourself: `make deb` (needs build-essential, dpkg-dev, debhelper).
+
+**Change the interval** with a drop-in, which survives upgrades:
+`systemctl edit pve-smart-alert.timer`. Empty `OnUnitActiveSec=` first, then set both
+timers again ([systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)):
+
+```ini
+[Timer]
+OnUnitActiveSec=
+OnBootSec=3min
+OnUnitActiveSec=1h
+```
+
+## Configuration
+
+`/etc/pve-smart-alert/config.toml` holds only what differs from the defaults.
+Every key with its default is in `/usr/share/doc/pve-smart-alert/config.reference.toml`.
+
+```toml
+[checks."wear"]
+warning = 90            # warn at 90 % instead of 95 %
+
+[[drive]]
+serial = "S4EWNX0M000000A"
+comment = "Worn, replacement ordered"
+
+[drive.checks."wear"]
+enabled = false
+```
+
+A file that does not validate never stops a run: the last good configuration is used
+and the error is reported. `pve-smart-alert config check` names the line.
 
 ## Commands
 
-The installed tool has these commands:
-
 | Command | Does |
 | --- | --- |
-| `pve-smart-alert doctor` | Reports one line per part of the host the tool works with: configuration, smartctl, notify bridge, templates, mail command, the routing of notifications and of the fallback mail to root, the state file with the last run, the timer with its schedule and next run, the Proxmox VE version, whether smartd mails root, in the line `controllers` a controller whose drives smartctl cannot read, such as one with the driver `mpi3mr`, and in the line `probe` the HPE Smart Array controllers of the host and whether their drives are probed (FR-603, FR-109, FR-103) |
-| `pve-smart-alert scan` | Finds the drives of the host and reads them in the order scan, probe, manual entries; a drive that two sources find is read twice and kept once. It shows every device with its source and what became of it; for a drive its model, serial number, class, what uses it, its wear value with the source and, for a drive read as `megaraid,N`, `sat+megaraid,N`, `scsi+megaraid,N`, `cciss,N`, `sat+cciss,N` or `scsi+cciss,N`, the controller and the device ID; any other drive shows the node and type instead (FR-108, [ADR 0034](docs/adr/0034-manual-entries-of-other-pass-through-types.md)). A model or serial number that holds a character the tool does not print, or that is cut, gets a line `Selector:` with the value as a TOML string, exactly as a selector is written; a value longer than the printed limit is cut in that line and carries `…`, so such a drive is selected with a model pattern, and a value with a lone surrogate, which TOML cannot write, gets a line `Cannot select:` that names the model pattern instead (ADR 0036). Above the devices it names a controller whose drives smartctl cannot read, so that they are not monitored (FR-109), and every HPE Smart Array controller with the drives the probe found behind it, or why it was not probed (FR-103) |
-| `pve-smart-alert check` | Runs one check: evaluates every drive against the checks of the [check catalog](docs/check-catalog.md), compares the result with the state of earlier runs and sends the notifications that are due (FR-601). The first run sends one summary. The state is `/var/lib/pve-smart-alert/state.json`; deleting it makes the next run a first run |
-| `pve-smart-alert check --dry-run` | Prints the findings and the notifications a run would send now, without sending anything or changing the state |
-| `pve-smart-alert status` | Shows from the state the last run and every drive with its active conditions (FR-602); `--json` prints the state as JSON |
-| `pve-smart-alert config check` | Validates the whole configuration file and names the first error, with its key where it has one and its line where it can be found; the exit status is then non-zero (FR-405) |
-| `pve-smart-alert config show` | Prints every key with its effective value and, for the values that carry one, its origin: the file, the built-in default or, while the configuration file cannot be used and one exists, the last good configuration (FR-407); the per-drive overrides are shown as configured; `--defaults` prints the built-in ones |
-| `pve-smart-alert dump-fixture --all` or `pve-smart-alert dump-fixture DEVICE...` | Writes the drive data of the host as an archive in which serial numbers, WWNs, EUI-64s, UUIDs, NGUIDs, SAS addresses and device names that are not nodes are replaced by placeholders, readable by root only, to attach to an issue (FR-604) |
-| `pve-smart-alert test-notification` | Sends one test notification, prints what the notification system did with it and names the matchers that route it (FR-520) |
+| `doctor` | Checks everything the tool depends on, one line each |
+| `scan` | Lists every drive found, and what became of it |
+| `check` | Runs one check and sends what is due; the timer calls it |
+| `check --dry-run` | Shows findings and due notifications, sends nothing |
+| `status` | Last run and active problems per drive; `--json` for the raw state |
+| `config check` / `config show` | Validates the configuration / shows every effective value and its origin |
+| `test-notification` | Sends a test and names the matchers that route it; `--severity`, `--transport` |
+| `dump-fixture --all` | Writes an anonymized recording of your drives, to attach to an issue |
 
-Options of `test-notification`:
-
-- `--severity SEVERITY`: `info` (default), `notice`, `warning` or `error`
-- `--transport TRANSPORT`: `auto`, `pve-notify` or `mail`, as for `transport` in the configuration; without the option the configuration decides.
+Details: `man pve-smart-alert`.
 
 ## What is notified
 
-The policy is that of [ADR 0009](docs/adr/0009-notification-policy.md); every value below is a key of `[notify]`.
+| Event | Rule |
+| --- | --- |
+| New problem | Once; a temperature first has to show in 2 runs in a row |
+| Severity rises | At once |
+| Value worsens at the same severity | At most every 6 hours per drive |
+| Reminder | Critical after 3 days, warning after 7 days, notice never |
+| Problem gone for 2 runs | Once, as recovered (`info`) |
+| Counter rises (e.g. CRC errors) | When it rises; an old value never alerts |
+| Drive missing or unreadable for 2 runs | Once; removable and USB drives are never "missing" |
 
-- A problem is notified once. It is notified again at once when its severity rises, when its value worsens at the same severity (at most every 6 hours per drive), and as a reminder: after 3 days for a critical finding, after 7 days for a warning, never for a notice. A temperature has to be seen in 2 runs in a row first.
-- A problem that is absent for 2 runs is notified as recovered, with severity `info`.
-- A rising error counter, such as the CRC errors of a cable, is notified when it rises; an old value never is.
-- A drive that is absent for 2 runs is notified once as missing; one that answers without usable data for 2 runs as unreadable. Removable and USB drives are never reported as missing.
-- All findings of one drive in one run are one message. When more than 3 drives have a message due in the same run, one summary replaces them.
-- Problems of the tool itself, such as a missing smartctl or an invalid configuration, follow the same rules.
+All findings of one drive in one run are one message; more than 3 drives at once become
+one summary. Problems of the tool itself follow the same rules. Every number is a key
+of `[notify]` ([ADR 0009](docs/adr/0009-notification-policy.md)).
 
-A run exits with status 0 when it completed, whatever the health of the drives; 1 when a notification could not be handed over, which is then planned again on the next run; 3 when another run holds the lock; and 130 when the command was interrupted with Ctrl+C, which says so instead of ending in a traceback. The service treats 3 as a success; every other status but 0 counts as a failed run and sends the failure mail. A command typed in a terminal sends no failure mail; the service is stopped with SIGTERM rather than interrupted with Ctrl+C.
+Exit status of a run:
 
-## Coexistence with smartd
-
-Proxmox VE runs smartd, and its default configuration mails root about some of the problems this tool reports, every day while they last. PVE SMART Alert leaves smartd alone ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)), so some problems arrive twice; `pve-smart-alert doctor` says in the line `smartd` whether smartd mails. To quiet smartd by hand, edit the `DEVICESCAN` line in `/etc/smartd.conf` and restart it with `systemctl restart smartmontools`:
-
-- remove `-m root -M exec /usr/share/smartmontools/smartd-runner`, so that smartd only logs to the journal, or
-- add `-M once` after `-m root`, so that it mails each problem only once.
-
-The Proxmox VE web interface does not depend on smartd.
+| Status | Meaning | Failure mail |
+| --- | --- | --- |
+| 0 | Run completed, whatever the drives' health | no |
+| 1 | A notification could not be handed over; retried next run | yes |
+| 3 | Another run holds the lock | no |
+| 130 | Interrupted with Ctrl+C | no (terminal only) |
 
 ## Notification routing
 
-Notifications have the type `pve-smart-alert` and reach a target only through a matcher under Datacenter → Notifications. The unchanged default matcher matches them, so no setup is needed. If the default matcher has been restricted, for example to the types `vzdump` and `system-mail`, the notifications are accepted and then dropped without an error.
+Notifications have the type `pve-smart-alert`. The unchanged default matcher routes
+them, so nothing needs to be set up.
 
-In that case, add a matcher with the rule `type` as regex `^pve-smart-alert$` and the target you want, in the web interface (Datacenter → Notifications → Notification Matchers → Add) or on the command line, as root on one node:
+If you restricted the default matcher, they are **dropped without an error**. Add a
+matcher for them, as root on one node, and route all four severities:
 
 ```sh
 pvesh create /cluster/notifications/matchers \
@@ -116,54 +162,55 @@ pvesh create /cluster/notifications/matchers \
   --match-severity info,notice,warning,error
 ```
 
-Replace `<TARGET>` with a target name from `pvesh get /cluster/notifications/targets`. Route all four severities: the tool also sends `info` messages, for recoveries and for the first summary, and `notice` findings. A matcher that leaves out a severity drops those messages.
+`<TARGET>` comes from `pvesh get /cluster/notifications/targets`. To check the routing:
 
-### Check the routing
+- `pve-smart-alert doctor`: the lines `routing` and `fallback` warn when a severity, or
+  the fallback mail to root, reaches no enabled target.
+- `pve-smart-alert test-notification --severity warning`: names the matchers that route it.
 
-Two commands evaluate the matchers the way the notification system does:
+Both are hints, not delivery receipts. Run `doctor` again after changing matchers or
+upgrading Proxmox VE.
 
-- `pve-smart-alert doctor` reads the matchers and targets with `pvesh`:
-  - `routing` is `warn` when a severity of the tool reaches no enabled target. The line names that severity, and a matcher that would route it if it or its target were enabled.
-  - `fallback` does the same for the mail to root that replaces a notification when the notify bridge fails. Proxmox VE routes it as the type `system-mail` with the severity `unknown`, so a default matcher limited to other types drops it too.
-- `pve-smart-alert test-notification --severity warning` names the matchers that route the test, or says that none does.
+## Coexistence with smartd
 
-Both give a hint, not a delivery receipt: a rule they cannot decide, such as a time rule, is reported as such, and only the target shows that a message arrived. Run `doctor` again after you change the matchers or upgrade Proxmox VE.
+smartd mails root about some of the same problems, daily, so some arrive twice.
+`doctor` shows in the line `smartd` whether it does. To quiet it, edit the `DEVICESCAN`
+line in `/etc/smartd.conf`, then `systemctl restart smartmontools`:
+
+- remove `-m root -M exec /usr/share/smartmontools/smartd-runner`: log to the journal only, or
+- add `-M once` after `-m root`: mail each problem only once.
+
+The web interface does not depend on smartd. The tool never changes it
+([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
 
 ## Documentation
 
-- [PROJECT.md](PROJECT.md): purpose, audience, comparison with existing solutions, scope of version 1
-- [REQUIREMENTS.md](REQUIREMENTS.md): numbered, verifiable requirements
-- [ARCHITECTURE.md](ARCHITECTURE.md): components, run sequence, configuration, state, notification, error handling
-- [docs/check-catalog.md](docs/check-catalog.md): the checks and their default thresholds
-- [docs/troubleshooting.md](docs/troubleshooting.md): what to do when no notification arrives, a drive is missing or was replaced, a run fails, or the configuration does not apply
-- [docs/hardware-support.md](docs/hardware-support.md): which drives and controllers are supported, how each was verified, and how to contribute a recording of your hardware
-- [docs/adr/](docs/adr/README.md): one record per architecture decision
-- [docs/research/](docs/research/README.md): evidence behind the decisions, with sources
-- [ROADMAP.md](ROADMAP.md): milestones, each with a testable result, and the state of each
-- [docs/traceability.md](docs/traceability.md): the tests and acceptance steps of every requirement, a dated snapshot
-- [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): what is not settled yet
-- [CLAUDE.md](CLAUDE.md): binding rules for contributors and AI agents
+- [Check catalog](docs/check-catalog.md): every check and its default thresholds
+- [Hardware support](docs/hardware-support.md): controllers, how each was verified, recordings wanted
+- [Troubleshooting](docs/troubleshooting.md): no notification, missing drive, failed run
+- [Project](PROJECT.md) · [Requirements](REQUIREMENTS.md) · [Architecture](ARCHITECTURE.md) ·
+  [Decisions](docs/adr/README.md) · [Research](docs/research/README.md)
+- [Roadmap](ROADMAP.md) · [Open questions](OPEN-QUESTIONS.md) · [Traceability](docs/traceability.md)
 
 ## Development
 
-Requires Python 3.11 or later, GNU Make and git.
+Python 3.11+, GNU Make and git. A fresh clone needs only:
 
 ```sh
-make check         # lint, format check, type check, repository rules and tests
-make dev-install   # create the virtual environment and install the development tools
-make test          # the test suite
-make build         # the Debian package and the Python distribution
-make deb           # the Debian package in dist/ (needs build-essential, dpkg-dev and debhelper)
-make python-dist   # wheel and sdist in dist/
+make check    # lint, format, types, repository rules and tests
 ```
 
-A fresh clone needs only `make check`, which creates the virtual environment on its own. Contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+`make test`, `make deb` and `make build` do what they say. Rules for contributions,
+human or AI: [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
 ## License
 
-AGPL-3.0-or-later. Copyright (C) 2026 Florian Punz. See [LICENSE](LICENSE) and [ADR 0015](docs/adr/0015-license.md).
-Some test fixtures come from the test data of other projects and keep their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+[AGPL-3.0-or-later](LICENSE), © 2026 Florian Punz ([ADR 0015](docs/adr/0015-license.md)).
+Some test fixtures come from other projects and keep their licenses:
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Affiliation
 
-This is an independent project. It is not affiliated with or endorsed by Proxmox Server Solutions GmbH. Proxmox is a registered trademark of Proxmox Server Solutions GmbH. The name of the platform is used only to say what the tool is for.
+An independent project, not affiliated with or endorsed by Proxmox Server Solutions GmbH.
+Proxmox is a registered trademark of Proxmox Server Solutions GmbH; the name is used only
+to say what the tool is for.
