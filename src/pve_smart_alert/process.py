@@ -1,14 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Running an external program with a timeout.
 
-External programs are started with an argument list, never through a shell,
-and in their own process group, so that a timeout ends the program and
-everything it started (ARCHITECTURE.md section 14).
-
-Every component that runs a program uses this module: the transports, the
-self-diagnosis and the routing check. There is no default timeout, because
-how long a program may take depends on what it does: a slow notification
-target is something else than a slow drive.
+Programs are started with an argument list, never through a shell, and in
+their own process group, so that a timeout ends everything they started,
+except a process stuck in disk I/O (see `run_with_timeout`); every component
+that runs a program uses this module (ARCHITECTURE.md section 14).
 """
 
 from __future__ import annotations
@@ -39,7 +35,7 @@ class ProcessResult:
 
     @property
     def lines(self) -> tuple[str, ...]:
-        """The standard error of the program, line by line."""
+        """The standard error of the program, line by line; the standard output is not included."""
         return tuple(line for line in self.stderr.splitlines() if line.strip())
 
 
@@ -68,12 +64,10 @@ def run_with_timeout(
 ) -> ProcessResult:
     """Run a program and return its output.
 
-    A program that does not end within `timeout` is killed together with the
-    process group it started; its output up to that point is returned with
-    `timed_out` set.
-
-    Raises `OSError` when the program cannot be started at all, for example
-    because it does not exist or is not executable.
+    A program that does not end within `timeout` is killed with its process
+    group; its output up to then is returned with `timed_out` set. A process
+    stuck in disk I/O (D state) survives the kill, and the wait then has no
+    bound. Raises `OSError` when it cannot be started.
     """
     process = subprocess.Popen(
         [str(argument) for argument in command],
@@ -91,6 +85,7 @@ def run_with_timeout(
         stdout, stderr = process.communicate(input_text, timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_process_group(process)
+        # A process stuck in disk I/O (D state) survives SIGKILL; this wait has no timeout.
         stdout, stderr = process.communicate()
         return ProcessResult(returncode=None, stdout=stdout, stderr=stderr, timed_out=True)
 

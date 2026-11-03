@@ -15,9 +15,9 @@ from typing import Final, Protocol
 from pve_smart_alert.config import TransportName
 from pve_smart_alert.model import MAX_PRINTED, Notification, printed
 
-# How long one transport may take. The delivery to SMTP, Gotify or webhook
-# targets happens inside the call, and a slow target must not hold the run
-# (ADR 0008). The value is the assumption recorded as Q-N4.
+# How long one transport may take. Delivery to SMTP, Gotify or webhook targets
+# happens inside the call, and a slow target must not hold the run (ADR 0008).
+# A dead target costs 5 to 10 s (ARCHITECTURE.md section 10).
 DEFAULT_TIMEOUT_SECONDS: Final = 120.0
 
 
@@ -25,11 +25,9 @@ DEFAULT_TIMEOUT_SECONDS: Final = 120.0
 class TransportOutcome:
     """What became of one notification.
 
-    `delivered` is the answer the rest of the tool works with: only after a
-    handover may the state that belongs to a notification be stored (FR-517).
-    `error` says why it was not delivered. `log_lines` is what the program
-    wrote to its standard error, which is what the notification system logged
-    about the targets (ARCHITECTURE.md section 10).
+    `delivered` gates the state change of FR-517; `error` says why it failed.
+    `log_lines` is the standard error of the program (ARCHITECTURE.md section
+    10).
     """
 
     delivered: bool

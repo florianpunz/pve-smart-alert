@@ -1,27 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """What the host tells about a drive besides smartctl, best effort (ADR 0005).
 
-`lsblk` is read once per run, from the database of udev, which does not wake
-a drive. It gives the transport, the removable flag, the type of a device,
-its vendor and model, and what uses it. The links below `/dev/disk` give the
-`by-id` and `by-path` names, and sysfs the transport of an NVMe controller
-and the driver of a SCSI host. When any of it is missing, the drive is still
-monitored, only without these details (FR-110).
-
-A drive behind a RAID controller, read with a pass-through type such as
-`sat+megaraid,14` on `/dev/bus/6`, is not a block device of the host: what
-lsblk says about the device node is about the controller or a logical
-volume, not about the drive. Its location is the controller, with the driver
-of its SCSI host, and the device ID of the type (ADR 0028). The same holds for
-`cciss,N` on `/dev/sgN`, where the driver is the one of the SCSI host the node
-belongs to (ADR 0032).
-
-The volume group of a drive is read from the device-mapper names of its LVM
-devices, as Research 06 verified against `pvs` on the test cluster: the name
-up to the first single dash, with each doubled dash reduced to one. `pvs`
-itself is not called; it reads labels from the disks. A ZFS pool is taken
-from the label of a `zfs_member` file system and an md array from the name
-of a `raid` device on the disk or its partitions; both are assumed (Q-S6).
+lsblk is read once per run from the udev database, which does not wake a
+drive; /dev/disk and sysfs add names, transports and SCSI hosts. A drive
+behind a RAID controller gets its controller as location (ADR 0028, ADR 0032);
+pool and array membership is assumed (Q-S6).
 """
 
 from __future__ import annotations
@@ -43,10 +26,9 @@ from pve_smart_alert.model import (
 from pve_smart_alert.paths import DISK_LINKS_DIR, LSBLK_PATH, SYSFS_DIR
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
 
-# The columns of lsblk this tool reads. Named explicitly: the set of `-O`
-# changes between versions of util-linux.
-# VENDOR and MODEL are the inquiry data of a SCSI device, which name a
-# logical volume of a RAID controller (ADR 0028).
+# The columns of lsblk this tool reads; named explicitly, because the set of
+# `-O` changes between versions of util-linux. VENDOR and MODEL name a logical
+# volume of a RAID controller (ADR 0028).
 LSBLK_COLUMNS: Final = "NAME,KNAME,TYPE,TRAN,RM,HOTPLUG,FSTYPE,LABEL,VENDOR,MODEL"
 LSBLK_TIMEOUT_SECONDS: Final = 10.0
 
@@ -190,10 +172,8 @@ def details_of(
 def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
     """Return the driver of a SCSI host, such as `megaraid_sas`, best effort.
 
-    It is the `proc_name` of the host in sysfs; `None` when that is missing
-    or empty. The value is untrusted text from the host: control characters
-    are removed and it is cut to `MAX_DRIVER_NAME` characters, as strings of
-    drives are (ARCHITECTURE.md section 14).
+    It is the untrusted `proc_name` of sysfs, cleaned and cut to
+    `MAX_DRIVER_NAME`; `None` when it is missing or empty.
     """
     path = paths.sysfs / "class" / "scsi_host" / f"host{host}" / "proc_name"
     try:
@@ -206,11 +186,9 @@ def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
 def scsi_host_of_sg(node: int | str, paths: HostPaths = HOST) -> int | None:
     """Return the SCSI host of a SCSI generic node, or `None`.
 
-    The kernel names a SCSI device `H:C:T:L`, and the link
-    `/sys/class/scsi_generic/sgN/device` points at it, so its last part names
-    the host. smartctl derives the host of a block device the same way, by
-    cutting the name at the first colon (`os_linux.cpp`,
-    `is_hpsa_in_raid_mode`, 7.5 lines 3363 to 3414).
+    `/sys/class/scsi_generic/sgN/device` points at `H:C:T:L`, so its last
+    part names the host; smartctl cuts the name the same way
+    (`is_hpsa_in_raid_mode`, 7.5).
     """
     link = paths.sysfs / "class" / "scsi_generic" / f"sg{node}" / "device"
     try:
@@ -224,12 +202,9 @@ def scsi_host_of_sg(node: int | str, paths: HostPaths = HOST) -> int | None:
 def sg_node_of_host(host: int, paths: HostPaths = HOST) -> str | None:
     """Return the device node `/dev/sgN` of a SCSI host, or `None`.
 
-    The lowest number wins, so that the choice is the same within a run and as
-    stable as the numbering of the nodes itself; the identity of a drive does
-    not depend on it (FR-105). Any node of the controller reaches the same
-    controller: the pass-through of `cciss,N` is an ioctl that looks the drive
-    up in the device list of the controller, and the node only has to belong to
-    it (ADR 0032).
+    The lowest number wins, so the choice is stable within a run but not part
+    of a drive identity (FR-105). Any node of the controller reaches it
+    (ADR 0032).
     """
     directory = paths.sysfs / "class" / "scsi_generic"
     try:
@@ -279,10 +254,8 @@ def _disks(base: str, block_devices: BlockDevices) -> list[Mapping[str, object]]
 def _membership(disks: Sequence[Mapping[str, object]]) -> Membership:
     """Return what the host builds on these disks.
 
-    The volume groups come from every LVM device below a disk. A ZFS pool or
-    an md array counts only on the disk itself or on its partitions: below a
-    logical volume, lsblk also shows the file systems inside the disks of
-    guests, such as the pool `zroot` of a virtual machine on the test cluster
+    A ZFS pool or md array counts only on the disk itself or a partition:
+    below a logical volume, lsblk also shows the file systems of guests
     (Research 06).
     """
     groups: list[str] = []

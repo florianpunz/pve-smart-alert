@@ -1,17 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Running smartctl for one drive (ADR 0004).
 
-One call per drive, with the name and the type that discovery found, as an
-argument list, with a timeout that ends the call and everything it started.
-Only options that read are ever passed: no option enables SMART, changes a
-setting or starts a test (ADR 0012).
-
-The answer is judged the way ADR 0004 lays down. Bits 0 and 1 of the exit
-status mean that no usable data came back; bit 2 alone is tolerated, and the
-higher bits are hints that the checks read from the JSON instead. A drive in
-standby is not read and is skipped for this run (FR-203). Everything else
-that keeps the data from being usable makes the drive unreadable for this
-run, which never stops the run (FR-205).
+One call per drive, with a timeout that ends it; only options that read are
+passed (ADR 0012). Bits 0 and 1 of the exit status mean that no usable data
+came back; bit 2 alone is tolerated, because the drive may still have
+answered. Standby is skipped (FR-203), unreadable means unreadable (FR-205).
 """
 
 from __future__ import annotations
@@ -33,12 +26,9 @@ from pve_smart_alert.process import ProcessRunner, run_with_timeout
 NO_DATA_BITS: Final = 0b11
 FAILPOWER: Final = 0b10
 
-# What smartctl writes when `--nocheck=standby` ends the call before the data,
-# in 7.4 and 7.5: an information message that names the power mode and the
-# exit status of FAILPOWER, for ATA (ataprint.cpp) and for SCSI
-# (scsiprint.cpp) alike. 7.5 adds `power_mode` to the JSON for ATA. The name
-# of an ATA mode is one word, such as STANDBY; the name of a SCSI power
-# condition has several, such as STANDBY BY TIMER.
+# What smartctl 7.4 and 7.5 write when `--nocheck=standby` ends the call, for
+# ATA and SCSI alike: a message that names the power mode; 7.0 to 7.3 are not
+# verified. An ATA mode is one word, a SCSI condition has several.
 STANDBY_MESSAGE: Final = re.compile(r"Device is in (.+?) mode(?:, exit\(|$)")
 
 # The major version of the JSON format this tool reads (ADR 0004).
@@ -49,13 +39,9 @@ JSON_FORMAT_MAJOR: Final = 1
 # `sat+megaraid,N`, and the USB bridges.
 _STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
 
-# The drives behind an HPE Smart Array, 3ware, Areca, Adaptec, HighPoint or
-# SSSRAID controller get the standby check whatever their protocol says: such
-# a drive can be a SATA drive, behind 3ware and HighPoint and behind an Areca
-# SATA controller it always is, and smartctl implements the power mode check
-# for SCSI as well (ADR 0032, ADR 0034). MegaRAID is not among them, because
-# its type tells a SATA drive (`sat+megaraid,N`) from a SAS drive
-# (`megaraid,N`).
+# These controller types get the standby check whatever their protocol says:
+# such a drive can be a SATA drive and smartctl checks the power mode for SCSI
+# too. MegaRAID is excluded: its type tells a SATA drive from a SAS one.
 _MEGARAID_TYPE: Final = re.compile(r"(?:.*\+)?megaraid,.*")
 
 
@@ -94,13 +80,10 @@ class Collected:
 def checks_standby(device_type: str, protocol: str | None = None) -> bool:
     """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
-    The option is `--nocheck=standby`, and a call that ends because of it is
-    recorded as standby, not as unreadable (ADR 0004). A drive behind an HPE
-    Smart Array, 3ware, Areca, Adaptec, HighPoint or SSSRAID controller is
-    included whatever its protocol says, because it can be a SATA drive and
-    smartctl checks the power mode for SCSI as well (ADR 0032, ADR 0034). For
-    every other type the protocol of the device scan decides where it is
-    known, and for a manual device the type does.
+    The option is `--nocheck=standby`; a call that ends because of it is
+    recorded as standby, not as unreadable (ADR 0004). For every other type
+    the protocol of the scan decides where it is known, and a manual device
+    the type.
     """
     if behind_controller(device_type) and _MEGARAID_TYPE.fullmatch(device_type) is None:
         return True
@@ -134,7 +117,11 @@ def collect_drive(
     runner: ProcessRunner = run_with_timeout,
     clock: Callable[[], float] = time.monotonic,
 ) -> Collected:
-    """Run smartctl for one drive and judge its answer."""
+    """Run smartctl for one drive and judge its answer.
+
+    `OSError` from the runner becomes `Status.UNREADABLE`; a `RecursionError`
+    from `json.loads` propagates and ends the run, against FR-205.
+    """
     command = drive_command(name, device_type, settings=settings, protocol=protocol)
     started = clock()
     try:

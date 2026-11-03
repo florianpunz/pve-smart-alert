@@ -355,11 +355,8 @@ def check_state(path: Path) -> CheckResult:
 def check_timer(path: Path, *, runner: ProcessRunner = run_with_timeout) -> CheckResult:
     """Check that the timer starts the runs, and report its schedule (FR-603).
 
-    The timer is only asked, never changed (ADR 0012). A timer that is not
-    active fails, because then no check runs by itself (FR-702). One that is
-    active but not enabled warns: the runs go on until the next reboot
-    (FR-703). The schedule is the one systemd uses, drop-ins included, which
-    is where an administrator changes the interval (ADR 0006).
+    The timer is only asked (ADR 0012). Not active fails, not enabled warns
+    (FR-702, FR-703); the schedule includes drop-ins (ADR 0006).
     """
     if not path.is_file():
         return CheckResult(
@@ -593,12 +590,8 @@ def check_controllers(paths: HostPaths = HOST) -> CheckResult:
 def check_probe(settings: DiscoverySettings | None = None, paths: HostPaths = HOST) -> CheckResult:
     """Name the HPE Smart Array controllers and whether the probe reaches them (FR-103).
 
-    Nothing is read here, so that `doctor` stays a picture of the host: the
-    probe itself runs in `scan` and in a check. A controller that the probe
-    cannot reach is a warning, because its drives are then found only as manual
-    entries. A probe that the configuration switched off is no warning, because
-    the administrator asked for it — unless the reason is the driver, which the
-    switch cannot change: a `smartpqi` host stays a warning (ADR 0032).
+    No drive is read here. A controller the probe cannot reach is a warning,
+    as is the `smartpqi` driver, which no switch changes (ADR 0032).
     """
     scsi = read_scsi_hosts(paths)
     if scsi.error is not None:
@@ -710,11 +703,8 @@ def check_routing(
 ) -> CheckResult:
     """Check that the matchers route every severity of the tool (ADR 0020).
 
-    A notification that no matcher matches is dropped without an error, so a
-    severity without a route is a warning. What this check cannot decide is
-    reported as such and never as routed; the notification system remains the
-    authority on what is delivered. With `transport = mail` every
-    notification goes as mail to root, so that route is checked instead
+    A severity without a route is a warning, and an undecided case is never
+    reported as routed. With `transport = mail` the mail route is checked
     (ADR 0022).
     """
     transport = TransportName.AUTO if settings is None else settings.transport

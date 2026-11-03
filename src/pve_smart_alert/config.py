@@ -1,28 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Loading and validation of the configuration file.
+"""Loading and validation of the configuration file (ADR 0011).
 
-The file is `/etc/pve-smart-alert/config.toml`, its format and its failure
-behavior are described in ADR 0011 and ARCHITECTURE.md section 8.
-
-This module reads the keys that are implemented: `[notify]` with the
-transport and the settings of the notification policy (FR-404),
-`[smartctl]` with `path`, `timeout` and `detail`, the manual devices of
-`[[discovery.device]]`, the exclude rules of `[discovery]`, the global
-overrides of `[checks."<check-id>"]`, which cover the checks of a drive and
-the conditions of the tool itself (FR-408, ADR 0031), and the per-drive
-overrides of `[[drive]]`, which can exclude a drive, set its smartctl detail
-level and override any check for it. The validation is strict: an unknown
-section, an unknown key, a wrong type and a value out of range are errors
-that name the place (FR-405). An override that repeats the built-in default is
-dropped, so that the reference file, which lists every key with its default,
-changes nothing when it is loaded.
-
-An invalid file never stops a run: `load_effective` returns the last
-configuration that passed validation, saved as `last-good-config.json` by
-`save_last_good`, or the built-in defaults when there is none, together with
-the error (FR-406). What a run then uses is `effective_checks`: the built-in
-defaults of the catalog, overridden by the global configuration, overridden
-by the first matching per-drive override (ARCHITECTURE.md section 6).
+The file is `/etc/pve-smart-alert/config.toml`; its keys and failure behavior
+are in ADR 0011 and ARCHITECTURE.md section 8. Validation is strict and names
+the place (FR-405). An invalid file never stops a run: the last good
+configuration, or the built-in defaults, apply with the error (FR-406).
 """
 
 from __future__ import annotations
@@ -69,11 +51,9 @@ class Detail(StrEnum):
 _TRANSPORT_VALUES: Final = tuple(item.value for item in TransportName)
 _DETAIL_VALUES: Final = tuple(item.value for item in Detail)
 
-# Which sections and keys this version knows. Anything else is an error
-# (ADR 0011). The table grows with the sections that are implemented. The
-# sections `checks` and `drive` are validated by their own builders, because
-# the keys of `checks` are the identifiers of the catalog and `drive` is a
-# list of tables.
+# Which sections and keys this version knows; anything else is an error
+# (ADR 0011). `checks` and `drive` have their own builders: the keys of
+# `checks` are catalog identifiers, and `drive` is a list of tables.
 _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
     "notify": frozenset(
         {
@@ -97,13 +77,9 @@ _DYNAMIC_SECTIONS: Final = ("checks", "drive")
 # The keys of a table that overrides one check (ADR 0011).
 _CHECK_KEYS: Final = ("enabled", "notice", "warning", "critical")
 
-#: The conditions of the tool itself, which the configuration may switch off
-#: with `enabled = false` in the table `[checks."<id>"]` (FR-408, ADR 0031).
-#: Their severity is
-#: fixed and they have no thresholds, no confirmation count and no per-class
-#: values, so `enabled` is the only key they take. The list is repeated here
-#: because `tool_conditions.py` imports this module and the import of it would
-#: be a cycle; a test keeps both lists in step.
+# The conditions of the tool, which `[checks."<id>"]` switches off with
+# `enabled` (FR-408, ADR 0031). The list is repeated from `tool_conditions.py`
+# to avoid an import cycle; a test keeps both in step.
 TOOL_CHECK_IDS: Final = frozenset(
     {
         "tool.smartctl_missing",
@@ -144,8 +120,8 @@ _DRIVE_KEYS: Final = ("model", "serial", "wwn", "comment", "exclude", "detail", 
 _DEVICE_KEYS: Final = ("name", "type")
 
 # How long one call of smartctl may take (ADR 0004, FR-202). Less than a
-# second is no time to answer, and more than the limit of a whole run
-# (NFR-08) could never be waited for.
+# second is no time to answer, and more than 15 min would outlast the run.
+# Keep the upper limit in sync with TimeoutStartSec in the service unit (NFR-08).
 DEFAULT_SMARTCTL_TIMEOUT: Final = 30.0
 _TIMEOUT_RANGE: Final = (1.0, 15 * 60.0)
 
@@ -158,10 +134,9 @@ _SECONDS: Final[Mapping[str, int]] = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 # type made of the words, numbers and separators of `smartctl --device`.
 DEVICE_NAME_PATTERN: Final = re.compile(r"/dev/[A-Za-z0-9._:+@/-]{1,250}")
 DEVICE_TYPE_PATTERN: Final = re.compile(r"[a-z0-9]+(?:[,/+-][a-z0-9]+){0,15}")
-# The types of the JMicron RAID bridges, `jmb39x,N`, `jmb39x-q,N`, `jms56x,N`
-# and, new in 7.5, `jmb39x-q2,N`, whose commands smartctl issues as a write to
-# a sector of the RAID volume and does not write back when it is stopped
-# (smartctl(8) of 7.4 and 7.5). The tool only reads drives (ADR 0012).
+# The JMicron RAID bridges, such as `jmb39x,N` and `jmb39x-q2,N`, whose
+# commands smartctl issues as a write to a sector; the tool only reads
+# (smartctl(8) of 7.4 and 7.5, ADR 0012).
 WRITING_DEVICE_TYPE: Final = re.compile(r"(?:^|\+)(?:jmb39x(?:-q2?)?|jms56x)(?:[,+]|$)")
 
 
@@ -249,10 +224,8 @@ _WWN_VALUE: Final = re.compile(r"(?:0[xX])?[0-9a-fA-F]{1,32}")
 class DriveSelector:
     """One selector of a drive, as exclude rules and per-drive overrides use it (ADR 0024).
 
-    A model is a pattern in which `*` stands for any sequence of characters
-    and `?` for one, and which has to match the whole name; upper and lower
-    case count. A serial number is compared exactly, a WWN exactly in its
-    digits, without a `0x` and without regard to their case.
+    A model is a pattern with `*` and `?` that matches the whole name, case
+    sensitive; a serial number is exact and a WWN exact in its digits.
     """
 
     kind: SelectorKind
@@ -346,9 +319,6 @@ def load_config(path: Path | None = None) -> Config:
 
     A missing or empty file is not an error: the built-in defaults are used
     (FR-401). An unreadable or invalid file raises `ConfigError`.
-
-    Version 1 reads one file. A drop-in directory and a cluster-wide file are
-    merged in here later, without changing the format (ADR 0011).
     """
     source = CONFIG_PATH if path is None else path
     text = _read(source)
@@ -365,10 +335,8 @@ def load_effective(
 ) -> tuple[Config, ConfigError | None]:
     """Load the configuration the way a run does (FR-406).
 
-    The file is tried first. When it is invalid, the last configuration that
-    passed validation is used, and when there is none the built-in defaults;
-    the run continues either way. The error is returned with the
-    configuration, so that the caller can raise the warning that names it.
+    The file is tried first; when it is invalid, the last good configuration
+    or the built-in defaults apply, with the error returned next to it.
     """
     try:
         return load_config(path), None
@@ -380,10 +348,7 @@ def load_effective(
 def save_last_good(config: Config, path: Path | None = LAST_GOOD_CONFIG_PATH) -> None:
     """Save the effective configuration as the last good one (ADR 0011).
 
-    A new directory is created only for the file of the tool itself. An
-    administrator who runs a command without the rights to write the state
-    directory gets the error from the command, not from the run: the caller
-    decides what a failed save means.
+    A failed save is reported to the caller, which decides what it means.
     """
     assert path is not None
     # It holds the selectors of the drives and the whole policy: it is
@@ -668,11 +633,8 @@ def drive_override(config: Config, identity: DriveIdentity) -> DriveOverride | N
 def tool_conditions_enabled(config: Config) -> frozenset[str]:
     """Return the conditions of the tool that the configuration leaves on (FR-408, ADR 0031).
 
-    The conditions of the tool are not checks of a drive, but their `enabled`
-    state is set the same way: only `enabled = false` in the table
-    `[checks."<id>"]` switches one off. A switched-off condition is not
-    raised, and one that is active in the state is dropped without a
-    recovery, like a check of a drive that is switched off (ADR 0009).
+    Only `enabled = false` in `[checks."<id>"]` switches one off; a
+    switched-off condition is dropped without a recovery (ADR 0009).
     """
     return TOOL_CHECK_IDS - frozenset(
         name for name, override in config.checks.items() if override.enabled is False
@@ -833,9 +795,7 @@ def _checks(
     """Return the check overrides of one table, validated and without no-op entries.
 
     The global table covers the checks of a drive and the conditions of the
-    tool itself (ADR 0031). A per-drive table takes only checks of a drive: a
-    condition of the tool is about the host, not about one drive, so setting
-    one there would silently do nothing.
+    tool; a per-drive table takes only checks of a drive (ADR 0031).
     """
     result: dict[str, CheckOverride] = {}
     for name, table in section.items():

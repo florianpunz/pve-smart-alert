@@ -1,38 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Turn recordings into anonymized fixtures: archives of the collection
-script, or the smartctl test data of other projects.
+"""Turn recordings into anonymized fixtures, or import the test data of another project.
 
-Fixtures are written by this script only, never by hand (ADR 0023). For each
-archive it reads the device scan and the drive outputs of smartctl, numbers
-the identifying values in the order of the scan, replaces them with
-placeholders, checks every output for real values that are left, and only
-then writes a directory with `scan.json`, one file per device, `lsblk.json`
-when the archive has it, and `recording.json`:
-
-    tests/fixtures/smartctl/<controller>/<prefix>-<node>/
-
-The archives are read where they are and never copied or unpacked: they
-contain real serial numbers and stay out of the repository (ADR 0016).
-
-Usage:
-    scripts/make_fixtures.py --output tests/fixtures/smartctl/direct \\
-        --prefix test-cluster --origin "Test cluster of the maintainer" ARCHIVE...
-
-The subcommand `import` makes one fixture of JSON files that another project
-publishes as its test data (ADR 0026). The files are read where they are, a
-device scan only if the source has one, and the repository, the commit, the
-path and the copyright of the source are written to `recording.json`:
-
-    scripts/make_fixtures.py import \\
-        --output tests/fixtures/smartctl/direct/libblockdev-hgst-husmr3280ass200 \\
-        --origin "..." --license LGPL-2.1-or-later --repository URL \\
-        --commit SHA --copyright "..." \\
-        --license-file tests/fixtures/licenses/libblockdev-LGPL-2.1.txt \\
-        --drive sdc=PATH_IN_REPOSITORY:LOCAL_FILE
-
-Exit status: 0 when every fixture was written, 1 when one could not be
-anonymized safely, in which case nothing of it is written.
+Fixtures are written by this script or by `dump-fixture`, never by hand
+(ADR 0023): identifying values are numbered in scan order where there is a
+scan, checked for leftovers, and written below `tests/fixtures/smartctl/`.
+Archives hold real serial numbers and stay out of the repository (ADR 0016).
 """
 
 from __future__ import annotations
@@ -52,7 +25,7 @@ DEFAULT_LICENSE: Final = "AGPL-3.0-or-later"
 COLLECTED_WITH: Final = "scripts/collect-node-data.sh"
 # The command scripts/collect-node-data.sh records the block devices with.
 LSBLK_COMMAND: Final = "lsblk -J -O"
-# The test cluster has no controller between drives and host (Research 06).
+# The default of --controller: the drives are directly attached (Research 06).
 CONTROLLER: Final = "none, directly attached"
 ANONYMIZED_WITH: Final = "scripts/make_fixtures.py (ADR 0023)"
 IMPORTED_WITH: Final = "scripts/make_fixtures.py import (ADR 0023, ADR 0026)"

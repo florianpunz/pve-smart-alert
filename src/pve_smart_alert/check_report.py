@@ -1,12 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The report of `pve-smart-alert check --dry-run` (FR-601).
 
-One block per monitored drive that has findings, in the order of discovery:
-the drive with its name, model and serial number, then one line per finding
-with the check, its severity and what the check found. The summary counts the
-devices of the run and the findings by severity. The command-line interface
-prints the notifications a run would send after it; nothing is sent and no
-state is changed.
+One block per monitored drive that has findings, in the order of discovery,
+then one line per finding with check, severity and text. The summary counts
+the devices and the findings; the command-line interface prints the planned
+notifications after it.
 """
 
 from __future__ import annotations

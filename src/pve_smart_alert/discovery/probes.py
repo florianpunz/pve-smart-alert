@@ -1,28 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The probe for the drives behind an HPE Smart Array controller (FR-103, ADR 0032).
 
-A controller in RAID mode hides its physical drives from the device scan of
-smartctl. smartctl reaches them through the controller with `-d cciss,N`,
-where `N` is the position of the drive in the physical device list of the
-controller (`cciss.cpp`: `cciss_getlun` copies entry `N` of the list that
-`CISS_REPORT_PHYS` answers with). The probe reads `cciss,0` upwards on the
-SCSI generic node of the controller and stops after
-`CONSECUTIVE_FAILURES` device IDs in a row that answer nothing, so that an
-empty bay ends the probe instead of a run through all 128 IDs that smartctl
-accepts (`os_linux.cpp`, 7.5 line 3583).
-
-Only the driver `hpsa` is probed. It is the driver whose hosts smartctl
-itself expects `-d cciss,N` on: `is_hpsa_in_raid_mode` compares the
-`proc_name` with `hpsa` and asks for the option when the logical volume
-reports a RAID level (`os_linux.cpp`, 7.5 lines 3363 to 3414 and 3475 to
-3477). The same controllers run with the driver `smartpqi` on other hosts,
-and no source or recording shows that the pass-through works there, so such
-a host is named in `scan` and `doctor` and is not probed (Q-R2).
-
-The probe is experimental in version 1 and is switched off with
-`probe_cciss = false` in `[discovery]`. It reads with the call of every other
-drive, `--nocheck=standby` included, so that a drive in standby is not woken
-(FR-203).
+smartctl reaches such a drive as `cciss,N` on the SCSI generic node of the
+controller, where `N` is its position in the physical device list. The probe
+reads from 0 upwards and stops after `CONSECUTIVE_FAILURES` empty IDs. Only
+the driver `hpsa` is probed; `smartpqi` is named but not probed (Q-R2).
 """
 
 from __future__ import annotations
@@ -50,22 +32,20 @@ __all__ = [
     "probe_hpe",
 ]
 
-#: The driver whose hosts smartctl reaches with `cciss,N` (ADR 0032).
+# The driver whose hosts smartctl reaches with `cciss,N` (ADR 0032).
 PROBED_DRIVER: Final = "hpsa"
 
-#: The drivers of HPE Smart Array controllers that are named but not probed:
-#: no source shows that the pass-through works with them (Q-R2).
+# The drivers of HPE Smart Array controllers that are named but not probed:
+# no source shows that the pass-through works with them (Q-R2).
 NAMED_DRIVERS: Final = frozenset({"smartpqi"})
 
-#: The highest device ID that smartctl accepts for `cciss,N`
-#: (`os_linux.cpp`, 7.5 line 3583: "must have 0 <= N <= 127").
+# The highest device ID that smartctl accepts for `cciss,N`
+# (`os_linux.cpp`, 7.5: "must have 0 <= N <= 127").
 MAX_DEVICE_ID: Final = 127
 
-#: How many device IDs in a row may answer nothing before the probe stops
-#: (ADR 0032). An ID at or beyond the end of the device list of a controller
-#: fails at once, so three in a row keep one drive that answers nothing, such
-#: as one that is broken, from ending the probe, at the price of three calls
-#: that come back at once.
+# How many device IDs in a row may answer nothing before the probe stops
+# (ADR 0032). An ID beyond the device list fails at once, so three keep one
+# broken drive from ending the probe.
 CONSECUTIVE_FAILURES: Final = 3
 
 

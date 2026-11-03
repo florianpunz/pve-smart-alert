@@ -1,23 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The state store: what the tool remembers between two runs (ADR 0007).
 
-State is one JSON file, `/var/lib/pve-smart-alert/state.json`, owned by root
-and readable by root only. Its shape is described in ARCHITECTURE.md
-section 9. This module reads it, validates it, migrates an older schema and
-replaces it atomically; what the state means is decided by the notification
-planner (ADR 0009).
-
-Rules of ADR 0007 that live here:
-
-- Atomic replacement: the new state is written to a temporary file in the
-  same directory, flushed to disk and renamed over the old one, so that a
-  crash leaves either the old or the new file (NFR-11).
-- Corruption: a file that cannot be parsed or fails validation, and a file
-  of an unknown newer schema, is renamed to `state.json.corrupt-<timestamp>`
-  and the run continues with empty state (NFR-12).
-- Migration: each schema version has a function to the next one.
-- Timestamps are UTC in ISO 8601; one that lies in the future is read as
-  "now", so that a clock jump cannot suppress reminders forever.
+The state is one JSON file, readable by root only, with the shape of
+ARCHITECTURE.md section 9. This module reads, validates and migrates it and
+replaces it atomically; the planner decides what it means (ADR 0009).
 """
 
 from __future__ import annotations
@@ -59,12 +45,12 @@ __all__ = [
     "state_to_json",
 ]
 
-#: The schema this version writes. A file of a higher one is set aside
-#: like a corrupt file, which keeps a downgrade from misreading it.
+# The schema this version writes. A file of a higher one is set aside
+# like a corrupt file, which keeps a downgrade from misreading it.
 SCHEMA_VERSION: Final = 2
 
-#: How long the record of a drive that is no longer seen is kept, so that a
-#: returning drive is recognized (ADR 0007).
+# How long the record of a drive that is no longer seen is kept, so that a
+# returning drive is recognized (ADR 0007).
 RETENTION: Final = timedelta(days=90)
 
 # A migration takes the document of one schema version and returns the
@@ -75,12 +61,10 @@ Migration = Callable[[dict[str, object]], dict[str, object]]
 def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
     """Re-key the drives of a schema-1 document (ADR 0037, ADR 0038).
 
-    Schema 1 joined the parts of the key with `|`, so a model with a `|` and
-    a serial number could meet another drive's key, and the same held for a
-    record of a device that never answered, which is keyed by its name and
-    type. Each record carries its identity and its last access, from which
-    the unambiguous key follows; only a record without a usable last access
-    keeps its old key.
+    Schema 1 joined the key parts with `|`, which two records could collide
+    on. The identity and last access give the unambiguous key; a record with
+    no identity is keyed by its device, and one whose last access or model is
+    missing or unreadable keeps its old key.
     """
     drives = document.get("drives")
     if not isinstance(drives, dict):
@@ -122,8 +106,8 @@ def _migrated_key(entry: Mapping[str, object]) -> str | None:
     return identity_key(identity, Access(name, device_type))
 
 
-#: The migrations, by the version they start from. Version 1 joined the parts
-#: of a drive key with `|`; version 2 writes them as a JSON array (ADR 0037, ADR 0038).
+# The migrations, by the version they start from. Version 1 joined the parts
+# of a drive key with `|`; version 2 writes them as a JSON array (ADR 0037, ADR 0038).
 MIGRATIONS: Final[Mapping[int, Migration]] = {1: _migrate_keys}
 
 
@@ -135,11 +119,8 @@ class StateError(Exception):
 class ConditionRecord:
     """One active condition of a drive or of the tool (ARCHITECTURE.md section 7).
 
-    `severity`, `current_value`, `threshold` and `text` are what the last run
-    saw. `last_notified`, `notified_severity` and `notified_value` are what
-    the last delivered notification said; `None` means that the condition was
-    not notified yet. `clear_runs` counts the runs in a row in which the
-    condition was absent.
+    The `notified_*` values and `last_notified` are what the last delivered
+    notification said; `last_notified is None` means it was not notified yet.
     """
 
     severity: Severity
@@ -292,11 +273,9 @@ class Loaded:
 def identity_key(identity: DriveIdentity, access: Access | None = None) -> str:
     """Return the key of a drive in the state file (ADR 0005, ADR 0007).
 
-    Model and serial number, or model and WWN when there is no serial
-    number. A drive without either has no stable identity and is keyed by
-    the path it was read through as well, because two such drives may well
-    be two drives. The parts are written as a JSON array, so that no part
-    can be split at a character that another part contains (ADR 0037, ADR 0038).
+    Model and serial number, or model and WWN; without either, the path it
+    was read through as well. The parts are a JSON array, so no part can be
+    split at a character another part contains (ADR 0037, ADR 0038).
     """
     parts = [identity.model]
     if identity.serial is not None:
@@ -317,10 +296,9 @@ def load_state(
 ) -> Loaded:
     """Load the state file for a run (ADR 0007).
 
-    A missing file is an empty state. A file that cannot be used is renamed
-    to `<name>.corrupt-<timestamp>` and the run goes on with an empty state;
-    `Loaded.reset` says why. A file that cannot even be renamed is left in
-    place and overwritten by the next save.
+    A missing file is an empty state. An unusable one is renamed to
+    `<name>.corrupt-<timestamp>` and the run goes on empty; `Loaded.reset`
+    says why. One that cannot be renamed is overwritten by the next save.
     """
     try:
         text = path.read_text(encoding="utf-8")
@@ -357,7 +335,10 @@ def read_state(
 
 
 def save_state(state: State, path: Path) -> None:
-    """Replace the state file atomically (ADR 0007, NFR-11)."""
+    """Replace the state file atomically (ADR 0007, NFR-11).
+
+    Raises `OSError` when the directory or the file cannot be written.
+    """
     text = _escaped(json.dumps(state_to_json(state), indent=2, ensure_ascii=False)) + "\n"
     write_private(path, text)
 
@@ -365,14 +346,10 @@ def save_state(state: State, path: Path) -> None:
 def write_private(path: Path, text: str) -> None:
     """Replace a file of the tool atomically, readable by root only (ADR 0007).
 
-    The file holds serial numbers, so neither it nor the directory it lies in
-    may be readable by others. The directory is created with mode 0700, and
-    one that an earlier build or a run by hand created with the mode of the
-    umask is corrected. The temporary file is created next to the target with
-    mode 0600, written, flushed to disk and renamed over the target; the
-    directory is flushed as well, so that the rename survives a power loss. A
-    failure leaves the old file as it was and removes the temporary one.
-    Raises `OSError`.
+    The file holds serial numbers, so it is mode 0600 and its directory 0700;
+    a relative directory is left as it is. The temporary file is flushed,
+    renamed and the directory flushed, so that a power loss leaves the old
+    file or the new one. Raises `OSError`.
     """
     _private_directory(path.parent)
     descriptor, temporary = tempfile.mkstemp(
@@ -476,15 +453,11 @@ def state_to_json(state: State) -> dict[str, object]:
 
 
 def _escaped(text: str) -> str:
-    """Return JSON text with the characters that are not printed as escapes.
+    """Return JSON text with the unprintable characters written as escapes.
 
-    The strings of drives are kept as they came (ADR 0005); escaped, the
-    characters that `without_controls` replaces put nothing on a terminal
-    that shows the file, and the rest stays readable with `cat` (ADR 0007,
-    ARCHITECTURE.md section 14). `json.dumps` escapes the C0 controls inside
-    a string already, so one below DEL is the whitespace between the values;
-    outside its strings JSON is ASCII, and an escape means the same character
-    inside a string, so the file reads back as it was written.
+    The strings of drives are kept as they came (ADR 0005), and an escape
+    reads back as the same character, so the file stays readable with `cat`
+    (ADR 0007, ARCHITECTURE.md section 14).
     """
     return "".join(
         json.dumps(character)[1:-1]
@@ -592,7 +565,11 @@ def _condition_to_json(record: ConditionRecord) -> dict[str, object]:
 
 
 class _Reader:
-    """Reads the values of a document strictly; a wrong type raises `TypeError`."""
+    """Read the values of a document strictly (ARCHITECTURE.md section 9).
+
+    `text` and `time` raise `KeyError` for a missing value; a wrong type
+    raises `TypeError`, a timestamp without a time zone `ValueError`.
+    """
 
     def __init__(self, now: datetime) -> None:
         self.now = now

@@ -1,27 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The wear value of an SSD and where it comes from (ADR 0021, FR-312).
 
-The first of these sources that a drive reports is used:
-
-1. `endurance_used.current_percent`, which smartmontools 7.5 and later
-   computes itself, for every protocol. For ATA it is the vendor-neutral
-   value only when the device statistics were read: without them
-   smartmontools guesses it from a vendor attribute, and the guess counts
-   as the vendor attribute it is ([Research 03](../research/03-smart-indicators.md)).
-2. ATA: the "Percentage Used Endurance Indicator" of the device statistics.
-   NVMe: `percentage_used` of the SMART health log. SCSI: the percentage
-   used endurance indicator of the solid state media log page.
-3. ATA only: the vendor attribute that the web interface of Proxmox VE reads,
-   as `100 - normalized value`, and the same kind of guess of smartmontools.
-
-Next to it, the value the web interface shows is kept, so that
-`pve-smart-alert scan` can name both when they differ (ADR 0021).
-
-The web interface searches the attribute names in the order of its own list
-and takes the first attribute whose name contains a name of the list; the
-normalized value is the remaining life (`get_wear_leveling_info` in
-`PVE/Diskmanage.pm` of `pve-storage`, checked on 2026-10-07). For NVMe it
-reads "Percentage Used".
+The first source a drive reports wins: `endurance_used.current_percent` of
+smartmontools 7.5 (vendor-neutral only with the device statistics read,
+Research 03), then the indicator of the protocol, then the vendor attribute
+the web interface of Proxmox VE reads, as `100 - value` (ADR 0021).
 """
 
 from __future__ import annotations
@@ -33,7 +16,9 @@ from typing import Final
 from pve_smart_alert.model import WearSource
 from pve_smart_alert.parsers.common import entries, flag, integer, section, text
 
-# The list of the web interface, in its order (PVE/Diskmanage.pm).
+# The list of the web interface, in its order (PVE/Diskmanage.pm). A value
+# falls as the drive wears, also under a name with "*_Used": mirror the web
+# interface and do not invert it here.
 WEB_INTERFACE_ATTRIBUTES: Final = (
     "Media_Wearout_Indicator",
     "SSD_Life_Left",
@@ -73,7 +58,7 @@ def ata_wear(document: Mapping[str, object]) -> Wear:
     endurance = _endurance_used(document)
     if endurance is not None and statistics is not None:
         # With the device statistics read, smartmontools overrides its own
-        # attribute guess with their standard value ([Research 03]), so
+        # attribute guess with their standard value (Research 03), so
         # `endurance_used` is the vendor-neutral source of ADR 0021.
         return Wear(endurance, WearSource.ENDURANCE_USED, web_interface)
     if statistics is not None:
@@ -81,10 +66,9 @@ def ata_wear(document: Mapping[str, object]) -> Wear:
     if web_interface is not None:
         return Wear(web_interface, WearSource.VENDOR_ATTRIBUTE, web_interface)
     if endurance is not None:
-        # Without the device statistics, for example with `detail = "basic"`,
-        # smartmontools guesses `endurance_used` from a vendor attribute. It
-        # is a vendor attribute, not the vendor-neutral value of the first
-        # source, but it counts rather than nothing.
+        # Without the device statistics, smartmontools guesses `endurance_used`
+        # from a vendor attribute, so it counts as a vendor attribute, not as
+        # the vendor-neutral first source.
         return Wear(endurance, WearSource.VENDOR_ATTRIBUTE, web_interface)
     return Wear()
 
@@ -126,6 +110,7 @@ def vendor_attribute_wear(document: Mapping[str, object]) -> int | None:
                 continue
             value = integer(attribute, "value")
             if value is not None:
+                # The same 100 - value for every name, as the web interface does.
                 return 100 - value
             # Like the web interface: the next name of the list is tried.
             break

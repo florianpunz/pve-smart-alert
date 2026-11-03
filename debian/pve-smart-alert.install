@@ -1,10 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Every file the package installs and the place it goes to. ARCHITECTURE.md
-# section 12 shows the complete layout of version 1, including the files that
-# are not built yet (ADR 0013). The units are installed here and not by
-# dh_installsystemd, which only writes the maintainer script snippets for the
-# timer (debian/rules).
+# Every file the package installs and where it goes (ADR 0013, ARCHITECTURE.md
+# section 12). The units are installed here; dh_installsystemd writes the
+# maintainer script snippets for the timer only (debian/rules).
 
 libexec/pve-smart-alert		usr/sbin
 libexec/notify-bridge		usr/libexec/pve-smart-alert

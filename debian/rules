@@ -1,10 +1,7 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Packaging rules. There is nothing to configure, build or compile:
-# debian/pve-smart-alert.install places every file of the tool at the path it
-# is installed to, and the Python package is installed as source, so that no
-# byte code is ever created on a host (ADR 0013).
+# Nothing is configured, built or compiled: debian/pve-smart-alert.install
+# places every file, and the Python package is installed as source (ADR 0013).
 
 %:
 	dh $@
@@ -23,23 +20,14 @@ override_dh_install:
 	# exclusion is what keeps the source tree installable as it is (ADR 0013).
 	dh_install --exclude=__pycache__
 
-# Only the timer gets maintainer script snippets: it is enabled and started on
-# installation, restarted after an upgrade and stopped on removal, and
-# deb-systemd-helper forgets it on purge. A unit named on the command line is
-# the only one dh_installsystemd writes snippets for; the two services are
-# installed all the same, by debian/pve-smart-alert.install.
-#
-# Named because dh_installsystemd would otherwise write a start snippet for
-# every unit without an [Install] section as well: postinst would then start
-# a check, and a failure report, by itself. The first check is started by the
-# timer instead (ADR 0006, ADR 0013). Read in dh_installsystemd of debhelper
-# 13.24.2, see ARCHITECTURE.md section 13.
+# Only the timer is named: unnamed, dh_installsystemd would also write start
+# snippets for the two services without [Install], and postinst would start a
+# check (dh_installsystemd of debhelper 13.24.2, ADR 0006, ADR 0013).
 override_dh_installsystemd:
 	dh_installsystemd pve-smart-alert.timer
 
-# The reference configuration keeps the path that ADR 0011 names and that
-# `doctor`, the shipped config.toml and the documentation give. It is larger
-# than 4 KiB, so dh_compress would otherwise install it as
-# config.reference.toml.gz.
+# The reference configuration keeps its path and is larger than 4 KiB, so
+# dh_compress would otherwise install it as `config.reference.toml.gz`
+# (ADR 0011).
 override_dh_compress:
 	dh_compress -X.toml

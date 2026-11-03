@@ -1,15 +1,8 @@
 #!/usr/bin/perl
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The notify bridge: the only part of PVE SMART Alert that touches the internals
-# of Proxmox VE (ADR 0008).
-#
-# One JSON document arrives on standard input and one leaves on standard output.
-# What the notification system logs about rendering and about the targets goes
-# to standard error unchanged; that log is the only feedback about delivery.
-#
-# `--check` loads the module and looks for the expected function without sending
-# anything; `pve-smart-alert doctor` reports that.
+# The notify bridge, the only part of PVE SMART Alert that touches Proxmox VE
+# internals (ADR 0008). One JSON document in, one out; the standard error is
+# the log. `--check` loads the module without sending anything.
 
 use strict;
 use warnings;
@@ -33,7 +26,7 @@ sub answer {
 sub load_notify {
     eval { require PVE::Notify; 1 } or return "PVE::Notify could not be loaded: $@";
     return "PVE::Notify does not offer notify()" unless PVE::Notify->can('notify');
-    # Without it the sub returns the code reference above, which reads as an error.
+    # Explicit undef: without it Perl returns can()'s code ref, which reads as an error.
     return undef;
 }
 

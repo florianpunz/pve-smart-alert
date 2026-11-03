@@ -1,27 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Discovery: which drives a host has, and what each of them is (ADR 0005).
 
-A pipeline of four steps:
-
-1. Sources: the device scan of smartctl, then the probe for the drives behind
-   an HPE Smart Array controller (FR-103, ADR 0032), then the manual entries
-   of the configuration (FR-104).
-2. Enrichment from lsblk, the links below /dev/disk and sysfs, best effort.
-3. Filtering. A device on a remote transport, one that is not a disk, and a
-   logical volume that lsblk or the scan names as one are skipped before
-   they are read. A logical volume or a non-disk that only its inquiry data
-   name, a drive that reports no SMART capability, and one that an exclude
-   rule selects (ADR 0024) are skipped after they were read, because only
-   the output tells what they are (FR-107, ADR 0028).
-4. De-duplication: a drive reachable through several paths is kept once, by
-   its identity, preferably through a block device of the host and through
-   the scan; the other paths are recorded as aliases (FR-106).
-
-Every device found is reported with what became of it, so that
-`pve-smart-alert scan` can show each one (FR-108). Nothing here stops for a
-single device (FR-205). The SCSI hosts of sysfs are read with the same
-paths, so that a controller whose drives smartctl cannot read is named
-instead of silently monitoring nothing (FR-109, ADR 0030).
+Sources: the device scan, the HPE probe (ADR 0032), then manual entries;
+lsblk, /dev/disk and sysfs only enrich. A device is filtered, de-duplicated
+by identity and reported with what became of it (FR-106 to FR-109). A device
+that cannot be read or parsed becomes an unreadable outcome (FR-205).
 """
 
 from __future__ import annotations
@@ -151,11 +134,9 @@ def discover(
 ) -> Discovery:
     """Find the drives of this host and read them.
 
-    A drive that two sources find is read twice and kept once; a device
-    listed twice with the same name and type is read once.
-
-    `on_device` is called before each device is read, so that a command can
-    show progress.
+    A drive that two different sources find is read twice and kept once; a
+    device listed twice with the same name and type is read once. `on_device`
+    is called before each device is read, so that a command can show progress.
     """
     settings = config.smartctl
     scan = run_scan(settings, runner=runner)
@@ -177,10 +158,8 @@ def discover(
             )
         )
     # The probe comes after the scan and before the manual entries
-    # (ARCHITECTURE.md section 5). It reads its devices itself, so that every
-    # answer goes through the same examination as the devices of the other
-    # sources; a drive that the scan found as well is read twice in the run and
-    # kept once, through the scan (FR-106).
+    # (ARCHITECTURE.md section 5); a drive the scan found as well is read twice
+    # and kept once (FR-106).
     probing = probe_hpe(
         scsi_hosts.hosts,
         probe_cciss=config.discovery.probe_cciss,
@@ -351,10 +330,8 @@ def _examine(
         )
     snapshot = replace(snapshot, location=details.location, membership=details.membership)
 
-    # A per-drive override can name another detail level for the drive. Which
-    # level a drive needs is known only after it was read, so the first answer
-    # is made with the level of the configuration and an override has the
-    # drive read once more with its own (FR-403).
+    # A per-drive override can name another detail level, which is known only
+    # after the drive was read: an override has it read once more (FR-403).
     override = drive_override(config, snapshot.identity)
     if (
         override is not None
@@ -406,11 +383,9 @@ def _examine(
 def _volume_before_reading(candidate: Candidate, details: Details) -> str | None:
     """Return the signal that names a device a logical volume before it is read (ADR 0028).
 
-    First the vendor and model that lsblk shows, then the scan, whose
-    `open_error` asks for `-d megaraid,N`. The inquiry data of lsblk are
-    those of the device node, so they count only when smartctl reads the
-    node itself and not a drive behind it; enrichment leaves them out for a
-    drive behind a controller (ADR 0028, ADR 0034).
+    The vendor and model of lsblk come first, then the `open_error` of the
+    scan. The inquiry data count only for the node itself, not for a drive
+    behind a controller (ADR 0034).
     """
     if logical_volume(details.vendor, details.model):
         return "lsblk " + inquiry_text(details.vendor, details.model, product_label="model")
@@ -424,10 +399,8 @@ def _not_a_drive(
 ) -> tuple[SkipReason, str] | None:
     """Return why a device read as SCSI is not a drive, from its inquiry data (ADR 0028).
 
-    A logical volume is named by vendor and product; a device that is not a
-    disk by its peripheral device type, such as an enclosure (13) or a
-    storage array controller (12). The output of any other protocol has no
-    inquiry data and passes.
+    Vendor and product name a logical volume; the peripheral device type
+    names an enclosure (13) or a controller (12). Another protocol passes.
     """
     if (protocol_of(document) or candidate.protocol) != "SCSI":
         return None

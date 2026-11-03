@@ -1,13 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The models of the tool: notifications and drives.
+"""The models of the tool: notifications and drives (ADR 0004, ADR 0008).
 
-One notification is one message that the tool hands to a transport. This
-module holds its shape, the severity vocabulary of the tool, and the mapping
-onto the severities of the Proxmox VE notification system (ADR 0008).
-
-One snapshot is what one run learned about one drive (ARCHITECTURE.md
-section 4). The parsers translate the output of smartctl into snapshots, and
-the checks read nothing else: they never see smartctl JSON (ADR 0004).
+A notification is one message the tool hands to a transport, with the
+severity vocabulary and its mapping onto Proxmox VE. A snapshot is what one
+run learned about one drive; the checks read it and never see smartctl JSON.
 """
 
 from __future__ import annotations
@@ -20,10 +16,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
-# The value of the `type` field of every notification (FR-502). It is also the
-# name of the two template files and of the template the bridge asks for, so
-# that a matcher, a webhook body and the templates use the same word
-# (ADR 0008).
+# The value of the `type` field of every notification (FR-502), and the name of
+# the two templates and of the template the bridge asks for, so that all three
+# use the same word (ADR 0008).
 NOTIFICATION_TYPE: Final = "pve-smart-alert"
 
 FIELD_TYPE: Final = "type"
@@ -38,25 +33,14 @@ FIELD_MODEL: Final = "model"
 # (FR-503, ADR 0029). Every other notification leaves it out.
 FIELD_DEVICE_ID: Final = "device-id"
 
-# The pass-through types that address one drive behind a controller, with
-# its device ID: `megaraid,N` for a SAS or SCSI drive and `sat+megaraid,N`
-# for a SATA drive behind a MegaRAID controller (ADR 0028), and `cciss,N`
-# behind an HPE Smart Array controller (ADR 0032). `scsi+` before either names
-# the SCSI pass-through itself, which is the documented way to switch the
-# implicit SAT of a cciss device off. The first group is the base type and the
-# second the device ID.
+# The pass-through types that address one drive behind a controller, with its
+# device ID: `megaraid,N` and `sat+megaraid,N` behind MegaRAID (ADR 0028) and
+# `cciss,N` behind an HPE Smart Array (ADR 0032); group 2 is the ID.
 _PASS_THROUGH_TYPE: Final = re.compile(r"(?:sat\+|scsi\+)?(megaraid|cciss),([0-9]+)")
 
-# The types that read a drive behind a controller through a node of the host
-# that is not the drive: the two above, and the other controller types of
-# smartctl(8) of 7.4 and 7.5 (Research 04, ADR 0034): `3ware,N`, `areca,N`
-# and `areca,N/E`, `aacraid,H,L,ID`, `hpt,L/M` and `hpt,L/M/N`, and
-# `sssraid,E,S`. Before `megaraid`, `cciss`, `aacraid` and `sssraid` smartctl
-# takes `scsi+` and `sat` with its options, such as `sat,auto+`, and refuses
-# them before the ATA types `3ware`, `areca` and `hpt` (dev_interface.cpp of
-# 7.5); the pattern takes them before every type. The node can be a
-# logical volume, such as /dev/sda for `aacraid` and `hpt`, so what the host
-# tells about it is not about the drive.
+# The types that read a drive behind a controller through a node that is not
+# the drive: the three above and `3ware,N`, `areca,N[/E]`, `aacraid,H,L,ID`,
+# `hpt,L/M[/N]` and `sssraid,E,S` (Research 04, ADR 0034).
 BEHIND_CONTROLLER_TYPE: Final = re.compile(
     r"(?:sat(?:,[a-z0-9]+)*\+|scsi\+)?"
     r"(?:megaraid|cciss|3ware|areca|aacraid|hpt|sssraid),[0-9][0-9,/]*"
@@ -85,7 +69,7 @@ class PveSeverity(StrEnum):
     ERROR = "error"
 
 
-#: How the severities of the tool are named towards Proxmox VE (ADR 0008).
+# How the severities of the tool are named towards Proxmox VE (ADR 0008).
 PVE_SEVERITY: Final[Mapping[Severity, PveSeverity]] = {
     Severity.INFO: PveSeverity.INFO,
     Severity.NOTICE: PveSeverity.NOTICE,
@@ -93,8 +77,8 @@ PVE_SEVERITY: Final[Mapping[Severity, PveSeverity]] = {
     Severity.CRITICAL: PveSeverity.ERROR,
 }
 
-#: The way back: a severity named by Proxmox VE, as the `test-notification`
-#: command takes it, belongs to exactly one severity of the tool (FR-520).
+# The way back: a severity named by Proxmox VE, as the `test-notification`
+# command takes it, belongs to exactly one severity of the tool (FR-520).
 SEVERITY_FOR_PVE: Final[Mapping[PveSeverity, Severity]] = {
     pve: severity for severity, pve in PVE_SEVERITY.items()
 }
@@ -119,34 +103,24 @@ class EventType(StrEnum):
 # --dry-run` print them, as in a message (ARCHITECTURE.md section 14).
 MAX_PRINTED: Final = 200
 
-# The limit of a notification field is that of a printed value, so that the
-# body and a matcher see the same value up to the cut (ADR 0036). Field
-# values go into the configuration of the notification system, and drive
-# data is untrusted (ARCHITECTURE.md section 14).
+# The limit of a notification field is that of a printed value, so that body
+# and matcher see the same value (ADR 0036). Drive data is untrusted
+# (ARCHITECTURE.md section 14).
 MAX_FIELD_VALUE: Final = MAX_PRINTED
 
 
-# The Unicode categories that `without_controls` replaces: the controls (Cc),
-# the format characters (Cf), among them the controls of the direction of
-# text and the invisible ones, the lone surrogates (Cs), which no output can
-# encode, and the line and paragraph separators (Zl, Zp).
+# The Unicode categories that `without_controls` replaces: Cc and Cf, among
+# them the direction controls and the invisible characters, the lone
+# surrogates Cs, and the separators Zl and Zp (ARCHITECTURE.md section 14).
 NOT_PRINTED: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 
 def without_controls(text: str) -> str:
-    """Return `text` with every control and format character replaced by a space.
+    """Return `text` with every character in `NOT_PRINTED` replaced by a space.
 
-    These are the C0 controls, among them escape, carriage return, newline
-    and tab, DEL, the C1 controls from U+0080 to U+009F, among them the 8-bit
-    introducer of an ANSI escape sequence (U+009B) and NEL (U+0085), the
-    format characters of Unicode, such as RIGHT-TO-LEFT OVERRIDE (U+202E) and
-    ZERO WIDTH SPACE (U+200B), a lone surrogate, which a decoder can produce
-    from an escape in JSON, and the line and paragraph separators. A string
-    from a drive that keeps none of them cannot move the cursor, colour a
-    terminal, start a line of its own, turn the direction of the text around
-    it or stop a line from being written. Letters of right-to-left scripts,
-    combining marks and letters that show as blank still show as Unicode
-    defines them (ARCHITECTURE.md section 14).
+    Such a string cannot move the cursor, colour a terminal, start a line of
+    its own or turn the direction of the text around it; everything else
+    shows as Unicode defines it (ARCHITECTURE.md section 14).
     """
     return "".join(
         " " if unicodedata.category(character) in NOT_PRINTED else character for character in text
@@ -181,12 +155,9 @@ def printed(value: str, *, limit: int) -> str:
 def exact_string(value: str) -> str:
     """Return a value as a TOML basic string that names exactly this value.
 
-    Control and format characters are written as `\\uXXXX` escapes, a quote
-    and a backslash are escaped, and a character outside the basic
-    multilingual plane as `\\UXXXXXXXX`. A lone surrogate is written as an
-    escape as well, although TOML has no value for it: a caller that writes
-    this into a file to be read as TOML has to decide what to do instead, as
-    `scan` does for its selector line (ADR 0036).
+    Control characters, quotes and backslashes are escaped. A lone surrogate
+    is escaped too, although TOML has no value for it: the caller decides
+    what to write instead, as `scan` does (ADR 0036).
     """
     return f'"{"".join(_escaped(character) for character in value)}"'
 
@@ -206,11 +177,8 @@ def _escaped(character: str) -> str:
 def escaped_within(value: str, *, limit: int) -> str:
     """Return `value` as an escaped TOML string that fits `limit` characters.
 
-    The escaped form of a value of control characters is about six times as
-    long as the value. It cannot always be written whole within the limit of
-    a notification field, and a cut inside a `\\uXXXX` escape is no value at
-    all: the value is cut at a character boundary instead and carries the
-    mark (ADR 0036).
+    A cut inside an escape is no value at all, so the value is cut at a
+    character boundary and carries the mark (ADR 0036).
     """
     escaped = exact_string(value)
     if len(escaped) <= limit:
@@ -231,13 +199,9 @@ def escaped_within(value: str, *, limit: int) -> str:
 def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
-    A field value never contains a comma, because Proxmox VE splits the value
-    list of an exact matcher on commas, so a comma inside a value would change
-    the meaning of a rule. Otherwise it is `printable`, so that a value cannot
-    break the line it is written to (ADR 0008, ARCHITECTURE.md section 14). A
-    value that cleaning would leave empty, such as a model or serial number of
-    control characters only, is carried as its exact escaped form instead, so
-    that a matcher can still select the drive (ADR 0036).
+    A comma becomes a semicolon, because Proxmox VE splits an exact matcher
+    on commas. A value of non-whitespace control characters only is carried as
+    its escaped form, so that a matcher can still select the drive (ADR 0036).
     """
     cleaned = printable(value.replace(",", ";"), limit=limit)
     if cleaned or not value.strip():
@@ -248,10 +212,8 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
 def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:
     """Return a value as a TOML basic string that is safe to print and to copy back.
 
-    Quotes and backslashes are escaped, and control and format characters are
-    replaced like everywhere else (ARCHITECTURE.md section 14), so that a
-    selector printed by `config show` reads as the line that is written in the
-    configuration file.
+    `config show` writes a drive comment with it, so the value reads as the
+    line written in the configuration file (ARCHITECTURE.md section 14).
     """
     cleaned = printable(value, limit=limit)
     escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')
@@ -262,12 +224,9 @@ def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:
 class Notification:
     """One message that is ready to be handed to a transport.
 
-    `node` is the name of the host the message is about, `subject` and `body`
-    are the rendered plain text; both transports send the same text. `fields`
-    are the metadata values of the single drive or event the notification is
-    about (FR-503); `type` and `hostname` are added by `fields_for`. `data` is
-    the structured payload the templates of the notification system can use in
-    addition to the two texts.
+    `fields` are the metadata of the drive or event (FR-503); `type` and
+    `hostname` are added by `fields_for`, and `data` is the payload of the
+    templates (ADR 0008).
     """
 
     event: EventType
@@ -281,10 +240,8 @@ class Notification:
     def fields_for(self) -> dict[str, str]:
         """Return the complete metadata fields of this notification.
 
-        Every notification carries `type` and `hostname` (FR-502); the other
-        fields describe a single drive (FR-503). The two fixed fields are set
-        last, so that a caller cannot replace them by accident: matchers and
-        webhook bodies rely on them.
+        `type` and `hostname` are set last, so that a caller cannot replace
+        them: matchers and webhook bodies rely on them (FR-502).
         """
         merged = dict(self.fields)
         merged[FIELD_TYPE] = NOTIFICATION_TYPE
@@ -293,16 +250,9 @@ class Notification:
 
 
 def pass_through_id(device_type: str) -> str | None:
-    """Return the device ID of a type that addresses a drive behind a controller.
+    """Return `N` of a pass-through type such as `sat+megaraid,N`, or `None`.
 
-    `megaraid,N` reaches a SAS or SCSI drive, `sat+megaraid,N` a SATA drive,
-    both behind a MegaRAID controller; `cciss,N` reaches a drive behind an HPE
-    Smart Array controller, where `N` is its position in the device list of the
-    controller (ADR 0032). `scsi+` before either names the SCSI pass-through,
-    which the manual of smartctl recommends for a cciss device whose implicit
-    SAT is not wanted (ADR 0032). The ID is `N` as the type writes it. Any
-    other type reads the device itself, and the answer is `None`. The location
-    that `scan` and a message show and the field `device-id` both come from
+    The location that `scan` shows and the field `device-id` both come from
     here, so that they cannot disagree (ADR 0028, ADR 0029).
     """
     match = _PASS_THROUGH_TYPE.fullmatch(device_type)
@@ -353,10 +303,10 @@ class DriveClass(StrEnum):
 
 
 class WearSource(StrEnum):
-    """Where the wear value of a drive comes from, in the order of ADR 0021.
+    """Where the wear value of a drive comes from (ADR 0021).
 
-    `pve-smart-alert scan` shows it next to the value, for example
-    "44 % (device statistics)".
+    The order of the sources is in `parsers/wear.py`. `scan` shows the source
+    next to the value, for example "44 % (device statistics)".
     """
 
     # The value smartmontools 7.5 and later computes itself.
@@ -486,11 +436,8 @@ class Collection:
 class Snapshot:
     """What one run learned about one drive (ARCHITECTURE.md section 4).
 
-    `metrics` maps a metric name to its value, for example `ata.attr.5.raw`,
-    `nvme.available_spare`, `temperature.current` or `wear.percent_used`. A
-    missing metric or flag is not applicable, and a check never guesses it
-    (FR-206). `wear_source` says where `wear.percent_used` comes from
-    (ADR 0021).
+    A missing metric or flag is not applicable and is never guessed (FR-206);
+    `wear_source` says where `wear.percent_used` comes from (ADR 0021).
     """
 
     identity: DriveIdentity
@@ -532,11 +479,8 @@ class CheckKind(StrEnum):
 class Finding:
     """What one check found about one drive (ARCHITECTURE.md section 4).
 
-    `value` is the current value of the source and `threshold` the one that
-    was crossed; both are `None` for a plain flag. `text` names the finding
-    with its value and threshold, for the report of a dry run and for a
-    notification. `check` is the stable identifier of the check, which the
-    configuration and the notifications name as well (ADR 0010).
+    `value` and `threshold` are `None` for a plain flag; `check` is the
+    stable identifier that configuration and notifications use (ADR 0010).
     """
 
     check: str

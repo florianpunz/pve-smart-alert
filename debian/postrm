@@ -1,25 +1,15 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Runs after the package was removed. Only `purge` does anything, and it
-# removes nothing but the paths that belong to the tool: the configuration,
-# the state, the runtime directory with the lock and the stamp of the failure
-# reporter, which the services keep until a reboot, and the directory the
-# Python package is installed to, where a file that no package owns can keep
-# the directory alive (ADR 0012, ADR 0035). Everything else under /usr, and
-# /etc/pve and /usr/share/pve-manager, belongs to dpkg and is already gone.
+# On purge, removes only the paths of the tool: configuration, state, runtime
+# directory and the package directory (ADR 0012, ADR 0035). Everything else
+# under /usr and /etc/pve belongs to dpkg.
 set -e
 
 case "$1" in
 	purge)
 		rm -rf /etc/pve-smart-alert /var/lib/pve-smart-alert /run/pve-smart-alert
-		# The launcher writes no byte code (`-B`, PYTHONDONTWRITEBYTECODE,
-		# ADR 0003), so a `__pycache__` below this directory can only come
-		# from something else that ran Python against the installed tree.
 		# dpkg removes a directory only when it is empty, and a file it does
-		# not own keeps it alive: that happened on `pve1` on 2026-10-18, and
-		# the first purge left `__pycache__` behind. The whole directory goes,
-		# so that nothing of the tool is left (ADR 0035).
+		# not own keeps it alive: the whole directory goes (ADR 0035).
 		rm -rf /usr/share/pve-smart-alert
 		;;
 esac

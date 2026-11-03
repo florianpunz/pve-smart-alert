@@ -1,32 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Anonymization of recordings (ADR 0023).
+"""Anonymization of recordings (ADR 0023, ADR 0026).
 
-One `Anonymizer` handles one archive: the device scan and the drive outputs
-of one host. Every identifying value gets a placeholder from a counter of its
-kind, numbered in the order the values are learned, which is the order of the
-scan, and the same real value gets the same placeholder in every file:
-
-- serial number: `ANON-SN-0001`;
-- WWN: `naa` and `oui` stay, `id` becomes the counter;
-- EUI-64: `oui` stays, `ext_id` becomes the counter;
-- the logical unit id and the SAS addresses of a SCSI drive, which smartctl
-  writes as `0x` and hexadecimal digits: an NAA 5 name is a WWN and shares
-  its counter, an NAA 6 name keeps its authority and vendor, and any other
-  name becomes a counter in its own number of digits (ADR 0026).
-
-Where a WWN or an EUI-64 is written as 16 hexadecimal digits in a text, the
-digits of its placeholder replace it. In the output of `lsblk`, drives that
-the scan does not list continue the counters, and a UUID becomes the counter
-in its own notation, `00000000-0000-0000-0000-000000000001`. An NGUID, which
-lsblk writes as `eui.` and 32 hexadecimal digits, is the vendor-specific
-extension in its first half and the EUI-64 of the namespace in its second
-(Research 06): the first half becomes a counter of its own, the EUI-64 its
-placeholder. The anonymizer fails closed: `check`
-raises when any real value is left in a document, in any of its forms, and
+One `Anonymizer` handles one archive: identifying values get a placeholder
+from a counter of their kind, and the same value gets the same placeholder in
+every file. It fails closed: `check` raises when a real value is left, and
 nothing may be written then.
-
-`pve-smart-alert dump-fixture` (FR-604) and `scripts/make_fixtures.py` use
-this module; fixtures are never anonymized by hand.
 """
 
 from __future__ import annotations
@@ -68,9 +46,8 @@ _NAA6_VENDOR_DIGITS: Final = 7
 MIN_SEARCHED_LENGTH: Final = 4
 
 # A device the scan names by its node. Only these shapes name no drive: every
-# other name, such as a /dev/disk/by-id link, a mapper name (which is the
-# WWID when user_friendly_names is off) or a serial link, can hold an
-# identifier and is replaced like the value it holds (ADR 0023, ADR 0039).
+# other name, such as a by-id link or a mapper name, can hold an identifier
+# and is replaced like the value it holds (ADR 0023, ADR 0039).
 _NODE_DEVICE: Final = re.compile(
     r"/dev/(?:"
     r"sd[a-z]+[0-9]*"
@@ -145,11 +122,9 @@ class Anonymizer:
     def learn_device(self, name: str) -> str:
         """Return the name to record a device under (ADR 0023).
 
-        A node such as `/dev/sda`, `/dev/nvme0n1` or `/dev/bus/6` is kept: it
-        names no drive. Every other name, such as a `by-id` link or a mapper
-        name, can hold the serial number or the WWID of the drive, so it is
-        replaced by a placeholder of this archive, in the file name, the
-        metadata and every text of the recording alike.
+        A node such as `/dev/sda` names no drive and is kept. Every other
+        name can hold a serial number or WWID, so it becomes a placeholder in
+        the file name, the metadata and every text.
         """
         if _NODE_DEVICE.fullmatch(name):
             return name

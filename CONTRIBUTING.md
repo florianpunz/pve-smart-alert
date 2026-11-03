@@ -12,6 +12,7 @@ Read [CLAUDE.md](CLAUDE.md) first: it contains the binding rules, and they apply
 - **No third-party Python package at run time.** The installed tool uses the standard library only. Development tools are fine ([ADR 0003](docs/adr/0003-implementation-language.md)).
 - **The tool is read-only.** Nothing is changed on the host except the tool's own files, and no command is sent to a drive that changes it ([ADR 0012](docs/adr/0012-read-only-and-coexistence-with-smartd.md)).
 - **Identifiers are stable.** Requirement IDs, check IDs, configuration keys, notification fields and command names are public interface ([ADR 0010](docs/adr/0010-health-evaluation-and-default-thresholds.md), [ADR 0014](docs/adr/0014-repository-structure.md)).
+- **Comments are short and current.** A comment says why or warns, in at most three lines; a docstring has one summary line and a body of at most four. Longer reasoning lives in an ADR or a document and is referenced by identifier, not repeated ([ADR 0042](docs/adr/0042-short-code-comments.md)).
 
 ## Development setup
 

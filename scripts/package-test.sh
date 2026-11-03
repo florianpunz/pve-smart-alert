@@ -1,21 +1,17 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The package test of ADR 0016, layer 4: install the package in a clean
-# Debian container with the Proxmox VE package repository, check the
-# installed files against ADR 0013, run the tool, purge it and check that
-# nothing is left. Runs as root inside a debian:trixie container:
-#
-#   docker run --rm -v "$PWD:/work" -w /work debian:trixie \
-#       sh scripts/package-test.sh dist/pve-smart-alert_0.5.0_all.deb
-#
-# Not for a real host: it adds the Proxmox VE repository to the container.
+# The package test of ADR 0016, layer 4: install in a clean debian:trixie
+# container with the Proxmox VE repository, check the files (ADR 0013), run
+# the tool, purge and check that nothing is left. Not for a real host.
+
+# Usage: docker run --rm -v "$PWD:/work" -w /work debian:trixie \
+#     sh scripts/package-test.sh dist/pve-smart-alert_<version>_all.deb
 set -eu
 
 package=$1
 keyring=/usr/share/keyrings/proxmox-archive-keyring.gpg
 # The archive key of Proxmox VE 9, the same file that a Proxmox VE 9.2 host
-# has at this path (checked on 2026-10-13).
+# has at this path.
 key_url=https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
 key_sha256=136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45
 
@@ -85,8 +81,8 @@ perl -c /usr/libexec/pve-smart-alert/notify-bridge
 
 step "byte code that something else wrote"
 # A Python run by hand against the installed tree leaves a cache that dpkg
-# cannot remove afterwards; it was found on `pve1` on 2026-10-18. Purge has to
-# take the directory of the package with it, and the check below says so.
+# cannot remove afterwards (ADR 0035). Purge has to take the directory of the
+# package with it, and the check below says so.
 mkdir -p /usr/share/pve-smart-alert/pve_smart_alert/__pycache__
 printf 'not from the package\n' \
 	>/usr/share/pve-smart-alert/pve_smart_alert/__pycache__/stray.cpython-312.pyc
