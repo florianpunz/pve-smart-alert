@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from pve_smart_alert.config import NotifySettings, TransportName
-from pve_smart_alert.model import EventType, Notification, Severity
+from pve_smart_alert.model import MAX_PRINTED, EventType, Notification, Severity
 from pve_smart_alert.process import ProcessResult
 from pve_smart_alert.transports import (
     AutoTransport,
@@ -421,6 +421,21 @@ def test_the_reason_of_the_fallback_carries_no_control_character() -> None:
     assert "\x1b" not in body
     assert "\nInjected" not in body
     assert body.endswith("Reason: refused: [2J550 Injected: fake line\n")
+
+
+def test_a_cut_reason_of_the_fallback_carries_the_mark() -> None:
+    # A cut value carries the mark, as in every other message (ADR 0036).
+    primary = StubTransport(
+        TransportName.PVE_NOTIFY, delivered=False, error="refused: " + "x" * 300
+    )
+    fallback = StubTransport(TransportName.MAIL)
+
+    AutoTransport(primary=primary, fallback=fallback).send(make_notification())
+
+    body = fallback.sent[0].body
+    # Cut exactly at the limit: one more character would mean another limit.
+    assert body.endswith("Reason: refused: " + "x" * (MAX_PRINTED - len("refused: ")) + "…\n")
+    assert "x" * (MAX_PRINTED - len("refused: ") + 1) + "…" not in body
 
 
 def test_a_failure_without_a_reason_is_still_reported() -> None:

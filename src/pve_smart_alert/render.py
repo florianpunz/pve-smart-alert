@@ -35,7 +35,7 @@ from pve_smart_alert.model import (
     Notification,
     Severity,
     pass_through_id,
-    printable,
+    printed,
 )
 from pve_smart_alert.paths import CONFIG_PATH, COROSYNC_CONF_PATH
 from pve_smart_alert.planner import RANK, DriveInfo, DriveMessage, Item, MessageKind, Planned
@@ -345,11 +345,15 @@ def _drive(planned: Planned, context: RenderContext) -> Notification:
     if closing:
         lines += ["", *closing]
     lines += ["", _signature(context)]
+    # The fields are built from the values as the state keeps them: the
+    # notification sanitizes them in `fields_for`, and a value that cleaning
+    # would leave empty is carried escaped instead of being left out
+    # (ADR 0036).
     fields = {
         FIELD_EVENT: message.event.value,
         FIELD_DEVICE: drive.name,
-        FIELD_SERIAL: _clean(drive.serial or ""),
-        FIELD_MODEL: _clean(drive.model or ""),
+        FIELD_SERIAL: drive.serial or "",
+        FIELD_MODEL: drive.model or "",
     }
     # `device-id` comes from the type of the current read, or of the last one
     # for a missing drive. A drive read without a pass-through type has no
@@ -779,7 +783,7 @@ def _clean(value: str | None, *, limit: int = _MAX_TEXT) -> str:
     """Return a string from a drive, safe to write into a message (ARCHITECTURE.md section 14)."""
     if value is None:
         return ""
-    return printable(value, limit=limit)
+    return printed(value, limit=limit)
 
 
 def _cleaned(item: Item) -> str:

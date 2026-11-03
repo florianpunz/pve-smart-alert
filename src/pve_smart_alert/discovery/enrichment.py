@@ -38,7 +38,7 @@ from pve_smart_alert.model import (
     Membership,
     behind_controller,
     pass_through_id,
-    sanitize_field_value,
+    printable,
 )
 from pve_smart_alert.paths import DISK_LINKS_DIR, LSBLK_PATH, SYSFS_DIR
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
@@ -200,7 +200,7 @@ def scsi_host_driver(host: int | str, paths: HostPaths = HOST) -> str | None:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    return sanitize_field_value(text, limit=MAX_DRIVER_NAME) or None
+    return printable(text, limit=MAX_DRIVER_NAME) or None
 
 
 def scsi_host_of_sg(node: int | str, paths: HostPaths = HOST) -> int | None:

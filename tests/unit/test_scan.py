@@ -9,6 +9,7 @@ real nodes.
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,9 @@ from hosts import Host
 
 from pve_smart_alert import cli
 from pve_smart_alert.config import Config, ConfigError, DriveSelector, ManualDevice, SelectorKind
-from pve_smart_alert.discovery import Discovery, discover
+from pve_smart_alert.discovery import Discovery, Found, Outcome, SkipReason, discover
+from pve_smart_alert.discovery.sources import Candidate, Source
+from pve_smart_alert.model import MAX_PRINTED
 from pve_smart_alert.scan_report import render
 from scenarios import SCENARIOS, build
 
@@ -258,9 +261,107 @@ def test_drives_behind_megaraid_show_controller_and_device_id(
     assert blocks[-1] == "2 monitored, 0 in standby, 0 unreadable, 1 skipped\n"
 
 
+def test_a_long_detail_of_a_skipped_device_carries_the_mark() -> None:
+    # The detail can quote the inquiry data of a logical volume and can be
+    # arbitrarily long. A cut value carries the mark, in `scan` as in
+    # `status` and in a message (ADR 0036).
+    found = Found(
+        Candidate("/dev/sda", "scsi", Source.SCAN),
+        Outcome.SKIPPED,
+        reason=SkipReason.LOGICAL_VOLUME,
+        detail="X" * 300,
+    )
+    discovery = Discovery(devices=(found,), smartctl_version=(7, 5))
+
+    (line,) = [
+        line
+        for line in render(discovery, smartctl_path=SMARTCTL)
+        if line.startswith("/dev/") and "skipped" in line
+    ]
+
+    assert "X" * MAX_PRINTED + "…" in line
+
+
 def test_a_drive_without_a_controller_has_no_location_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     text = report(Host.of_node(tmp_path, monkeypatch, "pve7").discover())
 
     assert "Location:" not in text
+
+
+def test_a_drive_whose_model_holds_an_unprinted_character_gets_a_selector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `scan` prints the model with the character replaced by a space, and a
+    # selector compares the stored value. The line `Selector:` is the value
+    # as it is written into the configuration (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "ACME\x01X 8TB"
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    discovery = host.discover()
+
+    (line,) = [line for line in report(discovery).splitlines() if "Selector:" in line]
+    selector = tomllib.loads(line.split("Selector:", 1)[1].strip())
+    identity = next(
+        found.snapshot.identity
+        for found in discovery.devices
+        if found.snapshot is not None and found.candidate.name == entry["device"]
+    )
+    assert DriveSelector(SelectorKind.MODEL, selector["model"]).matches(identity)
+
+
+def test_a_long_value_gets_a_selector_line_that_is_still_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A value longer than the printed limit cannot be printed whole. The
+    # selector line cuts it and carries the mark, but stays a TOML string:
+    # cutting the escaped line itself left half a string that nobody can
+    # paste (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "ACME-" + "X" * 300
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    (line,) = [line for line in report(host.discover()).splitlines() if "Selector:" in line]
+    selector = tomllib.loads(line.split("Selector:", 1)[1].strip())
+
+    assert selector["model"].endswith("…")
+    assert len(selector["model"]) == 201
+
+
+def test_a_selector_with_a_lone_surrogate_is_not_written_as_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TOML has no value for a lone surrogate, so a selector line with one
+    # could not be read back. `scan` says which pattern selects the drive
+    # instead of printing a line that no TOML reader accepts (ADR 0036).
+    host = Host.of_node(tmp_path, monkeypatch, "pve7")
+    recording = json.loads((host.recording / "recording.json").read_text(encoding="utf-8"))
+    entry = next(item for item in recording["files"] if item.get("device"))
+    path = host.recording / entry["file"]
+    drive = json.loads(path.read_text(encoding="utf-8"))
+    drive["model_name"] = "EVIL\ud800X 8TB"
+    drive["serial_number"] = "SN\x01A"
+    path.write_text(json.dumps(drive), encoding="utf-8")
+
+    lines = report(host.discover()).splitlines()
+
+    # The model gets no TOML line, the serial next to it still gets its line.
+    assert not [line for line in lines if "Selector:" in line and "model =" in line]
+    (serial_line,) = [line for line in lines if "Selector:" in line]
+    assert tomllib.loads(serial_line.split("Selector:", 1)[1].strip())["serial"] == "SN\x01A"
+    assert any(
+        "Cannot select:" in line
+        and "the model holds a lone surrogate" in line
+        and "select the drive with a model pattern" in line
+        for line in lines
+    )

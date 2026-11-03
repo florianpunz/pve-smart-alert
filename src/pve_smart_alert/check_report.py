@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.discovery import Discovery, Found, Outcome
-from pve_smart_alert.model import MAX_PRINTED, Finding, Severity, printable, without_controls
+from pve_smart_alert.model import MAX_PRINTED, Finding, Severity, printed, without_controls
 
 # The width the check identifiers and the severities line up in.
 _CHECK_WIDTH: Final = 26
@@ -55,20 +55,24 @@ def _smartctl_line(discovery: Discovery, path: Path) -> str:
 
 def _drive_line(found: Found) -> str:
     candidate = found.candidate
+    # The name and the type of a device of the scan need not be valid and
+    # can be arbitrarily long (ARCHITECTURE.md section 14).
+    name = printed(candidate.name, limit=MAX_PRINTED)
+    kind = printed(candidate.type, limit=MAX_PRINTED)
     snapshot = found.snapshot
     if snapshot is None:
-        return f"{candidate.name} [{candidate.type}]"
+        return f"{name} [{kind}]"
     identity = snapshot.identity
-    model = printable(identity.model, limit=MAX_PRINTED)
-    serial = printable(identity.serial or "no serial number reported", limit=MAX_PRINTED)
-    return f"{candidate.name} [{candidate.type}] {model}, serial {serial}"
+    model = printed(identity.model, limit=MAX_PRINTED)
+    serial = printed(identity.serial or "no serial number reported", limit=MAX_PRINTED)
+    return f"{name} [{kind}] {model}, serial {serial}"
 
 
 def _finding_line(finding: Finding) -> str:
     # The text of a finding can carry a string of the drive, such as the
     # informational exception of a SCSI drive: it is cut like any other
     # (ARCHITECTURE.md section 14).
-    text = printable(finding.text, limit=MAX_PRINTED)
+    text = printed(finding.text, limit=MAX_PRINTED)
     return f"  {finding.check:<{_CHECK_WIDTH}} {finding.severity.value:<{_SEVERITY_WIDTH}} {text}"
 
 

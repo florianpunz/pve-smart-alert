@@ -19,7 +19,16 @@ from pathlib import Path
 from typing import Final
 
 from pve_smart_alert.discovery import Discovery, Found, Outcome, Source
-from pve_smart_alert.model import MAX_PRINTED, Membership, Snapshot, printable, without_controls
+from pve_smart_alert.model import (
+    MAX_PRINTED,
+    DriveIdentity,
+    Membership,
+    Snapshot,
+    exact_string,
+    printable,
+    printed,
+    without_controls,
+)
 from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC
 
 # From this difference on, both values are shown (ADR 0021).
@@ -71,8 +80,8 @@ def _smartctl_line(discovery: Discovery, path: Path) -> str:
 def _device(found: Found) -> Iterator[str]:
     candidate = found.candidate
     # A name of the scan need not be valid, and can be arbitrarily long.
-    name = printable(candidate.name, limit=MAX_PRINTED)
-    kind = printable(candidate.type, limit=MAX_PRINTED)
+    name = printed(candidate.name, limit=MAX_PRINTED)
+    kind = printed(candidate.type, limit=MAX_PRINTED)
     yield f"{name} [{kind}], {_SOURCES[candidate.source]}: {_outcome(found)}"
     snapshot = found.snapshot
     if snapshot is not None:
@@ -87,14 +96,65 @@ def _device(found: Found) -> Iterator[str]:
         yield _labelled("Read in", f"{found.collected.duration_seconds:.2f} s")
 
 
+def _selector_lines(identity: DriveIdentity) -> Iterator[str]:
+    """Return the selector of a value that `scan` does not print as it is (ADR 0036).
+
+    A model or serial number that holds a character cleaning replaces, or that
+    is longer than a printed value, is printed cleaned or cut. The line
+    `Selector:` carries the value as a TOML string, exactly as it is written
+    into the configuration. A value longer than the printed limit cannot be
+    written whole: it is cut and carries the mark before it is escaped, so
+    that the line stays a TOML string, and such a drive is selected with a
+    model wildcard. A value that holds a lone surrogate gets no `Selector:`
+    line at all, because TOML has no value for it; a line says how the drive
+    is selected then.
+    """
+    for kind, value in (("model", identity.model), ("serial", identity.serial)):
+        if value is None or printable(value, limit=MAX_PRINTED) == value:
+            continue
+        if _has_lone_surrogate(value):
+            # TOML has no value for a lone surrogate: a line with one could
+            # not be read back, so the line names the way that works.
+            yield (
+                f"  {'Cannot select:':<10} the {kind} holds a lone surrogate,"
+                " which TOML cannot write; select the drive with a model pattern"
+            )
+            continue
+        yield _selector_line(kind, value)
+
+
+def _has_lone_surrogate(value: str) -> bool:
+    """Whether `value` holds a surrogate, which TOML cannot write (ADR 0036)."""
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+
+
+def _selector_line(kind: str, value: str) -> str:
+    """Return a `Selector:` line that does not cut the TOML string itself (ADR 0036)."""
+    return f"  {'Selector:':<10} {kind} = {_selector_value(value)}"
+
+
+def _selector_value(value: str) -> str:
+    """Return the value of a `Selector:` line as a TOML string (ADR 0036).
+
+    A value up to the printed limit is written as it is, so that a copy of
+    the line selects the drive. A longer value is cut with the mark before
+    it is escaped: cut after the escape, the line would end inside the
+    string and could not be read as TOML at all.
+    """
+    collapsed = " ".join(without_controls(value).split())
+    if len(collapsed) > MAX_PRINTED:
+        return exact_string(printed(value, limit=MAX_PRINTED))
+    return exact_string(value)
+
+
 def _outcome(found: Found) -> str:
     if found.outcome is Outcome.SKIPPED:
         reason = found.reason.value if found.reason is not None else "skipped"
         # The detail can quote the inquiry data of a logical volume from lsblk.
-        detail = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        detail = printed(found.detail, limit=MAX_PRINTED) if found.detail else ""
         return f"skipped, {reason}" + (f" ({detail})" if detail else "")
     if found.outcome is Outcome.STANDBY:
-        mode = printable(found.detail, limit=MAX_PRINTED) if found.detail else ""
+        mode = printed(found.detail, limit=MAX_PRINTED) if found.detail else ""
         return f"in standby ({mode}), not woken" if mode else "in standby"
     return found.outcome.value
 
@@ -103,6 +163,7 @@ def _drive(snapshot: Snapshot) -> Iterator[str]:
     identity = snapshot.identity
     yield _labelled("Model", identity.model)
     yield _labelled("Serial", identity.serial or "none reported")
+    yield from _selector_lines(identity)
     if identity.wwn is not None:
         yield _labelled("WWN", identity.wwn)
     if snapshot.firmware is not None:
@@ -169,4 +230,4 @@ def _probing(device_ids: tuple[int, ...]) -> str:
 
 def _labelled(label: str, value: str) -> str:
     """Return one line below a device. The values line up, and none is longer than a message's."""
-    return f"  {label + ':':<10} {printable(value, limit=MAX_PRINTED)}"
+    return f"  {label + ':':<10} {printed(value, limit=MAX_PRINTED)}"

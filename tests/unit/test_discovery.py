@@ -585,6 +585,10 @@ def test_the_driver_of_a_scsi_host_is_read_from_sysfs(tmp_path: Path) -> None:
     assert scsi_host_driver("3", paths) is None
     proc_name.write_text("\n", encoding="utf-8")
     assert scsi_host_driver(2, paths) is None
+    # Control characters only is as empty as no driver: the host must not
+    # look like it has one.
+    proc_name.write_text("\x01", encoding="utf-8")
+    assert scsi_host_driver(2, paths) is None
 
 
 def test_lsblk_of_the_node_does_not_describe_a_drive_behind_it(

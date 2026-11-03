@@ -181,6 +181,28 @@ def test_a_drive_read_directly_carries_no_device_id(device_type: str) -> None:
     assert FIELD_DEVICE_ID not in fields
 
 
+def test_a_model_of_control_characters_only_keeps_its_field() -> None:
+    # Cleaning would leave nothing, and a field that is left out cannot be
+    # matched at all (ADR 0036).
+    drive = replace(SSD, model="\x01", serial="\x07")
+
+    fields = render(drive_message(REALLOCATED, drive=drive), CONTEXT).fields_for()
+
+    assert fields["model"] == '"\\u0001"'
+    assert fields["serial"] == '"\\u0007"'
+
+
+def test_a_cut_value_in_a_message_carries_a_mark() -> None:
+    # ADR 0036: a copy of a cut value is not the value, and the field keeps
+    # the same limit as the printed text.
+    drive = replace(SSD, serial="S" * 250)
+
+    notification = render(drive_message(REALLOCATED, drive=drive), CONTEXT)
+
+    assert "S" * 200 + "…" in notification.body
+    assert notification.fields_for()["serial"] == "S" * 200
+
+
 def test_the_wwn_of_the_template_data_carries_no_control_character() -> None:
     # `data` is handed to templates an administrator can override; every
     # other string in it is cleaned (ARCHITECTURE.md section 14). The state
