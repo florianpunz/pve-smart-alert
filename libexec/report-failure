@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # The failure reporter of pve-smart-alert-failure.service (ADR 0006, ADR 0009):
-# it uses nothing of the tool and sends one plain mail to root per day. The
+# it uses nothing of the tool and sends at most one plain mail to root per day. The
 # PVE_SMART_ALERT_* variables exist for the tests; the unit sets none of them.
 set -u
 
@@ -24,9 +24,9 @@ host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo unknown)
 # named the run; systemd 251 and later do so in MONITOR_* (systemd.exec(5)).
 last_lines() {
 	if [ -n "${MONITOR_INVOCATION_ID:-}" ] && command -v "$journalctl" >/dev/null 2>&1; then
-		# The tool cleans what it writes, but a traceback need not: no control
-		# character reaches the mail (ARCHITECTURE.md section 14). Perl avoids
-		# the Python whose run may have failed.
+		# The tool cleans what it writes, but a traceback need not: every control
+		# character except tab and newline becomes a space (ARCHITECTURE.md
+		# section 14). Perl avoids the Python whose run may have failed.
 		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
 			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null |
 			# The bytes are decoded here, not by the IO layer, so that a

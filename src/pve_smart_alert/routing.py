@@ -42,8 +42,8 @@ MATCHERS: Final = "/cluster/notifications/matchers"
 TARGETS: Final = "/cluster/notifications/targets"
 
 # The fields whose values differ between notifications (FR-503), so a rule on
-# one of them is undecided. `device-id` is carried only by some (ADR 0029).
-# A field the tool sends in the future belongs here as well.
+# one is undecided; `device-id` is carried only by some. Keep in sync with the
+# fields a notification carries: a rule on a missing field is no match (ADR 0029).
 VARYING_FIELDS: Final = frozenset(
     {FIELD_EVENT, FIELD_DEVICE, FIELD_DEVICE_ID, FIELD_SERIAL, FIELD_MODEL}
 )

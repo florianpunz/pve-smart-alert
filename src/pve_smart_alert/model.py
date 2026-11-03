@@ -200,8 +200,8 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
     """Return a metadata value that is safe for the notification system.
 
     A comma becomes a semicolon, because Proxmox VE splits an exact matcher
-    on commas. A value that cleaning would leave empty is carried as its
-    escaped form, so that a matcher can still select the drive (ADR 0036).
+    on commas. A value of control characters only is carried as its escaped
+    form, so that a matcher can still select the drive (ADR 0036).
     """
     cleaned = printable(value.replace(",", ";"), limit=limit)
     if cleaned or not value.strip():
@@ -212,8 +212,8 @@ def sanitize_field_value(value: str, *, limit: int = MAX_FIELD_VALUE) -> str:
 def toml_string(value: str, *, limit: int = MAX_PRINTED) -> str:
     """Return a value as a TOML basic string that is safe to print and to copy back.
 
-    A selector printed by `config show` reads as the line written in the
-    configuration file (ARCHITECTURE.md section 14).
+    `config show` writes a drive comment with it, so the value reads as the
+    line written in the configuration file (ARCHITECTURE.md section 14).
     """
     cleaned = printable(value, limit=limit)
     escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')

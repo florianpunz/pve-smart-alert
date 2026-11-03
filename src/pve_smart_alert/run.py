@@ -121,8 +121,8 @@ class Delivery:
 class RunResult:
     """What one run did.
 
-    `discovery` and `findings`, keyed by `Access.key`, feed the dry-run
-    report. `ok` is false when a notification was not handed over or the
+    `discovery` and `findings` feed the dry-run report; `findings` is keyed by
+    `Access.key`. `ok` is false when a notification was not handed over or the
     state could not be saved (FR-607).
     """
 
@@ -146,7 +146,8 @@ def run_check(environment: Environment | None = None, *, dry_run: bool = False) 
     """Run one check (FR-601).
 
     Raises `LockedError` when another run holds the lock, and `OSError` when
-    the lock or the state directory cannot be used.
+    the lock cannot be taken. A state file that cannot be used is reported in
+    the result, not raised.
     """
     env = environment if environment is not None else Environment()
     if dry_run:

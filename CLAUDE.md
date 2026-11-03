@@ -68,7 +68,7 @@ These follow from the decision records. They are not hard rules, but deviating f
 9. **Claims are checked.** Statements about Proxmox VE or smartmontools behavior are verified in documentation or source code and cited, or they are marked as assumptions and listed in `OPEN-QUESTIONS.md`.
 10. **Open questions are kept current.** An answered question is removed from `OPEN-QUESTIONS.md` and its answer is written where it belongs.
 11. **The product name never contains "Proxmox".** The project is written PVE SMART Alert, its identifier is `pve-smart-alert`. The platform is named descriptively, as in "for Proxmox VE" (ADR 0018).
-12. **Comments are short and current.** A comment says why or warns, in at most three lines; a docstring is one summary line plus the contract in at most four. Longer reasoning lives in an ADR or a document and is referenced by ID, not repeated (ADR 0042).
+12. **Comments are short and current.** A comment says why or warns, in at most three lines; a docstring has one summary line and a body of at most four. Longer reasoning lives in an ADR or a document and is referenced by identifier, not repeated (ADR 0042).
 
 ## Documentation upkeep
 

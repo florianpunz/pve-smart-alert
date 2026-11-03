@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Turn recordings into anonymized fixtures, or import the test data of another project.
 
-Fixtures are written by this script only (ADR 0023): identifying values are
-numbered in scan order, checked for leftovers, and written as
-`tests/fixtures/smartctl/<controller>/<prefix>-<node>/`. Archives contain real
-serial numbers and stay out of the repository (ADR 0016).
+Fixtures are written by this script or by `dump-fixture`, never by hand
+(ADR 0023): identifying values are numbered in scan order where there is a
+scan, checked for leftovers, and written below `tests/fixtures/smartctl/`.
+Archives hold real serial numbers and stay out of the repository (ADR 0016).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ DEFAULT_LICENSE: Final = "AGPL-3.0-or-later"
 COLLECTED_WITH: Final = "scripts/collect-node-data.sh"
 # The command scripts/collect-node-data.sh records the block devices with.
 LSBLK_COMMAND: Final = "lsblk -J -O"
-# The test cluster has no controller between drives and host (Research 06).
+# No controller sits between the drives and the host (Research 06).
 CONTROLLER: Final = "none, directly attached"
 ANONYMIZED_WITH: Final = "scripts/make_fixtures.py (ADR 0023)"
 IMPORTED_WITH: Final = "scripts/make_fixtures.py import (ADR 0023, ADR 0026)"

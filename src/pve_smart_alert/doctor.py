@@ -590,7 +590,7 @@ def check_controllers(paths: HostPaths = HOST) -> CheckResult:
 def check_probe(settings: DiscoverySettings | None = None, paths: HostPaths = HOST) -> CheckResult:
     """Name the HPE Smart Array controllers and whether the probe reaches them (FR-103).
 
-    Nothing is read here. A controller the probe cannot reach is a warning,
+    No drive is read here. A controller the probe cannot reach is a warning,
     as is the `smartpqi` driver, which no switch changes (ADR 0032).
     """
     scsi = read_scsi_hosts(paths)

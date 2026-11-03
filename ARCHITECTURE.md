@@ -470,7 +470,7 @@ pve-smart-alert 1.0.0 on pve1
 | smartctl is older than 7.0 | Same, `tool.smartctl_too_old` |
 | Device scan fails or returns invalid JSON | Manual entries are still read. Drives known from state that were not found are not counted as missing, because they were not looked for. `tool.scan_failed`, warning |
 | A drive cannot be opened or returns no identify data | Counted as unreadable for this run. After 2 runs: condition `drive.unreadable` |
-| smartctl exceeds the timeout | Process group is killed. Treated as unreadable. The run continues with the next drive |
+| smartctl exceeds the timeout | Process group is killed. Treated as unreadable. A process stuck in disk I/O (D state) survives the kill, and the wait for it has no bound ([ROADMAP.md](ROADMAP.md), M7); otherwise the run continues with the next drive |
 | smartctl returns invalid or truncated JSON | Treated as unreadable. Output is logged at debug level |
 | Drive answers standby in a call with `--nocheck=standby`, which the tool passes for ATA, SAT and USB types and for every drive behind HPE Smart Array, 3ware, Areca, Adaptec, HighPoint or SSSRAID (FR-203, section 5) | Skipped for this run. Previous state is kept. No finding |
 | A JSON section is missing | The checks that need it are not applicable |

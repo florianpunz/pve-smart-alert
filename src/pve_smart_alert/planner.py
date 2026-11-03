@@ -802,8 +802,8 @@ class _Planner:
     def _due(self, holder: _Holder, check: str, condition: ConditionRecord) -> EventType | None:
         """Return why an active condition is notified now, or `None`.
 
-        On a falling severity it is not notified: `condition` takes the lower
-        severity and value as notified, and the caller stores that.
+        On a falling severity it is not notified: this method sets the lower
+        severity and value as notified, in place.
         """
         if condition.last_notified is None or condition.notified_severity is None:
             return EventType.PROBLEM

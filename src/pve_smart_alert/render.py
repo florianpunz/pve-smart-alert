@@ -42,9 +42,9 @@ SUBJECT_PREFIX: Final = "[pve-smart-alert]"
 
 # Strings of a drive are cut to this length in a message.
 _MAX_TEXT: Final = 200
-# The text of a condition of the tool is its own words; only the driver name of
-# a SCSI host is untrusted, cut where it is read (ADR 0030). It is cut far
-# later, so that the whole notice reaches the reader (ADR 0031).
+# The text of a condition of the tool is mostly its own words, but it embeds a
+# driver name (ADR 0030), a bridge error and a configuration error: it is cut
+# far later, and cleaned like everything else (ARCHITECTURE.md section 14).
 _MAX_TOOL_TEXT: Final = 1000
 
 # The width of the labels of the header block, and of the severity column.
@@ -335,8 +335,8 @@ def _drive(planned: Planned, context: RenderContext) -> Notification:
         lines += ["", *closing]
     lines += ["", _signature(context)]
     # The fields are built from the values as the state keeps them: `fields_for`
-    # sanitizes them, and a value that cleaning would leave empty is carried
-    # escaped instead (ADR 0036).
+    # sanitizes them, and a value of control characters only is carried escaped
+    # instead (ADR 0036).
     fields = {
         FIELD_EVENT: message.event.value,
         FIELD_DEVICE: drive.name,

@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Devices that look like drives and are none: logical volumes and non-disks (ADR 0028).
 
-A logical volume is a block device that smartctl reads without an error
-(FR-107). Inquiry data come first, because lsblk shows them before the read;
-the scan message is only the second signal, since a version can reword it.
+A logical volume is a block device that smartctl may read without an error, or
+one that the scan cannot open and asks for `-d megaraid,N` (FR-107). Inquiry
+data come first, because lsblk shows them before the read; the scan message is
+only the second signal, since a version can reword it.
 """
 
 from __future__ import annotations

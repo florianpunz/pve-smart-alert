@@ -2,9 +2,9 @@
 """The parser for NVMe drives (ADR 0004).
 
 The values of the SMART health log become metrics named `nvme.*`. The
-Critical Warning byte becomes the integer bitmask `nvme.critical_warning`,
-which the checks read bit by bit (docs/check-catalog.md). The drive's own
-temperature limits are kept but not evaluated (Q-T4).
+Critical Warning byte becomes the integer bitmask `nvme.critical_warning` and
+the snapshot field `nvme_critical_warning`, whose bits the checks read. The
+drive's own temperature limits are kept but not evaluated (Q-T4, docs/check-catalog.md).
 """
 
 from __future__ import annotations
@@ -88,7 +88,6 @@ def parse(
 
 
 def _first(value: int | None, fallback: int | None) -> int | None:
-    """Return `value`, or `fallback` when `value` is missing."""
     return value if value is not None else fallback
 
 

@@ -62,8 +62,8 @@ def _migrate_keys(document: dict[str, object]) -> dict[str, object]:
     """Re-key the drives of a schema-1 document (ADR 0037, ADR 0038).
 
     Schema 1 joined the key parts with `|`, which two records could collide
-    on. The identity and last access give the unambiguous key; only a record
-    without a usable last access keeps its old key.
+    on. The identity and last access give the unambiguous key; a record without
+    a usable last access or identity keeps its old key.
     """
     drives = document.get("drives")
     if not isinstance(drives, dict):
@@ -119,7 +119,7 @@ class ConditionRecord:
     """One active condition of a drive or of the tool (ARCHITECTURE.md section 7).
 
     The `notified_*` values and `last_notified` are what the last delivered
-    notification said; `None` means the condition was not notified yet.
+    notification said; `last_notified is None` means it was not notified yet.
     """
 
     severity: Severity
@@ -345,10 +345,10 @@ def save_state(state: State, path: Path) -> None:
 def write_private(path: Path, text: str) -> None:
     """Replace a file of the tool atomically, readable by root only (ADR 0007).
 
-    The file holds serial numbers, so it and its directory are mode 0600 and
-    0700. The temporary file is flushed, renamed and the directory flushed,
-    so that a power loss leaves the old file or the new one. Raises
-    `OSError`.
+    The file holds serial numbers, so it is mode 0600 and its directory 0700;
+    a relative directory is left as it is. The temporary file is flushed,
+    renamed and the directory flushed, so that a power loss leaves the old
+    file or the new one. Raises `OSError`.
     """
     _private_directory(path.parent)
     descriptor, temporary = tempfile.mkstemp(
@@ -566,8 +566,8 @@ def _condition_to_json(record: ConditionRecord) -> dict[str, object]:
 class _Reader:
     """Read the values of a document strictly (ARCHITECTURE.md section 9).
 
-    Raises `KeyError` for a missing value, `TypeError` for a wrong type and
-    `ValueError` for a timestamp without a time zone.
+    `text` and `time` raise `KeyError` for a missing value; a wrong type
+    raises `TypeError`, a timestamp without a time zone `ValueError`.
     """
 
     def __init__(self, now: datetime) -> None:

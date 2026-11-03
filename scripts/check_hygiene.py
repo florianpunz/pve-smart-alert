@@ -96,8 +96,8 @@ SOURCE_NAMES: Final = frozenset(
 )
 
 # The Handlebars templates (`.hbs`) and the Debian package metadata are left
-# out of NFR-20: their content is only expressions, and their license is in
-# debian/copyright (ADR 0015).
+# out of NFR-20: the templates are two expressions, the metadata is read by the
+# packaging tools, and both are licensed in debian/copyright (ADR 0015).
 
 # A shebang, a coding line and an interpreter hint fit in front of it.
 SPDX_SEARCH_LINES: Final = 5

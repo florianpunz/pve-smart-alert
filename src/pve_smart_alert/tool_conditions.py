@@ -44,7 +44,7 @@ PSEUDO_DEVICE: Final = "pve-smart-alert"
 MINIMUM_SMARTCTL: Final = (7, 0)
 
 # The first line of `smartctl --version`, for example
-# "smartctl 7.5 2025-04-30 r5714 [x86_64-linux-6.14.8-2-pve] (local build)".
+# "smartctl 7.5 r5714 [x86_64-linux] (local build)".
 _VERSION_LINE: Final = re.compile(r"^smartctl (\d+)\.(\d+)", re.MULTILINE)
 
 

@@ -58,7 +58,7 @@ Notes:
 Notes:
 
 - Raw values of attributes 1 (read error rate) and 7 (seek error rate) are never evaluated. They are packed on some vendors' drives.
-- `ata.command_timeouts`: the raw value is packed on some drives; where the string form has several parts, the decoded first number counts (Q-T1). The threshold is met strictly above its value: up to 100 timeouts are what clean drives show.
+- `ata.command_timeouts`: the raw value is packed on some drives; where the string form has several parts, `N (a/b/c)`, the decoded first number counts. A raw16 form such as `a b c` is used as the packed raw number; its parts are not decoded (Q-T1). The threshold is met strictly above its value: up to 100 timeouts are what clean drives show.
 - The thresholds were derived from hard disk data. They apply to SATA SSDs for lack of better data.
 - The recordings of the test cluster show values a check must not misread: a worst value of 0 with a threshold of 0 on attribute 187, a packed raw value of the temperature attribute 194, and the placeholder temperature limits -127 and 127 ([Research 06](research/06-test-cluster-recordings.md#quirks-seen)).
 

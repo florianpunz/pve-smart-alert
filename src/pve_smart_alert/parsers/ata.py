@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The parser for ATA drives: SATA hard disks and SSDs (ADR 0004).
+"""The parser for ATA drives: SATA hard disks and SSDs (ADR 0004, docs/check-catalog.md).
 
 The attribute table becomes `ata.attr.ID.raw` and `ata.attr.ID.value`, the
-normalized value (1 to 253, falling as the drive wears). The checks read the
-raw value only of the attributes the catalog names, because some drives pack
-the others; the temperature is `temperature.current` in °C (docs/check-catalog.md).
+normalized value, a vendor scale that usually falls as the drive wears. The
+checks read the raw value only where the catalog names it, because some drives
+pack the others; the temperature is `temperature.current` in °C.
 """
 
 from __future__ import annotations

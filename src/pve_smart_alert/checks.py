@@ -95,7 +95,8 @@ class Check:
     """One check of the catalog (docs/check-catalog.md).
 
     `severity` is fixed for a flag check, `thresholds` and `per_class` hold
-    the defaults, and `slots` the keys the configuration may set (ADR 0011).
+    the defaults, and `slots` the keys the configuration may set; `settable`
+    adds the confirmation count (ADR 0011).
     """
 
     id: str
@@ -228,7 +229,7 @@ CATALOG: Final[Mapping[str, Check]] = {
         ),
         # SATA (docs/check-catalog.md, "SATA (ATA attributes)"). The counter
         # checks read raw values: the normalized value is a vendor scale that
-        # falls with wear, while a counter only grows.
+        # falls with wear, while the raw value is the total that is counted.
         Check(
             "ata.attribute_failing",
             ATA_CLASSES,
@@ -464,8 +465,9 @@ def evaluate(
     """Evaluate one snapshot and return what the checks found (FR-301).
 
     `settings` are the effective checks of this drive, `baselines` those of
-    its event counters; a check that is disabled, does not apply or has no
-    input returns nothing (FR-306). The findings are in catalog order.
+    its event counters. A check that is disabled, does not apply or has no
+    input returns nothing (FR-206); an event without a baseline returns
+    nothing (FR-306). The findings are in catalog order.
     """
     findings: list[Finding] = []
     for item in _applicable(snapshot, settings):
@@ -682,7 +684,7 @@ def _temperature_attribute(attribute: FailingAttribute) -> bool:
     """Whether an attribute is a temperature attribute, which is excluded here.
 
     The rule is heuristic: 190 and 194 are the temperature on every drive seen
-    so far, and the name catches a vendor id (docs/check-catalog.md).
+    so far (Research 02, Research 06), and the name catches a vendor id.
     """
     return "temp" in attribute.name.lower() or attribute.id in (190, 194)
 

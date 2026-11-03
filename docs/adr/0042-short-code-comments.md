@@ -12,7 +12,7 @@ The maintenance rules in [CLAUDE.md](../../CLAUDE.md) already say that each fact
 
 ## Decision
 
-A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to code in this repository, in every language:
+A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to the shipped code in this repository, in every language: `src/`, `libexec/`, `systemd/`, `scripts/` and `debian/`. Test code, the CI workflows and `config/config.reference.toml` are out of scope: a test uses hosts, dates and question IDs as data, and the reference configuration is user documentation (ADR 0011).
 
 1. A comment says **why** or **warns**. It never restates what the code says.
 2. Inline and block comments are one or two lines, with a hard limit of three.
@@ -31,8 +31,7 @@ A comment describes what the code does now. It never describes a planned fix, a 
 
 - A comment that needs more than the limit moves its reasoning to an ADR or a document and keeps a reference.
 - A finding that needs a code change is written as the honest comment of the current behavior, and the fix is listed in [ROADMAP.md](../../ROADMAP.md).
-- Review reads comments against these rules. [CLAUDE.md](../../CLAUDE.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md) state the rule for agents and for human contributors.
-- Existing comments were revised once under this record; the revision changed no behavior.
+- Review reads comments against these rules.
 
 ## Revisit when
 

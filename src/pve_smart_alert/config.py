@@ -52,8 +52,8 @@ _TRANSPORT_VALUES: Final = tuple(item.value for item in TransportName)
 _DETAIL_VALUES: Final = tuple(item.value for item in Detail)
 
 # Which sections and keys this version knows; anything else is an error
-# (ADR 0011). `checks` and `drive` have their own builders, because their keys
-# are catalog identifiers and a list of tables.
+# (ADR 0011). `checks` and `drive` have their own builders: the keys of
+# `checks` are catalog identifiers, and `drive` is a list of tables.
 _SCHEMA: Final[Mapping[str, frozenset[str]]] = {
     "notify": frozenset(
         {

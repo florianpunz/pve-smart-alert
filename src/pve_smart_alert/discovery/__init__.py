@@ -134,9 +134,9 @@ def discover(
 ) -> Discovery:
     """Find the drives of this host and read them.
 
-    A drive that two sources find is read twice and kept once. `on_device`
-    is called before each device is read, so that a command can show
-    progress.
+    A drive that two different sources find is read twice and kept once; a
+    device listed twice with the same name and type is read once. `on_device`
+    is called before each device is read, so that a command can show progress.
     """
     settings = config.smartctl
     scan = run_scan(settings, runner=runner)
