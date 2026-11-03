@@ -46,7 +46,14 @@ last_lines() {
 		# failed.
 		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
 			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null |
-			perl -CSD -pe 's/(?![\t\n])[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/ /g' 2>/dev/null
+			# The bytes are decoded here, not by the IO layer, so that a
+			# malformed sequence becomes a replacement character instead of
+			# ending the excerpt at that line.
+			perl -MEncode -pe '
+				$_ = Encode::decode("UTF-8", $_, Encode::FB_DEFAULT);
+				s/(?![\t\n])[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/ /g;
+				$_ = Encode::encode("UTF-8", $_);
+			' 2>/dev/null
 	fi
 }
 
