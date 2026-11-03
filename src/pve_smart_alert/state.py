@@ -323,7 +323,11 @@ def write_private(path: Path, text: str) -> None:
 
 
 def _private_directory(directory: Path) -> None:
-    """Create the directory of a file of the tool, and keep it readable by root only."""
+    """Create the directory of a file of the tool.
+
+    An absolute path is the tool's own and is kept readable by root only; a
+    relative path belongs to the caller and is left as it is (ADR 0012).
+    """
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     if not directory.is_absolute():
         # A relative path names a directory of the caller, such as `.`; the
