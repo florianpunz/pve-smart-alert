@@ -65,8 +65,9 @@ def run_with_timeout(
     """Run a program and return its output.
 
     A program that does not end within `timeout` is killed with its process
-    group; its output up to then is returned with `timed_out` set. Raises
-    `OSError` when it cannot be started.
+    group; its output up to then is returned with `timed_out` set. A process
+    stuck in disk I/O (D state) survives the kill, and the wait then has no
+    bound. Raises `OSError` when it cannot be started.
     """
     process = subprocess.Popen(
         [str(argument) for argument in command],
