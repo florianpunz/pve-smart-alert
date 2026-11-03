@@ -23,10 +23,8 @@ from pve_smart_alert.process import ProcessResult, ProcessRunner, run_with_timeo
 from pve_smart_alert.transports.base import DEFAULT_TIMEOUT_SECONDS, TransportOutcome
 
 # The notification library writes what it did with each matched target to the
-# standard error of the bridge process. These lines are the only feedback
-# about delivery, so the fallback depends on them (ADR 0008). Their wording
-# was checked on Proxmox VE 9.2 (ARCHITECTURE.md section 10); if a later
-# version changes it, only these three patterns change.
+# standard error of the bridge, the only feedback about delivery (ADR 0008).
+# The wording was checked on Proxmox VE 9.2 (ARCHITECTURE.md section 10).
 TARGET_SUCCESS: Final = re.compile(r"notified via target", re.IGNORECASE)
 TARGET_FAILURE: Final = re.compile(r"could not notify via target", re.IGNORECASE)
 RENDER_FAILURE: Final = re.compile(r"failed to render notification template", re.IGNORECASE)
@@ -137,11 +135,9 @@ def _answer_error(stdout: str) -> str | None:
 def _reason_in_log(stderr: str) -> str | None:
     """Return why no target got the message, or `None` when it was handed over.
 
-    Best effort (ADR 0008): only a line the library is known to write counts.
-    `None` also when no matcher matched, which the log does not show; the
-    routing check in `routing.py` answers that (ADR 0020). Without a
-    recognized line the handover counts as successful, so that a change of
-    wording cannot turn every notification into a retry.
+    Only a known line counts (ADR 0008). `None` also when no matcher matched;
+    `routing.py` answers that (ADR 0020). Without such a line the handover
+    counts as successful.
     """
     if RENDER_FAILURE.search(stderr):
         return "the notification system could not render the template"

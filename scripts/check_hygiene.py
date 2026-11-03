@@ -2,23 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Repository checks that no other tool covers.
 
-Two rules are enforced here.
-
-1. **No AI attribution.** No file names an AI tool as an author, as the
-   origin of its content or as a session link (CLAUDE.md, hard rule 4).
-   Only the files in ``ATTRIBUTION_EXEMPT`` may quote such a line: the rules
-   themselves and the tests of this check, which have to contain an example.
-2. **SPDX license identifier.** Every source file carries an
-   ``SPDX-License-Identifier`` line among its first lines (ADR 0015, NFR-20).
-
-Which files count as source files is decided by ``SOURCE_SUFFIXES`` and
-``SOURCE_NAMES`` below. Add a suffix there when a new file type is introduced,
-so that the rule keeps holding for it.
-
-Usage:
-    scripts/check_hygiene.py [--root PATH] [--verbose]
-
-Exit status: 0 when the repository is clean, 1 when a rule is broken.
+Enforces no AI attribution (CLAUDE.md, hard rule 4) and the SPDX identifier of
+every source file (ADR 0015, NFR-20); `SOURCE_SUFFIXES` and `SOURCE_NAMES`
+decide which files count. Usage: `scripts/check_hygiene.py [--root PATH]
+[--verbose]`; exit status 0 is clean, 1 is a broken rule.
 """
 
 from __future__ import annotations
@@ -70,9 +57,8 @@ ATTRIBUTION_PATTERNS: Final = (
 )
 
 # Files that quote the forbidden patterns on purpose: the rule documents, this
-# check, and its tests, which need a sample to detect.
-# Nothing else belongs in this list, and a file is never added to it to silence
-# a finding about its own content.
+# check, and its tests. Nothing else belongs here, and a file is never added
+# to silence a finding about its own content.
 ATTRIBUTION_EXEMPT: Final = frozenset(
     {
         "AGENTS.md",
@@ -109,14 +95,9 @@ SOURCE_NAMES: Final = frozenset(
     }
 )
 
-# The Handlebars templates (`.hbs`) are left out on purpose even though NFR-20
-# asks for an identifier in every source file: their content is nothing but the
-# two expressions they print, and where they come from and under which license
-# they stand is recorded in the copyright file of the package (ADR 0015).
-#
-# The metadata of the Debian package is left out for the same reason: control,
-# changelog, copyright and the install lists are read by the packaging tools,
-# and the license of the whole package is stated in debian/copyright.
+# The Handlebars templates (`.hbs`) and the Debian package metadata are left
+# out of NFR-20: their content is only expressions, and their license is in
+# debian/copyright (ADR 0015).
 
 # A shebang, a coding line and an interpreter hint fit in front of it.
 SPDX_SEARCH_LINES: Final = 5

@@ -1,13 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """`pve-smart-alert dump-fixture`: the drive data of this host, anonymized (FR-604).
 
-It runs what the tool runs, the device scan, lsblk and the call of smartctl
-for each selected drive, and keeps the answers as they are, also those of
-drives that sleep or cannot be read: their messages are what a recording of
-other hardware is for (ADR 0016). The answers are anonymized as ADR 0023
-lays down and written as one archive in the layout of the fixtures, so that
-it can be attached to an issue and, after a review, added to the tests. When
-a real value is left in any file, nothing is written (NFR-14).
+It runs the device scan, lsblk and smartctl for each selected drive and keeps
+the answers, also of drives that sleep or cannot be read (ADR 0016). They are
+anonymized (ADR 0023) and written as one archive; a real value left in any
+file means nothing is written (NFR-14).
 """
 
 from __future__ import annotations
@@ -158,9 +155,8 @@ def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: in
     """Write the files below one directory into a compressed archive.
 
     The archive is written next to its target and renamed into place, so
-    that a symlink or a partial file at the target is never followed or
-    left behind, and it is readable by root only, like the state file: it
-    carries the identifiers of the host until they are reviewed (ADR 0023).
+    that a symlink is never followed, and it is readable by root only, like
+    the state file (ADR 0023).
     """
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor, temporary = tempfile.mkstemp(

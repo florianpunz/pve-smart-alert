@@ -1,15 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The report of `pve-smart-alert scan` (FR-108).
 
-One block per device found, in the order of discovery: its name, type and
-source, what became of it, and for a drive that was read what the tool knows
-about it: identity, class, the controller and device ID of a drive behind a
-RAID controller (ADR 0028), what uses it, the wear value with its source,
-and how long smartctl took. A controller whose drives smartctl cannot read
-is named above the devices (FR-109, ADR 0030), and so is every HPE Smart Array
-controller with what the probe made of it (FR-103, ADR 0032). A wear value
-that differs by 10 percentage points or more from what the web interface of
-Proxmox VE shows names both (ADR 0021).
+One block per device, in discovery order: name, type, source, outcome and, for
+a drive that was read, identity, class, controller, use and wear. Unsupported
+controllers and the HPE probe are named above the devices (ADR 0030, ADR 0032).
 """
 
 from __future__ import annotations
@@ -99,15 +93,9 @@ def _device(found: Found) -> Iterator[str]:
 def _selector_lines(identity: DriveIdentity) -> Iterator[str]:
     """Return the selector of a value that `scan` does not print as it is (ADR 0036).
 
-    A model or serial number that holds a character cleaning replaces, or that
-    is longer than a printed value, is printed cleaned or cut. The line
-    `Selector:` carries the value as a TOML string, exactly as it is written
-    into the configuration. A value longer than the printed limit cannot be
-    written whole: it is cut and carries the mark before it is escaped, so
-    that the line stays a TOML string, and such a drive is selected with a
-    model wildcard. A value that holds a lone surrogate gets no `Selector:`
-    line at all, because TOML has no value for it; a line says how the drive
-    is selected then.
+    The `Selector:` line carries the value as a TOML string; a value longer
+    than the printed limit is cut before it is escaped. A lone surrogate gets
+    no such line, because TOML has no value for it.
     """
     for kind, value in (("model", identity.model), ("serial", identity.serial)):
         if value is None or printable(value, limit=MAX_PRINTED) == value:
@@ -136,10 +124,8 @@ def _selector_line(kind: str, value: str) -> str:
 def _selector_value(value: str) -> str:
     """Return the value of a `Selector:` line as a TOML string (ADR 0036).
 
-    A value up to the printed limit is written as it is, so that a copy of
-    the line selects the drive. A longer value is cut with the mark before
-    it is escaped: cut after the escape, the line would end inside the
-    string and could not be read as TOML at all.
+    A value up to the printed limit is written as it is; a longer one is cut
+    before it is escaped, so that the line stays readable as TOML.
     """
     collapsed = " ".join(without_controls(value).split())
     if len(collapsed) > MAX_PRINTED:

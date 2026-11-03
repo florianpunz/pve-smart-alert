@@ -25,11 +25,9 @@ DEFAULT_TIMEOUT_SECONDS: Final = 120.0
 class TransportOutcome:
     """What became of one notification.
 
-    `delivered` is the answer the rest of the tool works with: only after a
-    handover may the state that belongs to a notification be stored (FR-517).
-    `error` says why it was not delivered. `log_lines` is what the program
-    wrote to its standard error, which is what the notification system logged
-    about the targets (ARCHITECTURE.md section 10).
+    `delivered` gates the state change of FR-517; `error` says why it failed.
+    `log_lines` is the standard error of the program (ARCHITECTURE.md section
+    10).
     """
 
     delivered: bool

@@ -1,19 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """SCSI hosts whose drives smartctl cannot read (FR-109, ADR 0030).
 
-The SCSI hosts of the host are the directories `hostN` below
-`/sys/class/scsi_host`, and the driver of each is its `proc_name`, read by
-`scsi_host_driver` of enrichment. A driver is reported only when it is on
-the list of drivers whose drives cannot be queried, with the reason and the
-source of each entry. Every other driver is not reported: the HBAs whose
-drives smartctl reads directly, `ahciem`, seen next to the ahci hosts on
-the TrueNAS SCALE kernel, the controllers whose drives a probe or a manual
-entry can reach, and every driver the tool does not know. Unknown is not
-unsupported.
-
-Reading sysfs is best effort: a directory that is missing means no SCSI
-host. One that cannot be read is reported as such, is no error of a run,
-and leaves the condition of the tool as it was.
+The hosts are the `hostN` directories of `/sys/class/scsi_host`, each with
+the driver that `scsi_host_driver` reads. A driver is reported only when it is
+on the list below, with the reason and source of the entry; every other driver
+is not, because unknown is not unsupported. Reading sysfs is best effort.
 """
 
 from __future__ import annotations
@@ -55,16 +46,15 @@ class Limitation:
     url: str
 
 
-#: The drivers whose drives smartctl cannot read. The list grows with
-#: evidence; an entry needs a source that says the drives cannot be queried,
-#: not only that the tool does not probe them (ADR 0030).
+# The drivers whose drives smartctl cannot read. The list grows with
+# evidence; an entry needs a source that says the drives cannot be queried,
+# not only that the tool does not probe them (ADR 0030).
 UNSUPPORTED_DRIVERS: Final[Mapping[str, Limitation]] = {
     "mpi3mr": Limitation(
         hardware="Broadcom MegaRAID 96xx, Dell PERC 12 such as the H965i",
-        # Issue 313 shows the RAID personality only: a PERC H965i with one
-        # virtual drive. The same driver runs Broadcom 9600 cards in an
-        # "Enhanced HBA Personality" that exposes the drives to the system;
-        # whether smartctl reads them there is not recorded (Q-R7).
+        # Issue 313 shows the RAID personality only. The same driver runs 9600
+        # cards in "Enhanced HBA Personality"; whether smartctl reads the drives
+        # there is not recorded (Q-R7).
         reason=(
             "in RAID mode smartctl neither lists nor queries the physical drives behind it,"
             " only the virtual drive"
@@ -76,8 +66,8 @@ UNSUPPORTED_DRIVERS: Final[Mapping[str, Limitation]] = {
     ),
 }
 
-#: The drivers that are never reported, with the reason (ADR 0030). They are
-#: listed so that nobody adds them to the list above by mistake.
+# The drivers that are never reported, with the reason (ADR 0030). They are
+# listed so that nobody adds them to the list above by mistake.
 NEVER_REPORTED: Final[Mapping[str, tuple[Support, str]]] = {
     "mpt2sas": (
         Support.DIRECT,

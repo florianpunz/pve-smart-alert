@@ -2,10 +2,9 @@
 """Running an external program with a timeout.
 
 Programs are started with an argument list, never through a shell, and in
-their own process group, so that a timeout ends the program and everything it
-started (ARCHITECTURE.md section 14). Every component that runs a program uses
-this module, `collect.py` included. There is no default timeout: how long a
-program may take depends on what it does.
+their own process group, so that a timeout ends everything they started
+(ARCHITECTURE.md section 14). Every component that runs a program uses this
+module, `collect.py` included. There is no default timeout.
 """
 
 from __future__ import annotations
@@ -65,12 +64,9 @@ def run_with_timeout(
 ) -> ProcessResult:
     """Run a program and return its output.
 
-    A program that does not end within `timeout` is killed together with the
-    process group it started; its output up to that point is returned with
-    `timed_out` set.
-
-    Raises `OSError` when the program cannot be started at all, for example
-    because it does not exist or is not executable.
+    A program that does not end within `timeout` is killed with its process
+    group; its output up to then is returned with `timed_out` set. Raises
+    `OSError` when it cannot be started.
     """
     process = subprocess.Popen(
         [str(argument) for argument in command],

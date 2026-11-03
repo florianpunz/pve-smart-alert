@@ -1,33 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The notification planner: which notifications are due, and what they change (ADR 0009).
+"""The notification planner: which notifications are due (ADR 0009).
 
-The planner is a pure function (ARCHITECTURE.md section 7): it takes the
-state of the last run, what this run observed, the configuration and the
-current time, and returns the state with every change that needs no
-notification, together with the notifications that are due. Each
-notification carries the changes that may be stored only once it has been
-handed over (ADR 0007, FR-517); a notification that fails leaves them out,
-and the next run plans it again from fresh data. Time is passed in and never
-read here, which is what makes every rule testable.
-
-The rules, in short (ADR 0009):
-
-- A condition is notified once when it appears, after its confirmation
-  count (`problem`); again at once when its severity rises (`escalated`);
-  when its value worsens at the same severity, for checks that track
-  worsening, after the cool-down of the drive (`worsened`); and after the
-  reminder interval of its severity (`reminder`). A falling severity is not
-  notified. A condition absent for the clear count is notified as
-  `recovered`, with severity info.
-- An event, the rise of a cumulative counter above its baseline, is notified
-  after the event cool-down of its drive and check, and its baseline moves
-  then. A counter below its baseline lowers it silently.
-- A drive absent for the missing count is notified once (`missing`); a drive
-  without usable data for the unreadable count gets the condition
-  `drive.unreadable`. Meanwhile its other conditions are frozen.
-- All notifications of one drive in one run are one message; more drives
-  than the grouping limit are one summary. The tool has its own message.
-- The first run records everything as notified and sends one summary.
+`plan` takes the state, what this run observed, the configuration and the
+time, and returns the state plus the notifications that are due. Each
+notification carries the changes stored only after it was handed over
+(FR-517). The rules are in ADR 0009.
 """
 
 from __future__ import annotations
@@ -90,12 +67,12 @@ __all__ = [
     "plan",
 ]
 
-#: The checks the planner raises itself, from presence and not from a snapshot.
+# The checks the planner raises itself, from presence and not from a snapshot.
 DRIVE_MISSING: Final = "drive.missing"
 DRIVE_UNREADABLE: Final = "drive.unreadable"
 
-#: The order of the severities. Info carries recoveries and the summaries
-#: without findings (ADR 0008).
+# The order of the severities. Info carries recoveries and the summaries
+# without findings (ADR 0008).
 RANK: Final[Mapping[Severity, int]] = {
     Severity.INFO: 0,
     Severity.NOTICE: 1,
@@ -136,11 +113,9 @@ class Presence(StrEnum):
 class DriveSeen:
     """One device of this run, as the planner needs it.
 
-    `findings` are the conditions and the events of a drive that was read;
-    an event finding is there only when its counter is above the baseline the
-    planner handed to the evaluation. `counters` holds the current value of
-    every event counter that is enabled for the drive, so that the planner
-    can record and lower baselines. `reason` says why a device is unreadable.
+    `findings` are its conditions and events, `counters` the current value of
+    every enabled event counter, so that the planner can record and lower
+    baselines. `reason` says why a device is unreadable.
     """
 
     access: Access
@@ -165,15 +140,10 @@ class SkippedSeen:
 class Observation:
     """What one run saw (ARCHITECTURE.md section 3, steps 4 to 8).
 
-    `tool` are the conditions of the tool that hold now, and
-    `tool_not_evaluated` those that this run could not look at, such as
-    `tool.unsupported_controller` when sysfs cannot be read: they are frozen,
-    neither recovered nor raised (ADR 0030). `state_reset` says
-    why the state was set aside, when it was. When the device scan failed,
-    `presence_known` is false: drives that were not found were not looked
-    for, so their absence is not counted. `probe_off` says that the
-    configuration switched the HPE Smart Array probe off: the drives that only
-    it can find are forgotten without a missing or a recovery (ADR 0032).
+    `tool_not_evaluated` are the conditions this run could not look at: they
+    are frozen, neither recovered nor raised (ADR 0030). `presence_known` is
+    false when the scan failed, and `probe_off` forgets the drives only the
+    HPE probe finds (ADR 0032).
     """
 
     drives: tuple[DriveSeen, ...] = ()
@@ -269,10 +239,9 @@ class MessageKind(StrEnum):
 class Planned:
     """One notification that is due, before it is rendered.
 
-    `drives` holds one drive for `drive`, the affected drives for `summary`,
-    and every monitored drive for `first-run`. `tool` are the items of the
-    tool. `skipped` and `unreadable` are listed by the first-run summary.
-    `changes` are stored only after the notification was handed over.
+    `drives` holds one drive for `drive`, the affected ones for `summary` and
+    every monitored one for `first-run`. `changes` are stored only after the
+    notification was handed over.
     """
 
     kind: MessageKind
@@ -606,12 +575,9 @@ class _Planner:
             and is_cciss_type(record.last_access.type)
             and (record.last_access.name, record.last_access.type) not in self.manual
         ):
-            # A drive that only the probe of an HPE Smart Array controller can
-            # find, while the configuration switched that probe off: it is
-            # forgotten silently, like an excluded drive, instead of being
-            # reported as missing. A device that the configuration names itself
-            # is read whatever the probe does, so it is never forgotten here
-            # (ADR 0032).
+            # A drive only the HPE probe finds, while the probe is switched off,
+            # is forgotten silently instead of being reported as missing; a
+            # device the configuration names itself is never forgotten (ADR 0032).
             del self.work.drives[key]
             return None, []
         if not self._enabled(record, DRIVE_MISSING):
@@ -638,10 +604,9 @@ class _Planner:
     def _forget_non_drives(self) -> None:
         """Forget the records of devices that discovery now knows are no drives (ADR 0028).
 
-        Such a device has no identity of its own in this run, so its record
-        is found by the path it was last read through. It goes before the
-        drives that are absent are counted, so that it is never reported as
-        missing.
+        Such a device has no identity, so its record is found by the path it
+        was read through. It goes before absent drives are counted, so that
+        it is never reported as missing.
         """
         for skipped in self.observation.skipped:
             if skipped.reason not in _NOT_DRIVES:

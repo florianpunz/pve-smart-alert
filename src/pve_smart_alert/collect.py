@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Running smartctl for one drive (ADR 0004).
 
-One call per drive, with a timeout that ends it and everything it started;
-only options that read are passed (ADR 0012). Bits 0 and 1 of the exit status
-mean that no usable data came back; bit 2 alone is tolerated, because the
-drive may still have answered with usable data. A drive in standby is skipped
-(FR-203), one that cannot be read is unreadable for this run (FR-205).
+One call per drive, with a timeout that ends it; only options that read are
+passed (ADR 0012). Bits 0 and 1 of the exit status mean that no usable data
+came back; bit 2 alone is tolerated, because the drive may still have
+answered. Standby is skipped (FR-203), unreadable means unreadable (FR-205).
 """
 
 from __future__ import annotations
@@ -40,13 +39,9 @@ JSON_FORMAT_MAJOR: Final = 1
 # `sat+megaraid,N`, and the USB bridges.
 _STANDBY_TYPES: Final = re.compile(r"(?:ata|sat|usb[a-z0-9]*|jm[bs][0-9a-z-]*)(?:[,+].*)?")
 
-# The drives behind an HPE Smart Array, 3ware, Areca, Adaptec, HighPoint or
-# SSSRAID controller get the standby check whatever their protocol says: such
-# a drive can be a SATA drive, behind 3ware and HighPoint and behind an Areca
-# SATA controller it always is, and smartctl implements the power mode check
-# for SCSI as well (ADR 0032, ADR 0034). MegaRAID is not among them, because
-# its type tells a SATA drive (`sat+megaraid,N`) from a SAS drive
-# (`megaraid,N`).
+# These controller types get the standby check whatever their protocol says:
+# such a drive can be a SATA drive and smartctl checks the power mode for SCSI
+# too. MegaRAID is excluded: its type tells a SATA drive from a SAS one.
 _MEGARAID_TYPE: Final = re.compile(r"(?:.*\+)?megaraid,.*")
 
 
@@ -85,13 +80,10 @@ class Collected:
 def checks_standby(device_type: str, protocol: str | None = None) -> bool:
     """Whether smartctl is asked not to wake a drive in standby (FR-203).
 
-    The option is `--nocheck=standby`, and a call that ends because of it is
-    recorded as standby, not as unreadable (ADR 0004). A drive behind an HPE
-    Smart Array, 3ware, Areca, Adaptec, HighPoint or SSSRAID controller is
-    included whatever its protocol says, because it can be a SATA drive and
-    smartctl checks the power mode for SCSI as well (ADR 0032, ADR 0034). For
-    every other type the protocol of the device scan decides where it is
-    known, and for a manual device the type does.
+    The option is `--nocheck=standby`; a call that ends because of it is
+    recorded as standby, not as unreadable (ADR 0004). For every other type
+    the protocol of the scan decides where it is known, and a manual device
+    the type.
     """
     if behind_controller(device_type) and _MEGARAID_TYPE.fullmatch(device_type) is None:
         return True

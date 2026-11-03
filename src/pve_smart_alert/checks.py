@@ -1,31 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The catalog of checks and the evaluation of one snapshot (ADR 0010).
 
-Each check has a stable identifier, the drive classes it applies to, the
-value it reads from the snapshot, its kind and its default thresholds; the
-living list with the reasoning behind every number is
-[docs/check-catalog.md](../../docs/check-catalog.md). A check whose input is
-missing is not applicable and returns nothing: missing data is never a
-finding (FR-206). Of a threshold check the highest severity whose threshold
-is met is reported (FR-302, FR-304). The drive's own failure verdict is
-always critical (FR-303); wear is never critical by default (FR-307).
-
-The settings of a check as they apply to one drive, `EffectiveCheck`, are
-resolved by `pve_smart_alert.config`: built-in default, overridden by the
-global configuration, overridden by the first matching per-drive override
-(ARCHITECTURE.md section 6).
-
-Event checks compare a cumulative counter with the baseline that the state
-file keeps for the drive: a finding only when the counter is above it, and
-nothing without a baseline, so that a non-zero value of a drive seen for the
-first time never alerts (FR-306). The planner keeps the baselines; `counters`
-tells it the current values.
-
-The checks `drive.missing` and `drive.unreadable` are in the catalog so that
-they can be configured like any other, but no snapshot answers them: the
-planner raises them from the presence of a drive over consecutive runs
-(FR-309, FR-310). The conditions of the tool itself are not checks of a
-drive; they are in `tool_conditions.py`.
+Each check has a stable identifier, its drive classes, the value it reads, its
+kind and its default thresholds; docs/check-catalog.md is the living list. A
+missing input is not applicable (FR-206); the planner raises drive.missing and
+drive.unreadable.
 """
 
 from __future__ import annotations
@@ -115,11 +94,8 @@ class Thresholds:
 class Check:
     """One check of the catalog (docs/check-catalog.md).
 
-    `severity` is the fixed severity of a flag check; `thresholds` the
-    defaults of a threshold check; `per_class` the defaults of the one check
-    whose thresholds differ per drive class. `slots` are the keys the
-    configuration may set for this check (ADR 0011). `source` names what the
-    check reads, for messages and for the reference of the configuration.
+    `severity` is fixed for a flag check, `thresholds` and `per_class` hold
+    the defaults, and `slots` the keys the configuration may set (ADR 0011).
     """
 
     id: str
@@ -162,10 +138,8 @@ class Check:
 class EffectiveCheck:
     """The settings of one check as they apply to one drive (ARCHITECTURE.md section 6).
 
-    For the one check whose thresholds differ per class, `thresholds` holds
-    the ones of the drive's class. For `nvme.spare` the warning threshold is
-    the margin in points above the threshold of the drive itself
-    (docs/check-catalog.md).
+    For `nvme.spare` the warning threshold is the margin above the threshold
+    of the drive itself (docs/check-catalog.md).
     """
 
     check: Check
@@ -489,13 +463,9 @@ def evaluate(
 ) -> list[Finding]:
     """Evaluate one snapshot and return what the checks found (FR-301).
 
-    `settings` are the effective checks for this drive, as
-    `pve_smart_alert.config.effective_checks` resolves them; without them the
-    built-in defaults apply. A check that is disabled, that does not apply
-    to the class of the drive, or whose input is missing, returns nothing.
-    `baselines` are the baselines of the event counters of this drive from
-    the state; an event without one returns nothing (FR-306). The findings
-    are in the order of the catalog.
+    `settings` are the effective checks of this drive, `baselines` those of
+    its event counters; a check that is disabled, does not apply or has no
+    input returns nothing (FR-306). The findings are in catalog order.
     """
     findings: list[Finding] = []
     for item in _applicable(snapshot, settings):
@@ -620,10 +590,9 @@ def _self_test(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
 
 def _smart_disabled(snapshot: Snapshot, item: EffectiveCheck) -> Finding | None:
     if snapshot.smart_available is True and snapshot.smart_enabled is False:
-        # The tool never enables SMART itself (FR-311, ADR 0012); it names
-        # the command an administrator can use. A drive behind a controller is
-        # addressed with its type, without which the command would reach the
-        # node, the logical volume or the controller (ADR 0034).
+        # The tool never enables SMART itself (FR-311, ADR 0012); it names the
+        # command. A drive behind a controller is addressed with its type, or
+        # the command would reach the node (ADR 0034).
         access = snapshot.access
         device = f"-d {access.type} " if behind_controller(access.type) else ""
         command = f"smartctl -s on {device}{access.name}"
@@ -712,12 +681,8 @@ def _attribute_failing(snapshot: Snapshot, item: EffectiveCheck) -> Finding | No
 def _temperature_attribute(attribute: FailingAttribute) -> bool:
     """Whether an attribute is a temperature attribute, which is excluded here.
 
-    The rule is heuristic, in this order of strength: the two standard
-    attributes 190 and 194 are the temperature on every drive seen so far,
-    and the name is checked as well so that an attribute of a vendor that
-    reports the temperature on an id of its own is still excluded. The
-    exclusion exists because temperature attributes are the well-known
-    source of false findings (docs/check-catalog.md, Research 03).
+    The rule is heuristic: 190 and 194 are the temperature on every drive seen
+    so far, and the name catches a vendor id (docs/check-catalog.md).
     """
     return "temp" in attribute.name.lower() or attribute.id in (190, 194)
 

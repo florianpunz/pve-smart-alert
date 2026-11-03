@@ -1,19 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The conditions of the tool itself (docs/check-catalog.md, ADR 0009).
 
-They are reported like the conditions of a drive, on a pseudo-device named
-after the tool: once, reminded per severity, and cleared with a recovery
-(FR-518). This module lists them and finds out, at the start of a run,
-which of them hold. `tool.state_reset` is a one-time event that the
-planner mentions in the summary after the reset. `tool.unsupported_controller`
-is read from the SCSI hosts that discovery found in sysfs (ADR 0030).
-
-Every one of them can be switched off in the configuration like a check of a
-drive, with `enabled = false` in the table `[checks."<id>"]` (FR-408, ADR
-0031). The notice
-about a controller whose drives cannot be read names how many drives the run
-monitors on the host and how that notice is switched off for a controller in
-HBA mode, whose drives all appear in the scan.
+They are reported like the conditions of a drive, on the pseudo-device
+`pve-smart-alert` (FR-518), and each can be switched off in the configuration
+(FR-408, ADR 0031). `tool.state_reset` is a one-time event; the unsupported
+controller is read from the SCSI hosts in sysfs (ADR 0030).
 """
 
 from __future__ import annotations
@@ -46,10 +37,10 @@ __all__ = [
     "unsupported_controller",
 ]
 
-#: The name of the pseudo-device the conditions of the tool are reported on.
+# The name of the pseudo-device the conditions of the tool are reported on.
 PSEUDO_DEVICE: Final = "pve-smart-alert"
 
-#: The oldest smartctl that writes JSON (ADR 0002, ADR 0004).
+# The oldest smartctl that writes JSON (ADR 0002, ADR 0004).
 MINIMUM_SMARTCTL: Final = (7, 0)
 
 # The first line of `smartctl --version`, for example
@@ -66,20 +57,18 @@ class ToolCondition:
     kind: CheckKind = CheckKind.CONDITION
 
 
-#: The condition of the controllers whose drives cannot be read (ADR 0030).
+# The condition of the controllers whose drives cannot be read (ADR 0030).
 UNSUPPORTED_CONTROLLER: Final = "tool.unsupported_controller"
 
-# What the notice about such a controller says about switching it off (ADR
-# 0031): a controller in HBA mode, whose drives the scan lists, needs no
-# notice, and the configuration of the tool switches it off like a check. The
-# setting is a dotted key, so that the line is valid TOML and can be pasted
-# into the configuration as it is (ADR 0040).
+# What the notice says about switching it off for a controller in HBA mode,
+# whose drives the scan lists (ADR 0031). The setting is a dotted key, so the
+# line is valid TOML and can be pasted as it is (ADR 0040).
 _SWITCH_OFF: Final = (
     "; if the controller runs in HBA mode and its drives all appear in scan,"
     ' switch this notice off with checks."tool.unsupported_controller".enabled = false'
 )
 
-#: Every condition of the tool, by its stable identifier.
+# Every condition of the tool, by its stable identifier.
 TOOL_CONDITIONS: Final[Mapping[str, ToolCondition]] = {
     condition.id: condition
     for condition in (
@@ -177,11 +166,9 @@ def unsupported_controller(
 ) -> Finding | None:
     """Return `tool.unsupported_controller` for SCSI hosts whose drives cannot be read.
 
-    One condition for all of them, which names each host and its driver; it
-    clears with a recovery when the last of them is gone (ADR 0030). It also
-    names how many drives this run monitors on the host, as far as the run
-    could count them, and how the notice is switched off for a controller
-    whose drives all appear in the scan (ADR 0031).
+    One condition names every such host and driver and clears when the last
+    is gone (ADR 0030); it also names the monitored count and the way to
+    switch it off (ADR 0031).
     """
     if not hosts:
         return None

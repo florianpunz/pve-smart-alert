@@ -2,20 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Check that the version of the program is the version of the package.
 
-The version of the program lives in ``src/pve_smart_alert/__init__.py``: it is
-what ``--version`` prints and what the package metadata reads. The version of
-the Debian package lives in the newest entry of ``debian/changelog``. Since the
-package ships the program as it is, both name the same version, and a
-difference means that one of the two was forgotten (ADR 0013).
-
-A build for a test host carries the next patch version of the current line
-(ADR 0041), so both files always name the same ``X.Y.Z`` and nothing else; a
-pre-release form such as ``X.Y.Z.devN`` is rejected.
-
-Usage:
-    scripts/check_version_sync.py [--root PATH]
-
-Exit status: 0 when both versions are the same, 1 when they are not.
+Both name the same `X.Y.Z`, from `src/pve_smart_alert/__init__.py` and the
+newest `debian/changelog` entry; a pre-release form is rejected (ADR 0013,
+ADR 0041). Usage: `scripts/check_version_sync.py [--root PATH]`; exit status
+0 when they match, 1 when they do not.
 """
 
 from __future__ import annotations

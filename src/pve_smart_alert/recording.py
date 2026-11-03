@@ -1,18 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """An anonymized recording of one host (ADR 0016, ADR 0023).
 
-A recording is what a host answered: the device scan, one drive output per
-device and the block devices of lsblk. `anonymize` turns it into the files of
-a fixture: the identifiers numbered in the order of the scan, every file
-checked for real values, and `recording.json` describing where each file
-comes from. `scripts/make_fixtures.py` makes fixtures of archives of the
-collection script and of the test data of other projects with it, and
-`pve-smart-alert dump-fixture` (FR-604) the archive a user can attach to an
-issue.
-
-A recording taken from another project may lack the device scan, or consist of
-the scan alone. Nothing missing is made up: such a fixture simply has no
-`scan.json`, or no drive files (ADR 0026).
+A recording is the device scan, one drive output per device and the block
+devices of lsblk. `anonymize` turns it into the files of a fixture, numbered
+in scan order and checked for real values. Nothing missing is made up
+(ADR 0026).
 """
 
 from __future__ import annotations
@@ -29,11 +21,9 @@ from pve_smart_alert.anonymize import Anonymizer
 class Recording:
     """What one host answered, before anonymization.
 
-    `drives` are the drive outputs by the name of their file without
-    `.json`, `exits` their exit statuses, and `calls` the device name and
-    type each was read with, where they are known. `scan` is `None` when the
-    source has no device scan. `source` says where a recording of another project
-    was taken from: repository, commit, path and copyright (ADR 0026).
+    `drives` are the outputs by file stem, `exits` their exit statuses and
+    `calls` the name and type each was read with. `scan` is `None` without a
+    device scan; `source` names the origin of another project (ADR 0026).
     """
 
     node: str
@@ -146,11 +136,9 @@ def _file_names(
 ) -> dict[str, str]:
     """Return the file name of each drive output, one name per drive.
 
-    The name comes from the anonymized device a drive was read through.
-    Several drives can share that device, such as the drives behind a
-    MegaRAID controller, which are all read through one device with a
-    different smartctl type: the second and every later one gets a number, so
-    that one output never overwrites another (ADR 0023).
+    Several drives can share the device they were read through, as behind a
+    MegaRAID controller: the second and every later one gets a number, so
+    that no output overwrites another (ADR 0023).
     """
     # The other files of a fixture: a drive must not take one of their names.
     names: dict[str, str] = {}
@@ -170,10 +158,9 @@ def _file_names(
 def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:
     """Return the file name of a drive output: the stem of the recording.
 
-    A device name that the anonymizer replaces, such as a `by-id` link, can
-    hold the serial number of the drive: then the anonymized name gives the
-    file name instead of the stem. Every other stem is kept, so that a
-    fixture keeps the file names its source gave it (ADR 0023, ADR 0039).
+    A device name that the anonymizer replaces can hold a serial number: then
+    its anonymized name gives the file name. Every other stem is kept, so
+    that a fixture keeps its file names (ADR 0023, ADR 0039).
     """
     name = _recorded_name(recording, stem)
     if isinstance(name, str) and name:

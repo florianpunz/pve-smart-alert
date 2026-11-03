@@ -1,16 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """One run of `pve-smart-alert check` (ARCHITECTURE.md section 3).
 
-Lock, configuration, state, preflight, discovery, collection, evaluation,
-presence, planning, delivery, save, summary. Everything the run touches
-outside the process is a field of `Environment`, so that a scenario test can
-run it with a clock, a state directory, a fake smartctl and a transport of
-its own (ADR 0016).
-
-A state change that belongs to a notification is applied only after the
-transport handed the notification over (FR-517); the state file is replaced
-once, at the end (ADR 0007). With `dry_run`, nothing is locked, sent or
-saved, and the state is read without setting a corrupt file aside.
+Everything the run touches outside the process is a field of `Environment`,
+so a scenario test replaces the clock, the paths, smartctl and the transport
+(ADR 0016). A state change is applied only after its notification was handed
+over (FR-517), and the state file is written once, at the end (ADR 0007).
 """
 
 from __future__ import annotations
@@ -127,10 +121,9 @@ class Delivery:
 class RunResult:
     """What one run did.
 
-    `discovery` and `findings` feed the report of a dry run; `findings` is
-    keyed by `Access.key`, the device name and the smartctl type. `ok` is
-    false when a notification was not handed over or the state could not be
-    saved, which makes the run fail (FR-607).
+    `discovery` and `findings`, keyed by `Access.key`, feed the dry-run
+    report. `ok` is false when a notification was not handed over or the
+    state could not be saved (FR-607).
     """
 
     config: Config

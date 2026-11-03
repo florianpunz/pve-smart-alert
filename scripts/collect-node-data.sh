@@ -1,25 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Collects the raw data of one Proxmox VE node that the development and the
-# acceptance runs need: the smartctl output of every drive, the block device
-# and LVM layout, the disk list of the web interface with its wearout column,
-# the notification matchers and targets, and the output of the installed
-# tool, if any. Everything ends up in one archive that can be copied with scp.
-#
-# The script only reads. It changes no setting, starts no self-test and sends
-# no notification (ADR 0012). A command that is missing or fails is recorded
-# in errors.txt and does not stop the run.
-#
-# The archive contains real serial numbers and WWNs. Keep it out of the
-# repository; fixtures are anonymized before they are committed (ADR 0016).
-#
-# Usage, as root on the node:
-#     sh collect-node-data.sh [LABEL]
-#
-# LABEL is added to the archive name, for example "matchers-b" for a run with
-# a changed matcher configuration. The archive is written to the current
-# directory and its path is printed at the end.
+# Collects the raw data of one node: smartctl, lsblk, LVM, the disk list and
+# the notification configuration. It only reads (ADR 0012), and the archive
+# holds real serial numbers, so it stays out of the repository (ADR 0016).
+
+# Usage as root: sh collect-node-data.sh [LABEL]. The archive is written to
+# the current directory and its path is printed at the end.
 
 set -u
 
@@ -91,8 +77,7 @@ if command -v zpool >/dev/null 2>&1; then
     run "${OUT}/zpool-list.txt" zpool list -v -P
 fi
 
-# The disk list of the web interface, including the wearout column, replaces
-# the screenshot for acceptance step 2 of M2.
+# The disk list of the web interface, including the wearout column.
 run "${OUT}/pve-disks.json" pvesh get "/nodes/${NODE}/disks/list" --output-format json
 run "${OUT}/matchers.json" pvesh get /cluster/notifications/matchers --output-format json
 run "${OUT}/targets.json" pvesh get /cluster/notifications/targets --output-format json

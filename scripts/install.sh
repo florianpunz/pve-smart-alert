@@ -1,16 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Installs PVE SMART Alert on a Proxmox VE host (ADR 0013).
-#
+# Installs PVE SMART Alert on a Proxmox VE host (ADR 0013):
 #   wget -qO- https://github.com/florianpunz/pve-smart-alert/releases/latest/download/install.sh | sh
-#
-# It downloads the package and SHA256SUMS of a release, verifies the package
-# against its checksum and installs it with apt. Everything that changes the
-# system is done by the package; this script changes nothing else.
-#
-# PVE_SMART_ALERT_VERSION=0.5.1 installs that version instead of the newest.
-# PVE_SMART_ALERT_BASE_URL replaces the download location, for a mirror.
+# The checksum proves integrity only, not that the package is the intended one.
 set -eu
 
 repository="https://github.com/florianpunz/pve-smart-alert"
@@ -42,10 +34,8 @@ echo "pve-smart-alert: downloading $base/$package"
 wget -q -O "$work/$package" "$base/$package"
 wget -q -O "$work/SHA256SUMS" "$base/SHA256SUMS"
 
-# Only the line of the downloaded package counts; a missing line is an error.
-# The name is matched as a fixed string, not as a pattern: a version carries
-# dots, and a pattern would accept a line for another file that happens to
-# match it.
+# Only the line of the downloaded package counts, and the name is matched as a
+# fixed string: dots in a version make a pattern accept another file's line.
 if ! awk -v name="$package" 'length($1) == 64 && $2 == name { print $1 "  " $2 }' \
 	"$work/SHA256SUMS" >"$work/expected" || [ ! -s "$work/expected" ]; then
 	echo "pve-smart-alert: SHA256SUMS has no checksum for $package" >&2
@@ -79,21 +69,17 @@ fi
 chmod 755 "$work"
 chmod 644 "$work/$package"
 
-# What apt did is read from dpkg before and after the call, not from what apt
-# prints, which is not an interface. The state comes with the version, because
-# a package that was removed but not purged has a version as well, and
-# installing it again is an installation, not a no-op.
+# What apt did is read from dpkg, not from what apt prints, which is not an
+# interface. The state comes with the version: a removed but unpurged package
+# has one too, and installing it again is an installation, not a no-op.
 installed_state() {
 	dpkg-query --show --showformat='${db:Status-Status} ${Version}' pve-smart-alert \
 		2>/dev/null || true
 }
 
-# "installed 0.5.0~dev5" for an installed package, "config-files 0.5.0~dev5" for
-# one that was removed but not purged, "half-configured 0.5.0~dev5" for one that
-# apt did not finish. The full status name is used, not the abbreviation: the
-# abbreviation is three characters, and the third one is a space for a healthy
-# package ("ii "), so it runs into the version and every comparison shifts by
-# one character. So "${state%% *}" is the state and "${state#* }" the version.
+# "installed 0.5.1" for an installed package, "config-files 0.5.1" for a
+# removed one. The full status name is used, not the three-character
+# abbreviation, which runs into the version ("ii 0.5.1").
 state_of() {
 	printf '%s' "${1%% *}"
 }

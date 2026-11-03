@@ -1,13 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The report of `pve-smart-alert status` (FR-602).
 
-Everything comes from the stored state; nothing is read from a drive. The
-last run with its time and result, the conditions of the tool, every drive
-with its active conditions, the conditions that wait for their
-confirmation, the drives that are missing or unreadable, and the skipped
-devices. With `--json` the state is printed as the tool loaded it, which is
-the machine-readable form (ARCHITECTURE.md section 9): a file of an older
-schema is migrated in memory, so its keys can differ from the file.
+Everything comes from the stored state; nothing is read from a drive. With
+`--json` the state is printed as loaded (ARCHITECTURE.md section 9), so a
+migrated schema can differ from the file.
 """
 
 from __future__ import annotations

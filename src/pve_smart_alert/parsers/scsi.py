@@ -1,21 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The parser for SCSI drives: SAS and parallel SCSI hard disks and SSDs (ADR 0004).
+"""The parser for SCSI drives: SAS and parallel SCSI (ADR 0004).
 
-The keys are those of smartmontools 7.3 and later (`scsi_model_name`,
-`scsi_revision`), with the names of 7.0 to 7.2 (`model_name`, `revision`) as
-the fallback (Research 08). The values of the log pages become metrics
-named `scsi.*`:
-
-- `scsi.grown_defects`: the elements of the grown defect list;
-- `scsi.uncorrected_errors`: the uncorrected errors of the error counter
-  log, read, write and verify added up, of the parts the drive reports;
-- `scsi.pending_defects`: the pending defects, which smartctl reads only
-  with `--xall` and only from drives that have the log page.
-
-The health verdict of a SCSI drive is missing when the drive has no
-informational exceptions mode page, and then it is not applicable: only an
-explicit `false` is a failed verdict (Research 08). The non-medium error
-count is not read; smartctl writes it only as text (docs/check-catalog.md).
+The keys are those of smartmontools 7.3 and later, with the names of 7.0 to
+7.2 as the fallback (Research 08). The log pages become `scsi.*` metrics.
+The health verdict is missing without an informational exceptions page, and
+only an explicit `false` is failed (Research 08).
 """
 
 from __future__ import annotations
@@ -41,10 +30,9 @@ from pve_smart_alert.parsers.wear import WEAR_METRIC, scsi_wear
 # The parts of the error counter log (`scsiprint.cpp`, Research 08).
 ERROR_COUNTER_PARTS: Final = ("read", "write", "verify")
 
-# The result codes of a self-test in the SCSI self-test log: 0 completed
-# without error, 3 to 7 an error or a failed segment, for which smartctl sets
-# its own failure bits. 1 and 2 are aborted tests and 15 a test in progress,
-# neither a failure (`scsiprint.cpp`, SPC-3 section 7.2.10).
+# The result codes of a SCSI self-test: 0 passed, 3 to 7 an error or a failed
+# segment. 1 and 2 are aborted tests and 15 a test in progress, neither a
+# failure (`scsiprint.cpp`, SPC-3 section 7.2.10).
 _SELF_TEST_PASSED: Final = 0
 _SELF_TEST_FAILED: Final = frozenset({3, 4, 5, 6, 7})
 

@@ -1,13 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# One run of the drive health check, started by pve-smart-alert.timer
-# (ADR 0006). It has no [Install] section: it is never enabled, only started
-# by the timer or by hand with `systemctl start pve-smart-alert.service`.
-#
-# Exit status 3 means that another run holds the lock, which is not a failure
-# of this one (FR-605). Every other status but 0 is a failure, status 1
-# included, a notification that could not be handed over: the failure unit
-# then reports it through a path that does not use the code of the tool.
+# One run of the drive health check, started by pve-smart-alert.timer (ADR 0006)
+# and never enabled. Exit status 3 means another run holds the lock (FR-605);
+# every other non-zero status is a failure that the failure unit reports.
 
 [Unit]
 Description=PVE SMART Alert drive health check

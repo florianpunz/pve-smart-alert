@@ -1,15 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The report of `pve-smart-alert config show` (FR-407).
 
-Every key of the effective configuration with its value and the origin of
-that value: the configuration file, the built-in default, or the last good
-configuration while the file cannot be used. The thresholds
-of the one check that differs per drive class are shown per class, as the
-global configuration leaves them for each class; the per-drive overrides
-are listed as they are configured, because which of them applies is known
-only for a concrete drive. What a run uses for one drive is named by
-`effective_checks`. The conditions of the tool follow the checks of a
-drive; they have no threshold, only their enabled state (FR-408, ADR 0031).
+Every key of the effective configuration with its value and origin: the file,
+the built-in default or the last good configuration. The per-class thresholds
+are shown per class; the per-drive overrides are listed as configured, since
+which one applies is known only for a concrete drive.
 """
 
 from __future__ import annotations
@@ -28,15 +23,15 @@ from pve_smart_alert.config import (
 )
 from pve_smart_alert.model import toml_string
 
-#: The words after a value that say where it comes from.
+# The words after a value that say where it comes from.
 _FROM_FILE: Final = "file"
 _FROM_DEFAULT: Final = "default"
 _FROM_LAST_GOOD: Final = "last good"
 
-#: The severities of a threshold, in the order they are shown.
+# The severities of a threshold, in the order they are shown.
 _SEVERITIES: Final = ("notice", "warning", "critical")
 
-#: The drive classes, in the order they are shown.
+# The drive classes, in the order they are shown.
 _CLASS_ORDER: Final = {"hdd": 0, "ssd": 1, "nvme": 2}
 
 
@@ -49,13 +44,9 @@ def render(
 ) -> list[str]:
     """Return the lines of the report.
 
-    `raw` is the configuration document as it lies in the file, or `None`
-    when the report shows the built-in defaults or the last good
-    configuration; it decides the origin of each value. `error` names a
-    file that could not be used. `last_good` says that the values come
-    from the last good configuration, not from the file, so every value of
-    the settings and checks is credited to it; the per-drive overrides are
-    shown as configured and carry no origin.
+    `raw` decides the origin of each value; `error` names a file that could
+    not be used. `last_good` credits every value to the last good
+    configuration, while the per-drive overrides carry no origin.
     """
     document = raw if raw is not None else {}
     origin = _FROM_LAST_GOOD if last_good else None

@@ -1,16 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Rendering the subject and the body of a notification.
+"""Rendering the subject and the body of a notification (ADR 0008).
 
-The tool renders both texts itself and the templates of the notification
-system only pass them through, so that the same text reaches the recipient on
-every route and no rendering depends on the Handlebars helpers of a particular
-Proxmox VE version (ADR 0008). The layout of a message about a drive is the
-one of ARCHITECTURE.md section 10; the structured data goes along for
-administrators who override the templates.
-
-Strings that come from a drive, such as the model and the serial number, are
-untrusted: they are stripped of control characters and cut before they are
-written into a message (ARCHITECTURE.md section 14).
+The tool renders both texts itself and the templates only pass them through,
+so the same text reaches the recipient on every route. The layout is in
+ARCHITECTURE.md section 10; drive strings are untrusted and are cleaned and
+cut before they are written (ARCHITECTURE.md section 14).
 """
 
 from __future__ import annotations
@@ -48,12 +42,9 @@ SUBJECT_PREFIX: Final = "[pve-smart-alert]"
 
 # Strings of a drive are cut to this length in a message.
 _MAX_TEXT: Final = 200
-# The text of a condition of the tool is the tool's own words: it says what a
-# run found about the host and what to do about it, and its only untrusted
-# fragment is the driver name of a SCSI host, which is cut to 64 characters
-# where it is read (ARCHITECTURE.md section 14, ADR 0030). It is therefore cut
-# far later, so that the notice about an unsupported controller reaches the
-# reader with its count and the way to switch it off (ADR 0031).
+# The text of a condition of the tool is its own words; only the driver name of
+# a SCSI host is untrusted, cut where it is read (ADR 0030). It is cut far
+# later, so that the whole notice reaches the reader (ADR 0031).
 _MAX_TOOL_TEXT: Final = 1000
 
 # The width of the labels of the header block, and of the severity column.
@@ -80,7 +71,7 @@ _REPLACE: Final = "Plan a replacement of the drive and make sure its data is bac
 _REPLACE_NOW: Final = "Replace the drive soon and make sure its data is backed up now."
 _COUNTER: Final = "A counter that keeps increasing indicates a failing drive. " + _REPLACE
 
-#: The texts of every check of the catalog and every condition of the tool.
+# The texts of every check of the catalog and every condition of the tool.
 TEXTS: Final[Mapping[str, Texts]] = {
     "health.failed": Texts(
         "Health verdict",
@@ -308,10 +299,8 @@ def render_test_notification(severity: Severity, *, node: str) -> Notification:
 def cluster_name(path: Path = COROSYNC_CONF_PATH) -> str | None:
     """Return the name of the cluster this node belongs to, or `None`.
 
-    Proxmox VE keeps the corosync configuration of a cluster in
-    `/etc/pve/corosync.conf`, and corosync names the cluster with the key
-    `cluster_name` of its `totem` section (corosync.conf(5)). A node that is
-    not in a cluster has no such file. The file is only read (ADR 0012).
+    Corosync names it with `cluster_name` of its `totem` section
+    (corosync.conf(5)); the file is only read (ADR 0012).
     """
     try:
         text = path.read_text(encoding="utf-8")
@@ -345,10 +334,9 @@ def _drive(planned: Planned, context: RenderContext) -> Notification:
     if closing:
         lines += ["", *closing]
     lines += ["", _signature(context)]
-    # The fields are built from the values as the state keeps them: the
-    # notification sanitizes them in `fields_for`, and a value that cleaning
-    # would leave empty is carried escaped instead of being left out
-    # (ADR 0036).
+    # The fields are built from the values as the state keeps them: `fields_for`
+    # sanitizes them, and a value that cleaning would leave empty is carried
+    # escaped instead (ADR 0036).
     fields = {
         FIELD_EVENT: message.event.value,
         FIELD_DEVICE: drive.name,

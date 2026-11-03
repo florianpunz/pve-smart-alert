@@ -87,10 +87,9 @@ EXIT_PROBLEM = 1
 EXIT_USAGE = 2
 # Another run holds the lock. Not an error of the run that holds it (FR-605).
 EXIT_LOCKED = 3
-# The command was interrupted with Ctrl+C. The number is the one a shell
-# reports for a program that died from SIGINT, so that a script that tests for
-# an interruption keeps working; the run itself says what happened instead of
-# ending in a traceback.
+# The command was interrupted with Ctrl+C. 130 is what a shell reports for a
+# program that died from SIGINT, so a script keeps working, and the run says
+# what happened instead of ending in a traceback.
 EXIT_INTERRUPTED = 130
 
 # Where a run reads lsblk, the links below /dev/disk and sysfs. The tests
@@ -327,13 +326,9 @@ def _report(
 def _matchers(notification: Notification, outcome: TransportOutcome) -> tuple[str, bool]:
     """Return which matchers route the delivered test notification.
 
-    The second value says whether that was decided: whether the line answers
-    where the notification went, or only why it cannot.
-
-    The notification system accepts a notification that no matcher matches
-    and drops it without an error, so the answer of the transport alone
-    cannot tell whether it went anywhere (ADR 0020). A test that went as mail
-    to root is followed as the notification the mail forwarder makes of it
+    The second value says whether that was decided. The transport alone
+    cannot tell whether a notification reached a target (ADR 0020); a test
+    sent as mail is followed as the notification the forwarder makes of it
     (ADR 0022).
     """
     if outcome.transport is TransportName.PVE_NOTIFY:

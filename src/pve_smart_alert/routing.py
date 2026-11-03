@@ -1,32 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The routing check: whether the notifications of the tool reach a target.
 
-A notification that no matcher of the notification system matches is accepted
-and dropped without an error, and the answer of the notification library does
-not tell this apart from a delivery (ADR 0020). This module reads the matchers
-and targets through the public API with `pvesh` and evaluates them the way
-`proxmox-notify` does (Research 01):
-
-- A matcher combines its rules with its mode, `all` or `any`: first the rules
-  of each kind, then the kinds. A matcher without rules matches everything,
-  and `invert-match` inverts the result of all others.
-- A rule on a field that the notification does not carry does not match.
-- A disabled matcher takes no part, and of the targets of a matcher only one
-  that exists and is enabled receives the notification.
-
-What cannot be decided here is unknown, and an unknown never counts as
-routed: a time rule, a rule on a field whose value differs between
-notifications, a regular expression that Python reads differently, a key this
-module does not know. The result is a hint; the notification system remains
-the authority on what is delivered (ADR 0020).
-
-The same evaluation covers the fallback route, mail to root, which the mail
-forwarder of Proxmox VE turns into a notification of the type `system-mail`
-(ADR 0022). Whether a mail reaches the forwarder at all depends on
-`/root/.forward`, which is read but never changed.
-
-Only `pvesh` is run, a documented command. No Proxmox VE code is imported
-(ADR 0008).
+A notification that no matcher matches is dropped without an error (ADR 0020).
+This module reads matchers and targets with `pvesh` and evaluates them the way
+`proxmox-notify` does; an undecided case is `unknown`, never routed (Research
+01). The same evaluation covers the fallback route, mail to root (ADR 0022).
 """
 
 from __future__ import annotations
@@ -63,13 +41,9 @@ TIMEOUT_SECONDS: Final = 30.0
 MATCHERS: Final = "/cluster/notifications/matchers"
 TARGETS: Final = "/cluster/notifications/targets"
 
-# The fields whose values differ from one notification of the tool to the
-# next (FR-503). A rule on one of them matches some notifications and not
-# others. `device-id` is carried only by some notifications at all, and a
-# rule on a field a notification lacks does not match it, so a rule on it is
-# just as undecided (ADR 0029). A field the tool sends in the future belongs
-# here as well, because a rule on a field the tool never sends is decided as
-# "no match".
+# The fields whose values differ between notifications (FR-503), so a rule on
+# one of them is undecided. `device-id` is carried only by some (ADR 0029).
+# A field the tool sends in the future belongs here as well.
 VARYING_FIELDS: Final = frozenset(
     {FIELD_EVENT, FIELD_DEVICE, FIELD_DEVICE_ID, FIELD_SERIAL, FIELD_MODEL}
 )
@@ -153,10 +127,9 @@ class Blocked:
 class Routing:
     """Where notifications with one set of metadata go.
 
-    `matchers` are the matchers that route them to an enabled target, in the
-    order of the configuration. `reasons` say why the verdict is unknown.
-    `blocked` names, for a notification that is not routed, the matchers that
-    would route it if they or their targets were enabled.
+    `matchers` route them in configuration order, `reasons` say why the
+    verdict is unknown, and `blocked` names the matchers that would route it
+    if they or their targets were enabled.
     """
 
     verdict: Verdict
@@ -218,11 +191,8 @@ def forwarded_mail_metadata(*, node: str) -> Metadata:
 def mail_is_forwarded(path: Path = ROOT_FORWARD_PATH) -> Truth:
     """Return whether mail to root reaches the notification system.
 
-    Mail to root is handed to the mail forwarder of Proxmox VE by a line in
-    `/root/.forward`, which the package `proxmox-mail-forward` writes
-    (Research 01). Without that line the mail ends in the local mailbox.
-    `None` when the file cannot be read. An alias of the mail system that
-    sends mail for root elsewhere is not seen here.
+    The forwarder is a line in `/root/.forward` (Research 01); without it the
+    mail ends in the local mailbox, and `None` means the file cannot be read.
     """
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -511,10 +481,8 @@ _MODES: Final[Mapping[str, tuple[Truth, Callable[[Truth, Truth], Truth]]]] = {
 def _compile(expression: str) -> re.Pattern[str] | None:
     """Return a regular expression of a rule, or `None`.
 
-    `proxmox-notify` uses the regular expressions of Rust, which Python reads
-    alike in the common cases. An expression that Python cannot compile, or
-    compiles only with a warning that it may mean something else, such as a
-    nested character class, is not evaluated.
+    `proxmox-notify` uses Rust regular expressions. One that Python cannot
+    compile, or compiles with a warning, is not evaluated.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error")

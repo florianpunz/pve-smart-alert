@@ -1,22 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The failure reporter, installed as /usr/libexec/pve-smart-alert/report-failure
-# and started by pve-smart-alert-failure.service when a run of
-# pve-smart-alert.service failed (ADR 0006, ADR 0009).
-#
-# It uses nothing of the tool, because a run that failed may have failed in
-# exactly that code: it sends one plain mail to root through the mail command
-# of the host, the same command and arguments the mail transport uses. It
-# sends at most one mail a day. The stamp of that limit lives in the runtime
-# directory, which a reboot empties, so one more mail per boot is possible.
-#
-# systemd 251 and later describe the failed run in the MONITOR_* variables of
-# a unit started through OnFailure= (systemd.exec(5)). Without them the mail
-# is sent all the same, with less detail.
-#
-# PVE_SMART_ALERT_RUN_DIR, PVE_SMART_ALERT_SENDMAIL and
-# PVE_SMART_ALERT_JOURNALCTL exist for the tests. The unit sets none of them.
+# The failure reporter of pve-smart-alert-failure.service (ADR 0006, ADR 0009):
+# it uses nothing of the tool and sends one plain mail to root per day. The
+# PVE_SMART_ALERT_* variables exist for the tests; the unit sets none of them.
 set -u
 
 run_dir=${PVE_SMART_ALERT_RUN_DIR:-/run/pve-smart-alert}
@@ -35,15 +21,12 @@ fi
 host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo unknown)
 
 # What the failed run wrote to the journal. Only read, and only when systemd
-# named the run.
+# named the run; systemd 251 and later do so in MONITOR_* (systemd.exec(5)).
 last_lines() {
 	if [ -n "${MONITOR_INVOCATION_ID:-}" ] && command -v "$journalctl" >/dev/null 2>&1; then
-		# No control or format character of a journal line reaches the mail,
-		# and neither do the line and paragraph separators: the tool cleans
-		# what it writes, but a traceback need not (ARCHITECTURE.md
-		# section 14). Tabs and line breaks stay. Perl is part of Proxmox VE,
-		# so the report does not depend on the Python whose run may have
-		# failed.
+		# The tool cleans what it writes, but a traceback need not: no control
+		# character reaches the mail (ARCHITECTURE.md section 14). Perl avoids
+		# the Python whose run may have failed.
 		"$journalctl" --no-pager --quiet --output=short-iso --lines=30 \
 			"_SYSTEMD_INVOCATION_ID=$MONITOR_INVOCATION_ID" 2>/dev/null |
 			# The bytes are decoded here, not by the IO layer, so that a
