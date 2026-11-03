@@ -119,8 +119,8 @@ def collect_drive(
 ) -> Collected:
     """Run smartctl for one drive and judge its answer.
 
-    `OSError` from the runner becomes `Status.UNREADABLE`; any other exception,
-    including one from parsing deeply nested JSON, propagates (FR-205).
+    `OSError` from the runner becomes `Status.UNREADABLE`; a `RecursionError`
+    from `json.loads` propagates and ends the run, against FR-205.
     """
     command = drive_command(name, device_type, settings=settings, protocol=protocol)
     started = clock()

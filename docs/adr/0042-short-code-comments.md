@@ -12,12 +12,12 @@ The maintenance rules in [CLAUDE.md](../../CLAUDE.md) already say that each fact
 
 ## Decision
 
-A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to the shipped code in this repository, in every language: `src/`, `libexec/`, `systemd/`, `scripts/`, `debian/` and `config/config.toml`. Test code, the CI workflows and `config/config.reference.toml` are out of scope: a test uses hosts, dates and question IDs as data, and the reference configuration is user documentation (ADR 0011).
+A comment describes what the code does now. It never describes a planned fix, a milestone or a date. One style applies to the shipped code in this repository, in every language: `src/`, `libexec/`, `systemd/`, `scripts/`, and the Debian maintainer scripts and debhelper files. Test code, the CI workflows and the configuration files (`config/config.toml`, `config/config.reference.toml`) are out of scope: a test uses hosts, dates and question IDs as data, the reference configuration is user documentation (ADR 0011), and a comment change in the conffile would ask every administrator at the next upgrade.
 
 1. A comment says **why** or **warns**. It never restates what the code says.
 2. Inline and block comments are one or two lines, with a hard limit of three.
 3. A docstring has one summary line. Its body carries only contract details that are not obvious, such as a return value, a raised exception or a side effect, in at most four lines. A module docstring states the purpose in at most five lines, then one line of references.
-4. The file header of a shell, Perl, systemd or TOML file is at most five lines.
+4. The file header of a shell, Perl or systemd file is at most five lines.
 5. Longer reasoning lives in an ADR or a document and is referenced by identifier: `ADR 0010`, `FR-302`, `NFR-08`, `Q-T1`, `Research 03`, `ARCHITECTURE.md section 10`. Code carries no Markdown link.
 6. A warning starts with "Do not ..." or "Keep in sync with ..." and gives the reason in a few words.
 7. Units and limits are named: °C, %, s, min, attribute IDs, exit bits.

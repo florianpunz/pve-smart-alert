@@ -58,7 +58,7 @@ def ata_wear(document: Mapping[str, object]) -> Wear:
     endurance = _endurance_used(document)
     if endurance is not None and statistics is not None:
         # With the device statistics read, smartmontools overrides its own
-        # attribute guess with their standard value ([Research 03]), so
+        # attribute guess with their standard value (Research 03), so
         # `endurance_used` is the vendor-neutral source of ADR 0021.
         return Wear(endurance, WearSource.ENDURANCE_USED, web_interface)
     if statistics is not None:

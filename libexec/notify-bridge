@@ -26,7 +26,7 @@ sub answer {
 sub load_notify {
     eval { require PVE::Notify; 1 } or return "PVE::Notify could not be loaded: $@";
     return "PVE::Notify does not offer notify()" unless PVE::Notify->can('notify');
-    # undef means the module loaded and offers notify().
+    # Explicit undef: without it Perl returns can()'s code ref, which reads as an error.
     return undef;
 }
 

@@ -2,9 +2,9 @@
 """Running an external program with a timeout.
 
 Programs are started with an argument list, never through a shell, and in
-their own process group, so that a timeout ends everything they started
-(ARCHITECTURE.md section 14). Every component that runs a program uses this
-module, `collect.py` included. There is no default timeout.
+their own process group, so that a timeout ends everything they started,
+except a process stuck in disk I/O (see `run_with_timeout`); every component
+that runs a program uses this module (ARCHITECTURE.md section 14).
 """
 
 from __future__ import annotations

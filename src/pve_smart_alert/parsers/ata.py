@@ -37,7 +37,6 @@ from pve_smart_alert.parsers.wear import WEAR_METRIC, WEB_INTERFACE_METRIC, ata_
 # such as "0 0 0" is used as the packed raw number (Q-T1, docs/check-catalog.md).
 _TIMEOUT_STRING: Final = re.compile(r"([0-9]+) \([0-9]+/[0-9]+/[0-9]+\)")
 
-# The attribute that carries the command timeouts.
 _TIMEOUT_ATTRIBUTE: Final = 188
 
 

@@ -3,8 +3,8 @@
 
 One parser per protocol. A missing key leaves its value out, which makes the
 checks that need it not applicable (FR-206). `collect.py`,
-`discovery/sources.py`, `dump.py` and `scripts/make_fixtures.py` read smartctl
-JSON without building a snapshot.
+`discovery/sources.py`, `dump.py`, `recording.py` and `scripts/make_fixtures.py`,
+for example, read smartctl JSON without building a snapshot.
 """
 
 from __future__ import annotations
