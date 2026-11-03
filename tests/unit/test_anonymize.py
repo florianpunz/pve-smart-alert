@@ -8,6 +8,7 @@ them belongs to a drive.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from typing import Final
 
@@ -20,6 +21,7 @@ from pve_smart_alert.anonymize import (
     Eui64,
     Wwn,
 )
+from pve_smart_alert.recording import Recording, anonymize, serialize_bytes
 
 SATA: Final[dict[str, object]] = {
     "device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"},
@@ -138,6 +140,204 @@ def test_a_real_value_that_is_left_fails_the_check(leak: dict[str, object]) -> N
     assert message.startswith("lsblk.json still contains a real value: ")
     assert "123456" not in message
     assert "e40a1b2c3" not in message
+
+
+def test_two_drives_read_through_one_device_keep_each_output() -> None:
+    # Two drives can be read through one link with a different smartctl
+    # type, such as a by-id link of a RAID controller. The anonymizer
+    # replaces the link by one placeholder, so both file names would be the
+    # same: without the number the second output overwrote the first and the
+    # fixture lost a drive (ADR 0023).
+    first = copy.deepcopy(SATA)
+    second = copy.deepcopy(NVME)
+    link = "/dev/disk/by-id/ata-Samsung_SSD_1234"
+    first["device"] = {"name": link, "type": "megaraid,8", "protocol": "ATA"}
+    second["device"] = {"name": link, "type": "megaraid,14", "protocol": "ATA"}
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["link-8"] = first
+    recording.drives["link-14"] = second
+    recording.calls["link-8"] = (link, "megaraid,8")
+    recording.calls["link-14"] = (link, "megaraid,14")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    metadata = files["recording.json"]
+    assert isinstance(metadata, dict)
+    listed = metadata["files"]
+    assert isinstance(listed, list)
+    entries = [entry for entry in listed if isinstance(entry, dict) and entry.get("type")]
+    assert len(entries) == 2
+    # The link becomes one placeholder for both, and the second gets a number.
+    assert {entry["file"] for entry in entries} == {"anon1.json", "anon1-2.json"}
+    for entry in entries:
+        drive = files[entry["file"]]
+        assert isinstance(drive, dict)
+        assert drive["model_name"] == entry["model"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "/dev/sda",
+        "/dev/sda1",
+        "/dev/nvme0",
+        "/dev/nvme0n1",
+        "/dev/sg0",
+        "/dev/bsg/sssraid0",
+        "/dev/bus/6",
+        "/dev/dm-0",
+        "/dev/cciss/c0d0",
+        "/dev/md0",
+        "/dev/twa0",
+    ],
+)
+def test_a_node_name_is_kept(name: str) -> None:
+    # A kernel or controller node names no drive, so it is kept (ADR 0039).
+    assert Anonymizer().learn_device(name) == name
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "/dev/disk/by-id/ata-Samsung_SSD_1234",
+        "/dev/disk/by-path/pci-0000:00:17.0-ata-2",
+        "/dev/mapper/3600508b400105e210000900000490000",
+        "/dev/serial/by-id/usb-KVM-over-IP_1234",
+        "/dev/md/myarray",
+    ],
+)
+def test_a_name_that_is_not_a_node_is_replaced(name: str) -> None:
+    # Anything else can hold an identifier: a by-id link holds the serial
+    # number, a mapper name the WWID when user_friendly_names is off
+    # (ADR 0039).
+    assert Anonymizer().learn_device(name) == "/dev/anon1"
+
+
+def test_a_drive_named_scan_does_not_overwrite_the_scan() -> None:
+    # `scan`, `lsblk` and `recording` are the names of the other files of a
+    # fixture. A drive whose file name would be one of them gets a numbered
+    # name instead of overwriting that file (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    recording = Recording(
+        node="pve9",
+        collected=None,
+        collected_with="test",
+        scan={"devices": [{"name": "/dev/sda", "type": "sat"}]},
+        scan_exit=0,
+    )
+    recording.drives["scan"] = drive
+    recording.calls["scan"] = ("/dev/sda", "sat")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    scan = files["scan.json"]
+    assert isinstance(scan, dict)
+    assert "model_name" not in scan
+    assert isinstance(scan.get("devices"), list)
+    drive_file = files["scan-2.json"]
+    assert isinstance(drive_file, dict)
+    assert drive_file["model_name"] == SATA["model_name"]
+
+
+def test_the_file_name_keeps_the_stem_of_the_recording() -> None:
+    # A recording imported from another project names its drive files
+    # itself. The device is a node, which holds no identifier, so the stem
+    # stays and a regenerated fixture keeps its file names (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["device"] = {"name": "/dev/bus/6", "type": "sat", "protocol": "ATA"}
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["bus6-megaraid14"] = drive
+    recording.calls["bus6-megaraid14"] = ("/dev/bus/6", "sat")
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    assert "bus6-megaraid14.json" in files
+
+
+def test_a_recording_with_a_lone_surrogate_is_written() -> None:
+    # A string of a drive can hold a lone surrogate, which UTF-8 cannot
+    # encode: the file is written with the escape instead, so that the
+    # archive is not lost (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["model_name"] = "EVIL\ud800X 8TB"
+    recording = Recording(
+        node="pve9", collected=None, collected_with="test", scan=None, scan_exit=None
+    )
+    recording.drives["sda"] = drive
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+    document = files["sda.json"]
+
+    assert json.loads(serialize_bytes(document).decode("utf-8"))["model_name"] == (
+        "EVIL\ud800X 8TB"
+    )
+
+
+def test_a_serial_and_the_underscore_form_of_another_keep_their_placeholders() -> None:
+    # udev writes a space of a serial number as an underscore. That form is
+    # numbered with the serial number, but it must not take the place of
+    # another real serial number that is written with an underscore
+    # (ADR 0023).
+    spaced = copy.deepcopy(SATA)
+    spaced["serial_number"] = "AB CD"
+    underscored = copy.deepcopy(NVME)
+    underscored["serial_number"] = "AB_CD"
+    anonymizer = Anonymizer()
+    anonymizer.learn(spaced)
+    anonymizer.learn(underscored)
+
+    assert (
+        anonymizer.drive(spaced)["serial_number"] != anonymizer.drive(underscored)["serial_number"]
+    )
+
+
+def test_the_free_text_of_the_metadata_is_anonymized() -> None:
+    # `origin`, `collected_with`, `controller` and the source of an import
+    # are free text. A serial number or WWN pasted into them is replaced
+    # like any other text (ADR 0023).
+    recording = Recording(
+        node="pve9",
+        collected=None,
+        collected_with="recorded by hand on /dev/sda, serial S2R5NX0H123456A",
+        scan=None,
+        scan_exit=None,
+        controller="LSI SAS2308, address 0x5002538e40a1b2c3",
+    )
+    recording.drives["sda"] = copy.deepcopy(SATA)
+
+    files = anonymize(
+        recording, origin="Test", license_id="AGPL-3.0-or-later", anonymized_with="test"
+    )
+
+    text = json.dumps(files["recording.json"])
+    assert "S2R5NX0H123456A" not in text
+    assert "5002538e40a1b2c3" not in text
+
+
+def test_a_serial_number_with_whitespace_is_replaced_in_its_udev_form() -> None:
+    # An ATA serial number may contain spaces; udev writes a space as an
+    # underscore in the by-id link and in the `id` and `id-link` of lsblk
+    # (ADR 0023).
+    drive = copy.deepcopy(SATA)
+    drive["serial_number"] = "S2R5 NX0H 1234A"
+    anonymizer = Anonymizer()
+    anonymizer.learn(drive)
+
+    anonymized = anonymizer.document({"id": "ata-Samsung_SSD_850_EVO_250GB_S2R5_NX0H_1234A"})
+
+    assert anonymized == {"id": "ata-Samsung_SSD_850_EVO_250GB_ANON-SN-0001"}
 
 
 def test_a_short_serial_number_is_replaced_only_in_its_field() -> None:

@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from pve_smart_alert.anonymize import Anonymizer
 
@@ -66,19 +66,29 @@ def anonymize(
     # After the drives of the scan, so that drives only lsblk shows come last.
     if recording.lsblk is not None:
         anonymizer.learn_lsblk(recording.lsblk)
+    # A device name that is not a kernel name can hold a serial number: it
+    # is replaced before any file name or text is built from it (ADR 0023).
+    filenames = _file_names(recording, order, anonymizer)
 
     files: dict[str, object] = {}
     if recording.scan is not None:
         files["scan.json"] = anonymizer.document(recording.scan)
     for stem in order:
-        files[f"{stem}.json"] = anonymizer.drive(recording.drives[stem])
+        files[f"{filenames[stem]}.json"] = anonymizer.drive(recording.drives[stem])
     if recording.lsblk is not None:
         files["lsblk.json"] = anonymizer.lsblk(recording.lsblk)
-    files["recording.json"] = _metadata(
-        recording, order, origin=origin, license_id=license_id, anonymized_with=anonymized_with
+    metadata = _metadata(
+        recording,
+        order,
+        filenames,
+        origin=origin,
+        license_id=license_id,
+        anonymized_with=anonymized_with,
     )
+    files["recording.json"] = anonymizer.document(metadata)
 
     for name, document in files.items():
+        anonymizer.check_name(name)
         anonymizer.check(document, name=name)
     return files
 
@@ -88,11 +98,25 @@ def serialize(document: object) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
+def serialize_bytes(document: object) -> bytes:
+    """Return a file of a fixture as bytes (ADR 0023).
+
+    A string of a drive can hold a lone surrogate, which UTF-8 cannot
+    encode. Such a document is written with its JSON escapes instead, so
+    that the archive is not lost.
+    """
+    text = serialize(document)
+    try:
+        return text.encode("utf-8")
+    except UnicodeEncodeError:
+        return (json.dumps(document, indent=2, ensure_ascii=True) + "\n").encode("ascii")
+
+
 def write_directory(directory: Path, files: Mapping[str, object]) -> None:
     """Write the files of one fixture into a directory."""
     directory.mkdir(parents=True, exist_ok=True)
     for name, document in files.items():
-        (directory / name).write_text(serialize(document), encoding="utf-8")
+        (directory / name).write_bytes(serialize_bytes(document))
 
 
 def scan_order(recording: Recording) -> list[str]:
@@ -117,9 +141,60 @@ def drive_class(drive: Mapping[str, object]) -> str:
     return "ssd" if drive.get("rotation_rate") == 0 else "hdd"
 
 
+def _file_names(
+    recording: Recording, order: Sequence[str], anonymizer: Anonymizer
+) -> dict[str, str]:
+    """Return the file name of each drive output, one name per drive.
+
+    The name comes from the anonymized device a drive was read through.
+    Several drives can share that device, such as the drives behind a
+    MegaRAID controller, which are all read through one device with a
+    different smartctl type: the second and every later one gets a number, so
+    that one output never overwrites another (ADR 0023).
+    """
+    # The other files of a fixture: a drive must not take one of their names.
+    names: dict[str, str] = {}
+    used: set[str] = {"scan", "lsblk", "recording"}
+    for stem in order:
+        base = _file_stem(recording, stem, anonymizer)
+        name = base
+        number = 2
+        while name in used:
+            name = f"{base}-{number}"
+            number += 1
+        used.add(name)
+        names[stem] = name
+    return names
+
+
+def _file_stem(recording: Recording, stem: str, anonymizer: Anonymizer) -> str:
+    """Return the file name of a drive output: the stem of the recording.
+
+    A device name that the anonymizer replaces, such as a `by-id` link, can
+    hold the serial number of the drive: then the anonymized name gives the
+    file name instead of the stem. Every other stem is kept, so that a
+    fixture keeps the file names its source gave it (ADR 0023, ADR 0039).
+    """
+    name = _recorded_name(recording, stem)
+    if isinstance(name, str) and name:
+        anonymized = anonymizer.learn_device(name)
+        if anonymized != name:
+            return PurePosixPath(anonymized).name
+    return stem
+
+
+def _recorded_name(recording: Recording, stem: str) -> object:
+    """Return the device name a drive output was read through, if it is known."""
+    call = recording.calls.get(stem)
+    if call is not None:
+        return call[0]
+    return _device_name(recording.drives[stem])
+
+
 def _metadata(
     recording: Recording,
     order: Sequence[str],
+    filenames: Mapping[str, str],
     *,
     origin: str,
     license_id: str,
@@ -145,7 +220,7 @@ def _metadata(
         name, device_type = recording.calls.get(stem, (access.get("name"), access.get("type")))
         files.append(
             {
-                "file": f"{stem}.json",
+                "file": f"{filenames[stem]}.json",
                 "device": name,
                 "type": device_type,
                 "protocol": access.get("protocol"),

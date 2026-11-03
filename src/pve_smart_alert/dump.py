@@ -12,10 +12,13 @@ a real value is left in any file, nothing is written (NFR-14).
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
+import os
 import re
 import tarfile
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,7 +36,7 @@ from pve_smart_alert.discovery.enrichment import (
 )
 from pve_smart_alert.discovery.sources import Candidate, manual_candidates, parse_scan, scan_command
 from pve_smart_alert.process import ProcessRunner, run_with_timeout
-from pve_smart_alert.recording import Recording, anonymize, serialize
+from pve_smart_alert.recording import Recording, anonymize, serialize_bytes
 
 # The license under which a recording comes into the project, like every
 # contribution (CONTRIBUTING.md, ADR 0015).
@@ -152,13 +155,55 @@ def _json_object(text: str) -> dict[str, object] | None:
 
 
 def _write_archive(path: Path, name: str, files: dict[str, object], *, mtime: int) -> None:
-    """Write the files below one directory into a compressed archive."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, "w:gz") as archive:
-        for file, document in files.items():
-            data = serialize(document).encode("utf-8")
-            member = tarfile.TarInfo(f"{name}/{file}")
-            member.size = len(data)
-            member.mode = 0o644
-            member.mtime = mtime
-            archive.addfile(member, io.BytesIO(data))
+    """Write the files below one directory into a compressed archive.
+
+    The archive is written next to its target and renamed into place, so
+    that a symlink or a partial file at the target is never followed or
+    left behind, and it is readable by root only, like the state file: it
+    carries the identifiers of the host until they are reviewed (ADR 0023).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+                for file, document in files.items():
+                    data = serialize_bytes(document)
+                    member = tarfile.TarInfo(f"{name}/{file}")
+                    member.size = len(data)
+                    member.mode = 0o644
+                    member.mtime = mtime
+                    archive.addfile(member, io.BytesIO(data))
+            # Flushed to disk before the rename, and the directory after it,
+            # so that a power loss leaves either the old archive or the whole
+            # new one, as for the state file (ADR 0007, ADR 0023).
+            stream.flush()
+            os.fsync(stream.fileno())
+        Path(temporary).replace(path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            Path(temporary).unlink(missing_ok=True)
+        raise
+    # After the rename, and best effort: some filesystems cannot flush a
+    # directory, and the archive is in place by then (ADR 0007).
+    _sync_directory(path.parent)
+
+
+def _sync_directory(directory: Path) -> None:
+    """Flush a directory, so that a rename in it survives a power loss.
+
+    A directory that cannot be flushed is not an error, as for the state
+    file: not every filesystem supports it, and the archive is already in
+    place (ADR 0007).
+    """
+    try:
+        descriptor = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        with contextlib.suppress(OSError):
+            os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

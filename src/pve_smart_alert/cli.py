@@ -600,7 +600,8 @@ def _dump_fixture(arguments: argparse.Namespace) -> int:
     print(_labelled("Written", str(dump.archive)))
     print(_labelled("Devices", ", ".join(dump.devices) or "none"))
     print("Serial numbers, WWNs and UUIDs are replaced by placeholders. Model names, firmware")
-    print("versions and the node name are kept; look at the archive before you share it.")
+    print("versions, the node name and the labels of pools and volume groups are kept;")
+    print("look at the archive before you share it.")
     return EXIT_OK
 
 

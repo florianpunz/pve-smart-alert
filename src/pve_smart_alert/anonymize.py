@@ -67,6 +67,25 @@ _NAA6_VENDOR_DIGITS: Final = 7
 # (ADR 0023).
 MIN_SEARCHED_LENGTH: Final = 4
 
+# A device the scan names by its node. Only these shapes name no drive: every
+# other name, such as a /dev/disk/by-id link, a mapper name (which is the
+# WWID when user_friendly_names is off) or a serial link, can hold an
+# identifier and is replaced like the value it holds (ADR 0023, ADR 0039).
+_NODE_DEVICE: Final = re.compile(
+    r"/dev/(?:"
+    r"sd[a-z]+[0-9]*"
+    r"|nvme[0-9]+(?:n[0-9]+(?:p[0-9]+)?)?"
+    r"|sg[0-9]+"
+    r"|bsg/[a-z]+[0-9]+"
+    r"|bus/[0-9]+"
+    r"|dm-[0-9]+"
+    r"|cciss/c[0-9]+d[0-9]+"
+    r"|md[0-9]+"
+    r"|tw[a-z]+[0-9]+"
+    r")"
+)
+DEVICE_PLACEHOLDER: Final = "/dev/anon{}"
+
 
 class AnonymizationError(Exception):
     """A recording that cannot be anonymized safely.
@@ -107,6 +126,10 @@ class Anonymizer:
 
     def __init__(self) -> None:
         self._serials: dict[str, str] = {}
+        # The form in which udev writes a serial number with underscores,
+        # kept apart from the real serial numbers so that it cannot take the
+        # place of another one.
+        self._udev_serials: dict[str, str] = {}
         self._wwns: dict[Wwn, Wwn] = {}
         self._euis: dict[Eui64, Eui64] = {}
         self._uuids: dict[str, str] = {}
@@ -115,6 +138,24 @@ class Anonymizer:
         # An NAA name that is not a WWN, by its lowercase digits, with the
         # digits of its placeholder (ADR 0026).
         self._names: dict[str, str] = {}
+        # A device name that is not a kernel name, by its name, with the
+        # placeholder name of this archive.
+        self._devices: dict[str, str] = {}
+
+    def learn_device(self, name: str) -> str:
+        """Return the name to record a device under (ADR 0023).
+
+        A node such as `/dev/sda`, `/dev/nvme0n1` or `/dev/bus/6` is kept: it
+        names no drive. Every other name, such as a `by-id` link or a mapper
+        name, can hold the serial number or the WWID of the drive, so it is
+        replaced by a placeholder of this archive, in the file name, the
+        metadata and every text of the recording alike.
+        """
+        if _NODE_DEVICE.fullmatch(name):
+            return name
+        if name not in self._devices:
+            self._devices[name] = DEVICE_PLACEHOLDER.format(len(self._devices) + 1)
+        return self._devices[name]
 
     def learn(self, drive: Mapping[str, object]) -> None:
         """Number the identifiers of one drive output that are new.
@@ -123,8 +164,8 @@ class Anonymizer:
         anonymized, so that the numbers follow the scan (ADR 0023).
         """
         serial = drive.get("serial_number")
-        if isinstance(serial, str) and serial and serial not in self._serials:
-            self._serials[serial] = SERIAL_PLACEHOLDER.format(_next(self._serials))
+        if isinstance(serial, str) and serial:
+            self._learn_serial(serial)
         wwn = _wwn(drive.get("wwn"))
         if wwn is not None and wwn not in self._wwns:
             self._wwns[wwn] = Wwn(wwn.naa, wwn.oui, _next(self._wwns))
@@ -173,8 +214,8 @@ class Anonymizer:
         """
         for node in _nodes(document):
             serial = node.get("serial")
-            if isinstance(serial, str) and serial.strip() and serial.strip() not in self._serials:
-                self._serials[serial.strip()] = SERIAL_PLACEHOLDER.format(_next(self._serials))
+            if isinstance(serial, str) and serial.strip():
+                self._learn_serial(serial.strip())
             wwn = node.get("wwn")
             if isinstance(wwn, str):
                 self._learn_lsblk_wwn(wwn)
@@ -210,6 +251,21 @@ class Anonymizer:
             anonymized_eui = self._learn_eui(nguid.group(2))
             if digits not in self._nguids:
                 self._nguids[digits] = f"{_next(self._nguids):016x}{anonymized_eui.hex}"
+
+    def _learn_serial(self, serial: str) -> str:
+        """Number a serial number, if it is new, and return its placeholder.
+
+        udev writes a space of a serial number as an underscore in the
+        `by-id` link and in the `id` and `id-link` of lsblk, so that form is
+        numbered with the same placeholder (ADR 0023).
+        """
+        if serial not in self._serials:
+            placeholder = SERIAL_PLACEHOLDER.format(_next(set(self._serials.values())))
+            self._serials[serial] = placeholder
+            udev_form = serial.replace(" ", "_")
+            if udev_form != serial and udev_form not in self._serials:
+                self._udev_serials[udev_form] = placeholder
+        return self._serials[serial]
 
     def _learn_wwn(self, digits: str) -> Wwn:
         """Number a WWN written as 16 digits, if it is new, and return its placeholder."""
@@ -282,9 +338,26 @@ class Anonymizer:
             kinds = ", ".join(dict.fromkeys(found))
             raise AnonymizationError(f"{name} still contains a real value: {kinds}")
 
+    def check_name(self, name: str) -> None:
+        """Raise when a file name of an archive still holds a real value.
+
+        The message names no value and no file: the file name itself can be
+        the value that is left (ADR 0023).
+        """
+        found = [
+            kind
+            for kind, value in self._searched_forms()
+            if len(value) >= MIN_SEARCHED_LENGTH and value.lower() in name.lower()
+        ]
+        if found:
+            kinds = ", ".join(dict.fromkeys(found))
+            raise AnonymizationError(f"a file name still contains a real value: {kinds}")
+
     def _searched_forms(self) -> Iterator[tuple[str, str]]:
         """Return every learned real value, in every form it is written in."""
         for serial in self._serials:
+            yield "serial number", serial
+        for serial in self._udev_serials:
             yield "serial number", serial
         for wwn in self._wwns:
             yield "WWN", wwn.hex
@@ -348,7 +421,12 @@ class Anonymizer:
     def _replace_in(self, text: str) -> str:
         # The longest values first, so that one that contains another is
         # replaced as a whole.
-        values = [*self._serials.items(), *self._uuids.items()]
+        values = [
+            *self._devices.items(),
+            *self._serials.items(),
+            *self._udev_serials.items(),
+            *self._uuids.items(),
+        ]
         for real, placeholder in sorted(values, key=lambda pair: -len(pair[0])):
             if len(real) >= MIN_SEARCHED_LENGTH:
                 text = text.replace(real, placeholder)
