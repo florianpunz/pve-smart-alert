@@ -9,7 +9,8 @@ planner mentions in the summary after the reset. `tool.unsupported_controller`
 is read from the SCSI hosts that discovery found in sysfs (ADR 0030).
 
 Every one of them can be switched off in the configuration like a check of a
-drive, with `[checks."<id>"] enabled = false` (FR-408, ADR 0031). The notice
+drive, with `enabled = false` in the table `[checks."<id>"]` (FR-408, ADR
+0031). The notice
 about a controller whose drives cannot be read names how many drives the run
 monitors on the host and how that notice is switched off for a controller in
 HBA mode, whose drives all appear in the scan.
@@ -70,10 +71,12 @@ UNSUPPORTED_CONTROLLER: Final = "tool.unsupported_controller"
 
 # What the notice about such a controller says about switching it off (ADR
 # 0031): a controller in HBA mode, whose drives the scan lists, needs no
-# notice, and the configuration of the tool switches it off like a check.
+# notice, and the configuration of the tool switches it off like a check. The
+# setting is a dotted key, so that the line is valid TOML and can be pasted
+# into the configuration as it is (ADR 0040).
 _SWITCH_OFF: Final = (
     "; if the controller runs in HBA mode and its drives all appear in scan,"
-    ' switch this notice off with [checks."tool.unsupported_controller"] enabled = false'
+    ' switch this notice off with checks."tool.unsupported_controller".enabled = false'
 )
 
 #: Every condition of the tool, by its stable identifier.

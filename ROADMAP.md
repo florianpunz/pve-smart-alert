@@ -341,7 +341,8 @@ State: started on 2026-10-17. The hostile-string tests, the traceability table a
 - Done, merged in pull request #34: a test measures a run with 24 responsive drives against the 60 seconds of NFR-07 (`tests/unit/test_run_time.py`, with the scenario `twenty-four-drives`), and results 6 and 7 are the acceptance steps for NFR-07 and NFR-09.
 - Still open for result 2: the acceptance steps that the table names and that are not ticked here; how a requirement verified by inspection alone, such as NFR-19, counts for result 2; and a check of the table row by row when it is made again for the release.
 - Done, merged in pull request #23: [docs/troubleshooting.md](docs/troubleshooting.md) and the source of the manual page, `man/pve-smart-alert.8`, which the package installs since the fix of `0.5.0~dev5`; with them the package installs the reference configuration uncompressed, at the path the tool names.
-- Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own; the notice `tool.unsupported_controller` names its table and key on one line, which is not valid TOML, in the wording that [ADR 0031](docs/adr/0031-switching-tool-conditions-off.md) prescribes.
+- Done, merged in pull request #45: the notice `tool.unsupported_controller` names the setting that switches it off as `checks."tool.unsupported_controller".enabled = false`, a line that is valid TOML and can be pasted into the configuration as it is ([ADR 0040](docs/adr/0040-switch-off-line-as-a-dotted-key.md)).
+- Still open for the user documentation: whether installation and the configuration reference stay in the README and in `config/config.reference.toml` or get documents of their own.
 
 ## After 1.0
 
