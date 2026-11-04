@@ -29,11 +29,11 @@ Answered in milestone M2 with recordings from the test cluster ([Research 06](do
 
 ## Thresholds
 
-Answered or narrowed in milestone M3, some only with feedback from users.
+Answered or narrowed in milestone M3, some only with feedback from users. The `N (a/b/c)` form of attribute 188 was answered in M3 and is described in [docs/check-catalog.md](docs/check-catalog.md); only its raw16 form stays open.
 
 | ID | Question | Why it matters | Assumed until answered |
 | --- | --- | --- | --- |
-| Q-T1 | How must the raw value of attribute 188 (command timeout) be decoded on drives that pack several counters into it? | Without decoding, healthy drives would exceed the threshold of 100 | The check uses the decoded value from smartctl's string form where it has several parts; otherwise the number. A raw16 form such as `0 0 0` (fixture `megaraid/telegraf-megaraid`) is used as the packed number itself, whose parts are not decoded; on a drive with a non-zero raw16 value that may overstate the timeouts (assumed, [Research 03](docs/research/03-smart-indicators.md)) |
+| Q-T1 | How must a raw16 value of attribute 188 (command timeout), such as `0 0 0`, be decoded, and does the packed number that the tool uses overstate the timeouts? | Without decoding, healthy drives would exceed the threshold of 100 | The packed raw number counts as it is, and its parts are not decoded; on a drive with a non-zero raw16 value that may overstate the timeouts (fixture `megaraid/telegraf-megaraid`, [Research 03](docs/research/03-smart-indicators.md)) |
 | Q-T2 | Are the defect counter thresholds derived from hard disk data appropriate for SATA SSDs? | No public data was found for SSDs | Same thresholds for both |
 | Q-T3 | What are sensible thresholds for grown defects on SAS drives? | No public failure-rate data was found | Notice at 1, warning at 100, every increase reported. Checked only against recordings ([Research 08](docs/research/08-public-recordings.md)): the healthy SAS drives have 0, one SAS drive with 56 gets a notice, a parallel SCSI drive with 260 a warning. To be reviewed in M7 |
 | Q-T4 | Are the temperature limits per class right, and should limits reported by the drive itself take precedence where available? | Temperature is the most likely source of noise | Fixed limits per class, confirmation in two runs |
