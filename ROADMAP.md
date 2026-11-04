@@ -67,7 +67,7 @@ Result you can test:
 
 Inputs, all settled: the name `pve-smart-alert` ([ADR 0018](docs/adr/0018-project-name.md)), the repository location ([ADR 0019](docs/adr/0019-repository-hosting.md)), the copyright holder Florian Punz, and the license AGPL-3.0-or-later ([ADR 0015](docs/adr/0015-license.md)).
 
-State: done on 2026-10-04; the repository is public since 2026-11-03. The reporting channel of [SECURITY.md](SECURITY.md), a private security advisory on GitHub, needs private vulnerability reporting switched on in the settings of the repository.
+State: done on 2026-10-04; the repository is public since 2026-11-03. The reporting channel of [SECURITY.md](SECURITY.md), a private security advisory on GitHub, is enabled (checked on 2026-11-04).
 
 ## M1: Walking skeleton with notifications (M)
 
