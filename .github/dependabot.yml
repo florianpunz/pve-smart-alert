@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Dependabot keeps the CI actions and the development tools current. The tool
+# has no run-time dependencies (ADR 0003), so pip covers only the build
+# requirement and the optional development group of pyproject.toml. Both
+# ecosystems are grouped and rate-limited so that the pull requests stay few and
+# reviewable.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      development:
+        patterns: ["*"]
+    ignore:
+      # The floor 77 is the first setuptools that reads the SPDX expression.
+      - dependency-name: "setuptools"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+    open-pull-requests-limit: 5
