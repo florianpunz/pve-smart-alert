@@ -42,7 +42,7 @@ dev = [
   "build>=1.2",
   "mypy~=2.4.0",
   "pytest>=8.0",
-  "ruff~=0.16.0",
+  "ruff>=0.16,<0.18",
 ]
 
 [tool.setuptools.dynamic]
